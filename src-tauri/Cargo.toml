@@ -1,0 +1,32 @@
+[package]
+name = "excel-network"
+version.workspace = true
+edition.workspace = true
+description = "A Tauri App"
+authors = ["you"]
+license = ""
+repository = ""
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[build-dependencies]
+tauri-build = { version = "1.4", features = [] }
+
+[dependencies]
+tauri = { version = "1.4", features = [ "api-all"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+models = { workspace = true }
+anyhow = { workspace = true }
+uuid = { workspace = true,features = ["serde", "v4"] }
+chrono = {workspace = true , features = ["serde"] }
+dotenv = { workspace = true }
+bigdecimal = { workspace = true }
+reqwest = { version = "^0.11", features = ["json"] }
+dirs = "^5"
+rust_xlsxwriter = "^0.42"
+
+[features]
+# this feature is used for production builds or when `devPath` points to the filesystem
+# DO NOT REMOVE!!
+custom-protocol = ["tauri/custom-protocol"]

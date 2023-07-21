@@ -1,0 +1,83 @@
+{
+  "sheets": [
+    {
+      "row": [
+        {
+          "Basic": {
+            "Uuid": "id"
+          }
+        },
+        {
+          "Basic": {
+            "String": "name"
+          }
+        },
+        {
+          "Basic": {
+            "String": "desc"
+          }
+        },
+        {
+          "Basic": {
+            "Float": "tax"
+          }
+        },
+        {
+          "Basic": {
+            "Integer": "i32"
+          }
+        },
+        {
+          "Basic": {
+            "Date": "date"
+          }
+        }
+      ],
+      "sheet_type_name": "مبيعات"
+    },
+    {
+      "row": [
+        {
+          "Basic": {
+            "Uuid": "id"
+          }
+        },
+        {
+          "Basic": {
+            "String": "name"
+          }
+        },
+        {
+          "Basic": {
+            "Float": "tax"
+          }
+        },
+        {
+          "Basic": {
+            "Integer": "i32"
+          }
+        },
+        {
+          "Calculated": {
+            "AddO": [
+              {
+                "Float": "tax"
+              },
+              {
+                "Multiply": [
+                  {
+                    "Float": "tax"
+                  },
+                  {
+                    "Integer": "i32"
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "sheet_type_name": "مشتريات"
+    }
+  ]
+}
