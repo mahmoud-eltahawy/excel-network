@@ -1,1 +1,107 @@
-{"sheets":[{"sheet_type_name":"مبيعات","row":[{"Basic":{"Uuid":"id"}},{"Basic":{"String":"name"}},{"Basic":{"String":"desc"}},{"Basic":{"Float":"tax"}},{"Basic":{"Integer":"i32"}},{"Basic":{"Date":"date"}}]},{"sheet_type_name":"مشتريات","row":[{"Basic":{"Uuid":"id"}},{"Basic":{"String":"name"}},{"Basic":{"Float":"tax"}},{"Basic":{"Integer":"i32"}},{"Calculated":{"AddO":[{"Float":"tax"},{"Multiply":[{"Float":"tax"},{"Integer":"i32"}]}]}}]}]}
+{
+  "sheets": [
+    {
+      "row": [
+        {
+          "Basic": {
+            "Uuid": {
+              "header": "id",
+              "is_completable": false
+            }
+          }
+        },
+        {
+          "Basic": {
+            "String": {
+              "header": "name",
+              "is_completable": true
+            }
+          }
+        },
+        {
+          "Basic": {
+            "String": {
+              "header": "desc",
+              "is_completable": true
+            }
+          }
+        },
+        {
+          "Basic": {
+            "Float": {
+              "header": "tax",
+              "is_completable": false
+            }
+          }
+        },
+        {
+          "Basic": {
+            "Integer": {
+              "header": "i32",
+              "is_completable": false
+            }
+          }
+        },
+        {
+          "Basic": {
+            "Date": {
+              "header": "date",
+              "is_completable": false
+            }
+          }
+        }
+      ],
+      "sheet_type_name": "مبيعات"
+    },
+    {
+      "row": [
+        {
+          "Basic": {
+            "Uuid": {
+              "header": "id",
+              "is_completable": false
+            }
+          }
+        },
+        {
+          "Basic": {
+            "String": {
+              "header": "name",
+              "is_completable": true
+            }
+          }
+        },
+        {
+          "Basic": {
+            "Float": {
+              "header": "tax",
+              "is_completable": false
+            }
+          }
+        },
+        {
+          "Basic": {
+            "Integer": {
+              "header": "i32",
+              "is_completable": false
+            }
+          }
+        },
+        {
+          "Calculated": {
+            "AddO": [
+              "tax",
+              {
+                "Multiply": [
+                  "tax",
+                  "i32"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "sheet_type_name": "مشتريات"
+    }
+  ]
+}

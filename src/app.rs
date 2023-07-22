@@ -4,8 +4,15 @@ use serde::{Deserialize, Serialize};
 
 use tauri_sys::tauri::invoke;
 
+mod sheet;
+
+use sheet::{SheetHome,show::ShowSheet,add::AddSheet};
+
 #[derive(Serialize, Deserialize)]
 pub struct Non;
+
+#[derive(Serialize, Deserialize)]
+pub struct Id{id : Uuid}
 
 #[component]
 pub fn App(cx: Scope) -> impl IntoView {
@@ -22,9 +29,21 @@ pub fn App(cx: Scope) -> impl IntoView {
                         }
                     />
                     <Route
-                        path="/sheet/:name"
+                        path="/sheet/:sheet_type_id"
                         view=|cx| {
-                            view! { cx, <Sheet/> }
+                            view! { cx, <SheetHome/> }
+                        }
+                    />
+                    <Route
+                        path="/sheet/:sheet_type_id/show/:sheet_id"
+                        view=|cx| {
+                            view! { cx, <ShowSheet/> }
+                        }
+                    />
+                    <Route
+                        path="/sheet/:sheet_type_id/add"
+                        view=|cx| {
+                            view! { cx, <AddSheet/> }
                         }
                     />
                 </Routes>
@@ -33,62 +52,35 @@ pub fn App(cx: Scope) -> impl IntoView {
       </main>
     }
 }
-
+use models::Name;
+use uuid::Uuid;
 
 #[component]
 pub fn Home(cx: Scope) -> impl IntoView {
-    let sheets_names = create_resource(
+    let sheets_types_names = create_resource(
 	cx,
 	|| (),
 	|_| async move {
-            invoke::<Non, Vec<String>>("sheets_names", &Non{})
+            invoke::<Non, Vec<Name>>("sheets_types_names", &Non{})
             .await
 	    .unwrap_or_default()
     });
 
     view! {cx,
 	 <section>
+	   <br/>
+	   <br/>
             <For
-                each=move || sheets_names.read(cx).unwrap_or_default()
-                key=|s| s.clone()
+                each=move || sheets_types_names.read(cx).unwrap_or_default()
+                key=|s| s.id
                 view=move |cx, s| {
                     view! { cx,
-                        <A class="button" href=format!("sheet/{}", s)>
-			    <h1>{s}</h1>
+                        <A class="button" href=format!("sheet/{}", s.id)>
+			    <h1>{s.the_name}</h1>
                         </A>
                     }
                 }
             />
-	   <Outlet/>
-	 </section>
-    }
-}
-
-
-#[component]
-pub fn Sheet(cx: Scope) -> impl IntoView {
-    let params = use_params_map(cx);
-    let sheet_name = move || {
-	let s = params.
-	with(|params| params.get("name").cloned())
-	.unwrap_or_default();
-	
-	log!("{:#?}",s);
-	s
-    };
-    // let sheets_names = create_resource(
-    // 	cx,
-    // 	|| (),
-    // 	|_| async move {
-    //         invoke::<Non, Vec<String>>("sheets_names", &Non{})
-    //         .await
-    // 	    .unwrap_or_default()
-    // });
-
-    view! {cx,
-	 <section>
-	   <h1>"hello world"</h1>
-	   <h1>{sheet_name()}</h1>
 	   <Outlet/>
 	 </section>
     }

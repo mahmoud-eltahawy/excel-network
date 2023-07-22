@@ -2,23 +2,42 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use dotenv::dotenv;
+use uuid::Uuid;
 use std::collections::HashMap;
 use std::env;
 
 use std::fs::File;
 
 #[tauri::command]
-fn sheets_names(
+fn sheets_types_names(
     app_state: tauri::State<'_, AppState>,
-) -> Vec<String> {
-    app_state.sheets_names.clone()
+) -> Vec<Name> {
+    app_state.sheets_types_names.clone()
 }
 
 #[tauri::command]
-fn sheet_map(
+fn sheet_type_name(
     app_state: tauri::State<'_, AppState>,
-) -> HashMap<String,Vec<ConfigValue>> {
-    app_state.sheet_map.clone()
+    id : Uuid,
+) -> String {
+    app_state
+	.sheets_types_names
+	.clone()
+	.into_iter()
+	.filter(|x| x.id == id)
+	.collect::<Vec<_>>()
+	.first()
+	.unwrap()
+	.the_name
+	.clone()
+}
+
+#[tauri::command]
+fn sheet_headers(
+    app_state: tauri::State<'_, AppState>,
+    sheet_name : String,
+) -> Vec<ConfigValue> {
+    app_state.sheet_map.get(&sheet_name).unwrap().to_vec()
 }
 
 fn main() {
@@ -26,8 +45,9 @@ fn main() {
     tauri::Builder::default()
 	.manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
-	    sheets_names,
-	    sheet_map,
+	    sheets_types_names,
+	    sheet_headers,
+	    sheet_type_name,
 	])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -35,11 +55,11 @@ fn main() {
 
 pub struct AppState {
     pub origin: String,
-    pub sheets_names : Vec<String>,
+    pub sheets_types_names : Vec<Name>,
     pub sheet_map : HashMap<String,Vec<ConfigValue>>,
 }
 
-use models::{SheetConfig, Config, ConfigValue};
+use models::{SheetConfig, Config, ConfigValue, Name};
 
 impl Default for AppState {
     fn default() -> Self {
@@ -51,9 +71,12 @@ impl Default for AppState {
 
 	let config : Config = serde_json::from_reader(&mut file).unwrap();
 	let Config { sheets } = config;
-	let sheets_names = sheets
+	let sheets_types_names = sheets
 	    .iter()
-	    .map(|x| x.sheet_type_name.clone())
+	    .map(|x| Name {
+		id: Uuid::new_v4(),
+		the_name: x.sheet_type_name.clone()
+	    })
 	    .collect::<Vec<_>>();
 	let mut sheet_map = HashMap::new();
 	for SheetConfig { sheet_type_name, row } in sheets.into_iter() {
@@ -62,7 +85,7 @@ impl Default for AppState {
 
         AppState {
             origin: format!("http://{host}:{port}"),
-	    sheets_names,
+	    sheets_types_names,
 	    sheet_map,
         }
     }
