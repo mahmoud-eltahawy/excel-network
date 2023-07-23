@@ -35,9 +35,12 @@ fn sheet_type_name(
 #[tauri::command]
 fn sheet_headers(
     app_state: tauri::State<'_, AppState>,
-    sheet_name : String,
+    name : String,
 ) -> Vec<ConfigValue> {
-    app_state.sheet_map.get(&sheet_name).unwrap().to_vec()
+    if name == "none"{
+	return vec![];
+    }
+    app_state.sheet_map.get(&name).unwrap().to_vec()
 }
 
 fn main() {

@@ -4,32 +4,50 @@
       "row": [
         {
           "Basic": {
-            "Uuid": "id"
+            "Uuid": {
+              "header": "id",
+              "is_completable": false
+            }
           }
         },
         {
           "Basic": {
-            "String": "name"
+            "String": {
+              "header": "name",
+              "is_completable": true
+            }
           }
         },
         {
           "Basic": {
-            "String": "desc"
+            "String": {
+              "header": "desc",
+              "is_completable": true
+            }
           }
         },
         {
           "Basic": {
-            "Float": "tax"
+            "Float": {
+              "header": "tax",
+              "is_completable": false
+            }
           }
         },
         {
           "Basic": {
-            "Integer": "i32"
+            "Integer": {
+              "header": "i32",
+              "is_completable": false
+            }
           }
         },
         {
           "Basic": {
-            "Date": "date"
+            "Date": {
+              "header": "date",
+              "is_completable": false
+            }
           }
         }
       ],
@@ -39,41 +57,50 @@
       "row": [
         {
           "Basic": {
-            "Uuid": "id"
+            "Uuid": {
+              "header": "id",
+              "is_completable": false
+            }
           }
         },
         {
           "Basic": {
-            "String": "name"
+            "String": {
+              "header": "name",
+              "is_completable": true
+            }
           }
         },
         {
           "Basic": {
-            "Float": "tax"
+            "Float": {
+              "header": "tax",
+              "is_completable": false
+            }
           }
         },
         {
           "Basic": {
-            "Integer": "i32"
+            "Integer": {
+              "header": "i32",
+              "is_completable": false
+            }
           }
         },
         {
           "Calculated": {
-            "AddO": [
-              {
-                "Float": "tax"
-              },
-              {
-                "Multiply": [
-                  {
-                    "Float": "tax"
-                  },
-                  {
-                    "Integer": "i32"
-                  }
-                ]
-              }
-            ]
+            "header": "calc",
+            "value": {
+              "AddO": [
+                "tax",
+                {
+                  "Multiply": [
+                    "tax",
+                    "i32"
+                  ]
+                }
+              ]
+            }
           }
         }
       ],

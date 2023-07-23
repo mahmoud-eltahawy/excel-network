@@ -1,6 +1,6 @@
-use uuid::Uuid;
-use serde::{Serialize,Deserialize};
 use chrono::NaiveDate;
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct SheetShearchParams {
@@ -11,13 +11,13 @@ pub struct SheetShearchParams {
     pub sheet_type_name: String,
 }
 
-#[derive(Debug,Serialize,Deserialize,Clone,Default)]
-pub struct Name{
-    pub id : Uuid,
-    pub the_name : String,
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct Name {
+    pub id: Uuid,
+    pub the_name: String,
 }
 
-#[derive(Debug,Serialize,Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Column {
     Uuid(Option<Uuid>),
     String(Option<String>),
@@ -26,28 +26,32 @@ pub enum Column {
     Date(Option<NaiveDate>),
 }
 
-#[derive(Debug,Serialize,Deserialize)]
-pub struct Row{
-    pub sheet_id : Uuid,
-    pub columns : Vec<Column>,
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Row {
+    pub sheet_id: Uuid,
+    pub columns: Vec<Column>,
 }
 
-#[derive(Debug,Serialize,Deserialize)]
-pub struct Sheet{
-    pub id : Uuid,
-    pub sheet_name : String,
-    pub sheet_type_name : String,
-    pub insert_date : NaiveDate,
-    pub rows : Vec<Row>,
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Sheet {
+    pub id: Uuid,
+    pub sheet_name: String,
+    pub sheet_type_name: String,
+    pub insert_date: NaiveDate,
+    pub rows: Vec<Row>,
 }
 
-#[derive(Debug,Serialize,Deserialize,Clone)]
-pub struct ColumnProps{
+pub trait HeaderGetter {
+    fn get_header(self) -> String;
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ColumnProps {
     pub header: String,
-    pub is_completable : bool,
+    pub is_completable: bool,
 }
 
-#[derive(Debug,Serialize,Deserialize,Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum ColumnConfig {
     Uuid(ColumnProps),
     String(ColumnProps),
@@ -56,88 +60,139 @@ pub enum ColumnConfig {
     Date(ColumnProps),
 }
 
-type OpetationValue = (String,String);
-type OpetationOValue = (Box<Opetation>,String);
-type OpetationValueO = (String,Box<Opetation>);
-
-#[derive(Debug,Serialize,Deserialize,Clone)]
-pub enum Opetation {
-    Multiply(OpetationValue),
-    Add(OpetationValue),
-    Minus(OpetationValue),
-    Divide(OpetationValue),
-    OMultiply(OpetationOValue),
-    OAdd(OpetationOValue),
-    OMinus(OpetationOValue),
-    ODivide(OpetationOValue),
-    MultiplyO(OpetationValueO),
-    AddO(OpetationValueO),
-    MinusO(OpetationValueO),
-    DivideO(OpetationValueO),
+impl HeaderGetter for ColumnConfig {
+    fn get_header(self) -> String {
+        match self {
+            Self::Uuid(prop) => prop.header,
+            Self::String(prop) => prop.header,
+            Self::Integer(prop) => prop.header,
+            Self::Float(prop) => prop.header,
+            Self::Date(prop) => prop.header,
+        }
+    }
 }
 
-#[derive(Debug,Serialize,Deserialize,Clone)]
-pub enum ConfigValue{
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum ValueType {
+    Const(f64),
+    Variable(String),
+}
+
+type OperationValue = (ValueType, ValueType);
+type OperationOValue = (Box<Operation>, ValueType);
+type OperationValueO = (ValueType, Box<Operation>);
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum Operation {
+    Multiply(OperationValue),
+    Add(OperationValue),
+    Minus(OperationValue),
+    Divide(OperationValue),
+    OMultiply(OperationOValue),
+    OAdd(OperationOValue),
+    OMinus(OperationOValue),
+    ODivide(OperationOValue),
+    MultiplyO(OperationValueO),
+    AddO(OperationValueO),
+    MinusO(OperationValueO),
+    DivideO(OperationValueO),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct OperationConfig {
+    pub header: String,
+    pub value: Operation,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum ConfigValue {
     Basic(ColumnConfig),
-    Calculated(Opetation)
+    Calculated(OperationConfig),
 }
 
-#[derive(Debug,Serialize,Deserialize)]
-pub struct SheetConfig{
-    pub sheet_type_name : String,
-    pub row : Vec<ConfigValue>,
+impl HeaderGetter for ConfigValue {
+    fn get_header(self) -> String {
+        match self {
+            Self::Basic(cv) => cv.get_header(),
+            Self::Calculated(cv) => cv.header,
+        }
+    }
 }
 
-#[derive(Debug,Serialize,Deserialize)]
-pub struct Config{
-    pub sheets : Vec<SheetConfig>
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SheetConfig {
+    pub sheet_type_name: String,
+    pub row: Vec<ConfigValue>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Config {
+    pub sheets: Vec<SheetConfig>,
 }
 
 use std::fs::File;
 use std::io::Write;
 
-pub fn get_config_example(){
-    let fcp = |header| ColumnProps{
-	header,
-	is_completable: false
+pub fn get_config_example() {
+    let fcp = |header| ColumnProps {
+        header,
+        is_completable: false,
     };
-    let tcp = |header| ColumnProps{
-	header,
-	is_completable: true
+    let tcp = |header| ColumnProps {
+        header,
+        is_completable: true,
     };
-    let a = Config{
-	sheets : vec![
-	    SheetConfig{
-		sheet_type_name: String::from("مبيعات"),
-		row :  vec![
-		    ConfigValue::Basic(ColumnConfig::Uuid(fcp("id".to_string()))),
-		    ConfigValue::Basic(ColumnConfig::String(tcp("name".to_string()))),
-		    ConfigValue::Basic(ColumnConfig::String(tcp("desc".to_string()))),
-		    ConfigValue::Basic(ColumnConfig::Float(fcp("tax".to_string()))),
-		    ConfigValue::Basic(ColumnConfig::Integer(fcp("i32".to_string()))),
-		    ConfigValue::Basic(ColumnConfig::Date(fcp("date".to_string()))),
-		],
-	    },
-	    SheetConfig{
-		sheet_type_name: String::from("مشتريات"),
-		row :  vec![
-		    ConfigValue::Basic(ColumnConfig::Uuid(fcp("id".to_string()))),
-		    ConfigValue::Basic(ColumnConfig::String(tcp("name".to_string()))),
-		    ConfigValue::Basic(ColumnConfig::Float(fcp("tax".to_string()))),
-		    ConfigValue::Basic(ColumnConfig::Integer(fcp("i32".to_string()))),
-		    ConfigValue::Calculated(
-			Opetation::AddO((
-			    "tax".to_string(),
-			    Box::new(Opetation::Multiply((
-				"tax".to_string(),
-				"i32".to_string()))))))
-		],
-	    },
-	]
+    let a = Config {
+        sheets: vec![
+            SheetConfig {
+                sheet_type_name: String::from("مبيعات"),
+                row: vec![
+                    ConfigValue::Basic(ColumnConfig::Integer(fcp("رقم الفاتورة".to_string()))),
+                    ConfigValue::Basic(ColumnConfig::Date(fcp("التاريخ".to_string()))),
+                    ConfigValue::Basic(ColumnConfig::Integer(fcp(
+                        "رقم التسجيل الضريبي".to_string()
+                    ))),
+                    ConfigValue::Basic(ColumnConfig::String(tcp("اسم العميل".to_string()))),
+                    ConfigValue::Basic(ColumnConfig::String(tcp("تبع".to_string()))),
+                    ConfigValue::Basic(ColumnConfig::Float(fcp("القيمة".to_string()))),
+                    ConfigValue::Calculated(OperationConfig {
+                        header: "ض.ق.م".to_string(),
+                        value: Operation::Multiply((
+                            ValueType::Variable("القيمة".to_string()),
+                            ValueType::Const(0.14),
+                        )),
+                    }),
+                    ConfigValue::Basic(ColumnConfig::Float(fcp("الخصم".to_string()))),
+                    ConfigValue::Basic(ColumnConfig::Float(fcp("القيمة".to_string()))),
+                    ConfigValue::Calculated(OperationConfig {
+                        header: "الاجمالي".to_string(),
+                        value: Operation::AddO((
+                            ValueType::Variable("القيمة".to_string()),
+                            Box::new(Operation::OMinus((
+                                Box::new(Operation::Multiply((
+                                    ValueType::Variable("القيمة".to_string()),
+                                    ValueType::Const(0.14),
+                                ))),
+                                ValueType::Variable("الخصم".to_string()),
+                            ))),
+                        )),
+                    }),
+                ],
+            },
+            SheetConfig {
+                sheet_type_name: String::from("مشتريات"),
+                row: vec![
+                    ConfigValue::Basic(ColumnConfig::Uuid(fcp("id".to_string()))),
+                    ConfigValue::Basic(ColumnConfig::String(tcp("name".to_string()))),
+                    ConfigValue::Basic(ColumnConfig::Float(fcp("tax".to_string()))),
+                    ConfigValue::Basic(ColumnConfig::Integer(fcp("i32".to_string()))),
+                ],
+            },
+        ],
     };
 
     let b = serde_json::to_string(&a).unwrap_or_default();
-    
+
     let mut file = File::create("output.json").unwrap();
 
     file.write_all(b.as_bytes()).unwrap();

@@ -17,6 +17,7 @@ struct SheetArgs {
 
 pub mod add;
 pub mod show;
+pub mod shared;
 
 #[component]
 pub fn SheetHome(cx: Scope) -> impl IntoView {

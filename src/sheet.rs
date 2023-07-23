@@ -5,6 +5,7 @@ use models::SheetShearchParams;
 
 pub mod show;
 pub mod add;
+pub mod shared;
 
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
