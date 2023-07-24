@@ -19,10 +19,8 @@ pub struct Name {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Column {
-    Uuid(Option<Uuid>),
     String(Option<String>),
-    Integer(Option<i64>),
-    Float(Option<f64>),
+    Float(f64),
     Date(Option<NaiveDate>),
 }
 
@@ -45,17 +43,15 @@ pub trait HeaderGetter {
     fn get_header(self) -> String;
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone,PartialEq)]
 pub struct ColumnProps {
     pub header: String,
     pub is_completable: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone,PartialEq)]
 pub enum ColumnConfig {
-    Uuid(ColumnProps),
     String(ColumnProps),
-    Integer(ColumnProps),
     Float(ColumnProps),
     Date(ColumnProps),
 }
@@ -63,16 +59,14 @@ pub enum ColumnConfig {
 impl HeaderGetter for ColumnConfig {
     fn get_header(self) -> String {
         match self {
-            Self::Uuid(prop) => prop.header,
             Self::String(prop) => prop.header,
-            Self::Integer(prop) => prop.header,
             Self::Float(prop) => prop.header,
             Self::Date(prop) => prop.header,
         }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone,PartialEq)]
 pub enum ValueType {
     Const(f64),
     Variable(String),
@@ -82,7 +76,7 @@ type OperationValue = (ValueType, ValueType);
 type OperationOValue = (Box<Operation>, ValueType);
 type OperationValueO = (ValueType, Box<Operation>);
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone,PartialEq)]
 pub enum Operation {
     Multiply(OperationValue),
     Add(OperationValue),
@@ -98,7 +92,7 @@ pub enum Operation {
     DivideO(OperationValueO),
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone,PartialEq)]
 pub struct OperationConfig {
     pub header: String,
     pub value: Operation,
@@ -147,9 +141,9 @@ pub fn get_config_example() {
             SheetConfig {
                 sheet_type_name: String::from("مبيعات"),
                 row: vec![
-                    ConfigValue::Basic(ColumnConfig::Integer(fcp("رقم الفاتورة".to_string()))),
+                    ConfigValue::Basic(ColumnConfig::Float(fcp("رقم الفاتورة".to_string()))),
                     ConfigValue::Basic(ColumnConfig::Date(fcp("التاريخ".to_string()))),
-                    ConfigValue::Basic(ColumnConfig::Integer(fcp(
+                    ConfigValue::Basic(ColumnConfig::Float(fcp(
                         "رقم التسجيل الضريبي".to_string()
                     ))),
                     ConfigValue::Basic(ColumnConfig::String(tcp("اسم العميل".to_string()))),
@@ -163,7 +157,6 @@ pub fn get_config_example() {
                         )),
                     }),
                     ConfigValue::Basic(ColumnConfig::Float(fcp("الخصم".to_string()))),
-                    ConfigValue::Basic(ColumnConfig::Float(fcp("القيمة".to_string()))),
                     ConfigValue::Calculated(OperationConfig {
                         header: "الاجمالي".to_string(),
                         value: Operation::AddO((
@@ -182,10 +175,9 @@ pub fn get_config_example() {
             SheetConfig {
                 sheet_type_name: String::from("مشتريات"),
                 row: vec![
-                    ConfigValue::Basic(ColumnConfig::Uuid(fcp("id".to_string()))),
                     ConfigValue::Basic(ColumnConfig::String(tcp("name".to_string()))),
                     ConfigValue::Basic(ColumnConfig::Float(fcp("tax".to_string()))),
-                    ConfigValue::Basic(ColumnConfig::Integer(fcp("i32".to_string()))),
+                    ConfigValue::Basic(ColumnConfig::Float(fcp("i32".to_string()))),
                 ],
             },
         ],

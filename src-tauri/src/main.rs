@@ -18,29 +18,38 @@ fn sheets_types_names(
 #[tauri::command]
 fn sheet_type_name(
     app_state: tauri::State<'_, AppState>,
-    id : Uuid,
+    id : Option<Uuid>,
 ) -> String {
-    app_state
-	.sheets_types_names
-	.clone()
-	.into_iter()
-	.filter(|x| x.id == id)
-	.collect::<Vec<_>>()
-	.first()
-	.unwrap()
-	.the_name
-	.clone()
+    match id {
+	Some(id) => app_state
+	    .sheets_types_names
+	    .clone()
+	    .into_iter()
+	    .filter(|x| x.id == id)
+	    .collect::<Vec<_>>()
+	    .first()
+	    .expect("expected type name to exist")
+	    .the_name
+	    .clone(),
+	None => String::from(""),
+    }
+    
 }
 
 #[tauri::command]
 fn sheet_headers(
     app_state: tauri::State<'_, AppState>,
-    name : String,
+    name : Option<String>,
 ) -> Vec<ConfigValue> {
-    if name == "none"{
-	return vec![];
+    match name {
+	Some(name) => app_state.
+	    sheet_map
+	    .get(&name)
+	    .expect(&format!("expected name ({}) to exist",name))
+	    .to_vec(),
+	None => vec![]
     }
-    app_state.sheet_map.get(&name).unwrap().to_vec()
+    
 }
 
 fn main() {

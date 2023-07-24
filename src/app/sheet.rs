@@ -23,8 +23,10 @@ pub mod shared;
 pub fn SheetHome(cx: Scope) -> impl IntoView {
     let params = use_params_map(cx);
     let sheet_id = move || params.
-	with(|params| Uuid::from_str(params.get("sheet_type_id").unwrap()))
-	.unwrap_or_default();
+	with(|params| match params.get("sheet_type_id") {
+	    Some(id) => Uuid::from_str(id).ok(),
+	    None => None
+	});
     let sheet_type_name_resource = create_resource(
 	cx,
 	|| () ,
@@ -75,7 +77,11 @@ pub fn SheetHome(cx: Scope) -> impl IntoView {
             <input
                 type="string"
                 class="centered-input"
-		placeholder= move|| format!{"{} ({})","اسم الشيت",sheet_type_name()}
+                placeholder=move || {
+                    format! {
+                        "{} ({})", "اسم الشيت", sheet_type_name()
+                    }
+                }
                 value=move || sheet_name.get()
                 on:input=move |ev| set_sheet_name.set(Some(event_target_value(&ev)))
             />
@@ -128,7 +134,7 @@ pub fn SheetHome(cx: Scope) -> impl IntoView {
                     <span class="down-arrow">"↓"</span>
                 </button>
             </Show>
-	   <Outlet/>
+            <Outlet/>
         </section>
     }
 }
