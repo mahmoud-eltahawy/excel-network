@@ -1,6 +1,7 @@
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct SheetShearchParams {
@@ -17,17 +18,34 @@ pub struct Name {
     pub the_name: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub enum Column {
+#[derive(Debug, Serialize, Deserialize,Clone)]
+pub enum ColumnValue {
     String(Option<String>),
     Float(f64),
     Date(Option<NaiveDate>),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+impl ToString for ColumnValue {
+    fn to_string(&self) -> String {
+	match self {
+	    Self::String(Some(v)) => v.to_owned(),
+	    Self::Float(v) => format!("{:.2}",v),
+	    Self::Date(Some(v)) => v.to_string(),
+	    _ => String::from(""),
+	}
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize,Clone)]
+pub struct Column {
+    pub is_basic : bool,
+    pub value : ColumnValue,
+}
+
+#[derive(Debug, Serialize, Deserialize,Clone)]
 pub struct Row {
-    pub sheet_id: Uuid,
-    pub columns: Vec<Column>,
+    pub id: Uuid,
+    pub columns: HashMap<String, Column>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

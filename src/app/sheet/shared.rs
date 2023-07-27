@@ -1,5 +1,13 @@
 use leptos::*;
 
+use crate::Non;
+use uuid::Uuid;
+use tauri_sys::tauri::invoke;
+
+pub async fn new_id() -> Uuid {
+    invoke::<_, Uuid>("new_id", &Non {}).await.unwrap()
+}
+
 #[component]
 pub fn SheetHead<Fa,Fb>(
     cx: Scope,

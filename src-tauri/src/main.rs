@@ -15,6 +15,12 @@ fn sheets_types_names(
     app_state.sheets_types_names.clone()
 }
 
+
+#[tauri::command]
+fn new_id() -> Uuid {
+    Uuid::new_v4()
+}
+
 #[tauri::command]
 fn sheet_type_name(
     app_state: tauri::State<'_, AppState>,
@@ -60,6 +66,7 @@ fn main() {
 	    sheets_types_names,
 	    sheet_headers,
 	    sheet_type_name,
+	    new_id
 	])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

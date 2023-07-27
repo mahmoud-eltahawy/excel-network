@@ -1,11 +1,11 @@
 use chrono::NaiveDate;
 use leptos::*;
 use leptos_router::*;
-use models::{ConfigValue, HeaderGetter, Column, ColumnConfig, ColumnProps, OperationConfig, Operation, ValueType};
+use models::{ConfigValue, HeaderGetter, ColumnValue, ColumnConfig, ColumnProps, OperationConfig, Operation, ValueType, Column, Row};
 use serde::{Serialize, Deserialize};
 use std::{str::FromStr, collections::HashMap};
 
-use super::shared::SheetHead;
+use super::shared::{SheetHead, new_id};
 
 use uuid::Uuid;
 use tauri_sys::tauri::invoke;
@@ -19,6 +19,7 @@ struct NameArg{
 #[component]
 pub fn AddSheet(cx: Scope) -> impl IntoView {
     let (sheet_name, set_sheet_name) = create_signal(cx, String::from(""));
+    let (rows,set_rows) = create_signal(cx, Vec::new());
     let params = use_params_map(cx);
     let sheet_id = move || params.
 	with(|params| match params.get("sheet_type_id") {
@@ -70,9 +71,9 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
 	.map(|x| x.header)
 	.collect::<Vec<_>>();
 
+    let append = move |row : Row| set_rows.update(|xs| xs.push(row));
 
-    let append = |map| {};
-
+    let delete_row = move |id : Uuid| set_rows.update(|xs| xs.retain(|x| x.id != id));
 
     view! { cx,
         <section>
@@ -95,6 +96,12 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
             <table>
                 <SheetHead basic_headers=basic_headers calc_headers=calc_headers/>
                 <tbody>
+                    <ShowRows
+                        delete_row=delete_row
+                        basic_headers=basic_headers
+                        calc_headers=calc_headers
+                        rows=rows
+                    />
                     <InputRow
                         basic_headers=basic_headers
                         calc_headers=calc_headers
@@ -109,6 +116,44 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
     }
 }
 
+
+#[component]
+fn ShowRows<BH,CH,FD>(
+    cx: Scope,
+    basic_headers : BH,
+    calc_headers : CH,
+    delete_row : FD,
+    rows : ReadSignal<Vec<Row>>
+) -> impl IntoView
+where
+    BH : Fn() -> Vec<String> + 'static + Clone + Copy,
+    CH : Fn() -> Vec<String> + 'static + Clone + Copy,
+    FD : Fn(Uuid) + 'static + Clone + Copy,
+{
+
+    view! { cx,
+        <For
+            each=move || rows.get()
+            key=|row| row.id
+            view=move |cx, Row { columns, id }| {
+                view! { cx,
+                    <tr>
+                        <For
+                            each=move || basic_headers().into_iter().chain(calc_headers())
+                            key=|key| key.clone()
+                            view=move |cx, column| {
+                                view! { cx, <td>{columns.get(&column).map(|x| x.value.to_string())}</td> }
+                            }
+                        />
+                        <td>
+                            <button on:click=move |_| delete_row(id)>"X"</button>
+                        </td>
+                    </tr>
+                }
+            }
+        />
+    }
+}
 
 type GetterSetter<T> = (ReadSignal<T>,WriteSignal<T>);
 
@@ -131,7 +176,7 @@ fn InputRow<F,BH,CH>(
     calc_columns : Memo<Vec<OperationConfig>>,
 ) -> impl IntoView
 where
-    F : Fn(HashMap<String,(Column,bool)>) + 'static,
+    F : Fn(Row) + 'static + Clone + Copy,
     BH : Fn() -> Vec<String> + 'static + Clone,
     CH : Fn() -> Vec<String> + 'static,
 {
@@ -171,15 +216,32 @@ where
 	let mut result = HashMap::new();
 	for (key,value) in basic_signals_map.get(){
 	    result.insert(key, match value {
-		ColumnSignal::String((reader,_)) => (Column::String(Some(reader.get())),true),
-		ColumnSignal::Float((reader,_)) => (Column::Float(reader.get()),true),
-		ColumnSignal::Date((reader,_)) => (Column::Date(Some(reader.get())),true),
+		ColumnSignal::String((reader,_)) => Column{
+		    is_basic : true,
+		    value : ColumnValue::String(Some(reader.get()))
+		},
+		ColumnSignal::Float((reader,_)) => Column{
+		    is_basic : true,
+		    value : ColumnValue::Float(reader.get())
+		},
+		ColumnSignal::Date((reader,_)) => Column{
+		    is_basic : true,
+		    value : ColumnValue::Date(Some(reader.get()))
+		},
 	    });
 	}
 	for (key ,value) in calc_signals_map.get() {
-	    result.insert(key, (Column::Float(value),false));
+	    result.insert(key, Column{
+		    is_basic : false,
+		    value : ColumnValue::Float(value)
+		});
 	}
-	append(result);
+	spawn_local(async move {
+	    append(Row{
+		id : new_id().await,
+		columns : result
+	    });
+	})
     };
 
     view! { cx,
@@ -198,8 +260,8 @@ where
                     view! { cx,
                         <td>
                             {move || match calc_signals_map.get().get(&header) {
-                                Some(x) => format!("{:.2}",*x),
-                                None => format!("{:.2}",0.0),
+                                Some(x) => format!("{:.2}",* x),
+                                None => format!("{:.2}", 0.0),
                             }}
                         </td>
                     }
@@ -328,23 +390,20 @@ fn make_input(
     view! { cx,
         <>
             <td>
-            <input
-	    type=i_type
-	    value=move || value.clone()
-	    // {
-	    // 	let value = value.clone();
-	    // 	if value.parse::<f64>().is_ok(){
-	    // 	    value.parse::<f64>().unwrap()
-	    // 	} else {
-	    // 	    value
-	    // 	}
-	    // }
-	    on:change=move |ev| match cmp_arg.get(&header) {
-		Some(ColumnSignal::String((_,write))) => write.set(event_target_value(&ev)),
-		Some(ColumnSignal::Float((_,write))) => write.set(event_target_value(&ev).parse().unwrap_or_default()),
-		Some(ColumnSignal::Date((_,write))) => write.set(event_target_value(&ev).parse().unwrap_or_default()),
-		None => ()
-	    }/>
+                <input
+                    type=i_type
+                    value=move || value.clone()
+                    on:change=move |ev| match cmp_arg.get(&header) {
+                        Some(ColumnSignal::String((_, write))) => write.set(event_target_value(&ev)),
+                        Some(ColumnSignal::Float((_, write))) => {
+                            write.set(event_target_value(&ev).parse().unwrap_or_default())
+                        }
+                        Some(ColumnSignal::Date((_, write))) => {
+                            write.set(event_target_value(&ev).parse().unwrap_or_default())
+                        }
+                        None => {}
+                    }
+                />
             </td>
         </>
     }
