@@ -3,12 +3,12 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE IF NOT EXISTS sheets (
   id UUID PRIMARY KEY NOT NULL,
   sheet_name VARCHAR(80) NOT NULL,
-  sheet_type VARCHAR(80) NOT NULL,
+  type_name VARCHAR(80) NOT NULL,
   insert_date DATE NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS sheets_names_idx ON sheets(sheet_name);
-CREATE INDEX IF NOT EXISTS sheets_type_idx ON sheets(sheet_type);
+CREATE INDEX IF NOT EXISTS sheets_type_idx ON sheets(type_name);
 CREATE INDEX IF NOT EXISTS sheets_insert_date_idx ON sheets(insert_date);
 
 CREATE TABLE IF NOT EXISTS rows (

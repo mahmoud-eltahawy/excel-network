@@ -1,4 +1,7 @@
 mod config;
+mod service;
+
+use service::*;
 
 use config::{get_config_postgres_url, get_configs_server, set_debug_configs};
 use dotenv::dotenv;
@@ -24,7 +27,7 @@ async fn main() -> std::io::Result<()> {
                 db: db_pool.clone(),
             }))
             .wrap(Logger::default())
-        // .service(sell_bill::scope())
+	    .service(sheet::scope())
     })
     .bind(get_configs_server())?
     .run()
