@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use std::collections::HashMap;
+use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct SheetShearchParams {
@@ -18,7 +18,7 @@ pub struct Name {
     pub the_name: String,
 }
 
-#[derive(Debug, Serialize, Deserialize,Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum ColumnValue {
     String(Option<String>),
     Float(f64),
@@ -27,22 +27,22 @@ pub enum ColumnValue {
 
 impl ToString for ColumnValue {
     fn to_string(&self) -> String {
-	match self {
-	    Self::String(Some(v)) => v.to_owned(),
-	    Self::Float(v) => format!("{:.2}",v),
-	    Self::Date(Some(v)) => v.to_string(),
-	    _ => String::from(""),
-	}
+        match self {
+            Self::String(Some(v)) => v.to_owned(),
+            Self::Float(v) => format!("{:.2}", v),
+            Self::Date(Some(v)) => v.to_string(),
+            _ => String::from(""),
+        }
     }
 }
 
-#[derive(Debug, Serialize, Deserialize,Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Column {
-    pub is_basic : bool,
-    pub value : ColumnValue,
+    pub is_basic: bool,
+    pub value: ColumnValue,
 }
 
-#[derive(Debug, Serialize, Deserialize,Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Row {
     pub id: Uuid,
     pub columns: HashMap<String, Column>,
@@ -61,13 +61,13 @@ pub trait HeaderGetter {
     fn get_header(self) -> String;
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone,PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct ColumnProps {
     pub header: String,
     pub is_completable: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone,PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum ColumnConfig {
     String(ColumnProps),
     Float(ColumnProps),
@@ -84,7 +84,7 @@ impl HeaderGetter for ColumnConfig {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone,PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum ValueType {
     Const(f64),
     Variable(String),
@@ -94,7 +94,7 @@ type OperationValue = (ValueType, ValueType);
 type OperationOValue = (Box<Operation>, ValueType);
 type OperationValueO = (ValueType, Box<Operation>);
 
-#[derive(Debug, Serialize, Deserialize, Clone,PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum Operation {
     Multiply(OperationValue),
     Add(OperationValue),
@@ -110,7 +110,7 @@ pub enum Operation {
     DivideO(OperationValueO),
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone,PartialEq)]
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct OperationConfig {
     pub header: String,
     pub value: Operation,
@@ -161,9 +161,7 @@ pub fn get_config_example() {
                 row: vec![
                     ConfigValue::Basic(ColumnConfig::Float(fcp("رقم الفاتورة".to_string()))),
                     ConfigValue::Basic(ColumnConfig::Date(fcp("التاريخ".to_string()))),
-                    ConfigValue::Basic(ColumnConfig::Float(fcp(
-                        "رقم التسجيل الضريبي".to_string()
-                    ))),
+                    ConfigValue::Basic(ColumnConfig::Float(fcp("رقم التسجيل الضريبي".to_string()))),
                     ConfigValue::Basic(ColumnConfig::String(tcp("اسم العميل".to_string()))),
                     ConfigValue::Basic(ColumnConfig::String(tcp("تبع".to_string()))),
                     ConfigValue::Basic(ColumnConfig::Float(fcp("القيمة".to_string()))),

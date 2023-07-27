@@ -24,7 +24,7 @@ async fn main() -> std::io::Result<()> {
                 db: db_pool.clone(),
             }))
             .wrap(Logger::default())
-            // .service(sell_bill::scope())
+        // .service(sell_bill::scope())
     })
     .bind(get_configs_server())?
     .run()

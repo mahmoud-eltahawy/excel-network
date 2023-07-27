@@ -6,17 +6,18 @@ use tauri_sys::tauri::invoke;
 
 mod sheet;
 
-use sheet::{SheetHome,show::ShowSheet,add::AddSheet};
+use sheet::{add::AddSheet, show::ShowSheet, SheetHome};
 
 #[derive(Serialize, Deserialize)]
 pub struct Non;
 
 #[derive(Serialize, Deserialize)]
-pub struct Id{id : Option<Uuid>}
+pub struct Id {
+    id: Option<Uuid>,
+}
 
 #[component]
 pub fn App(cx: Scope) -> impl IntoView {
-
     view! { cx,
         <main>
             <Router>
@@ -58,13 +59,14 @@ use uuid::Uuid;
 #[component]
 pub fn Home(cx: Scope) -> impl IntoView {
     let sheets_types_names = create_resource(
-	cx,
-	|| (),
-	|_| async move {
-            invoke::<Non, Vec<Name>>("sheets_types_names", &Non{})
-            .await
-	    .unwrap_or_default()
-    });
+        cx,
+        || (),
+        |_| async move {
+            invoke::<Non, Vec<Name>>("sheets_types_names", &Non {})
+                .await
+                .unwrap_or_default()
+        },
+    );
 
     view! { cx,
         <section>

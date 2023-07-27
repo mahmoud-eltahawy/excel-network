@@ -1,14 +1,14 @@
+use chrono::NaiveDate;
 use leptos::*;
 use leptos_router::*;
-use serde::{Serialize,Deserialize};
-use uuid::Uuid;
-use chrono::NaiveDate;
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use uuid::Uuid;
 
-use tauri_sys::tauri::invoke;
 use crate::Id;
+use tauri_sys::tauri::invoke;
 
-use models::{SheetShearchParams,Name};
+use models::{Name, SheetShearchParams};
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 struct SheetArgs {
@@ -16,31 +16,32 @@ struct SheetArgs {
 }
 
 pub mod add;
-pub mod show;
 pub mod shared;
+pub mod show;
 
 #[component]
 pub fn SheetHome(cx: Scope) -> impl IntoView {
     let params = use_params_map(cx);
-    let sheet_id = move || params.
-	with(|params| match params.get("sheet_type_id") {
-	    Some(id) => Uuid::from_str(id).ok(),
-	    None => None
-	});
+    let sheet_id = move || {
+        params.with(|params| match params.get("sheet_type_id") {
+            Some(id) => Uuid::from_str(id).ok(),
+            None => None,
+        })
+    };
     let sheet_type_name_resource = create_resource(
-	cx,
-	|| () ,
-	move |_| async move {
-            invoke::<Id, String>("sheet_type_name", &Id{id : sheet_id()})
-            .await
-	    .unwrap_or_default()
-    });
+        cx,
+        || (),
+        move |_| async move {
+            invoke::<Id, String>("sheet_type_name", &Id { id: sheet_id() })
+                .await
+                .unwrap_or_default()
+        },
+    );
 
     let sheet_type_name = move || match sheet_type_name_resource.read(cx) {
-	Some(name) => name,
-	None => "none".to_string()
+        Some(name) => name,
+        None => "none".to_string(),
     };
-
 
     let (offset, set_offset) = create_signal(cx, 0_u64);
     let (begin, set_begin) = create_signal(cx, None::<NaiveDate>);
@@ -48,19 +49,16 @@ pub fn SheetHome(cx: Scope) -> impl IntoView {
     let (sheet_name, set_sheet_name) = create_signal(cx, None::<String>);
 
     let search_args = move || SheetArgs {
-	params: SheetShearchParams {
-	    offset: offset.get() as i64,
-	    sheet_type_name: sheet_type_name(),
-	    sheet_name: sheet_name.get(),
-	    begin: begin.get(),
-	    end: end.get(),
-	},
+        params: SheetShearchParams {
+            offset: offset.get() as i64,
+            sheet_type_name: sheet_type_name(),
+            sheet_name: sheet_name.get(),
+            begin: begin.get(),
+            end: end.get(),
+        },
     };
 
-    let bills = create_resource(
-	cx,
-	search_args,
-	|value| async move {
+    let bills = create_resource(cx, search_args, |value| async move {
         invoke::<_, Vec<Name>>("top_5_sheets", &value)
             .await
             .unwrap_or_default()
