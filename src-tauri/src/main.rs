@@ -1,6 +1,7 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+use chrono::Local;
 use dotenv::dotenv;
 use uuid::Uuid;
 use std::collections::HashMap;
@@ -58,6 +59,27 @@ fn sheet_headers(
     
 }
 
+#[tauri::command]
+async fn save_sheet(
+    app_state: tauri::State<'_, AppState>,
+    sheetname: String,
+    typename: String,
+    rows : Vec<Row>,
+) -> Result<(),String> {
+    if sheetname.is_empty(){
+	return Err("اسم الشيت مطلوب".to_string());
+    }
+    let sheet = Sheet{
+	id : Uuid::new_v4(),
+	sheet_name : sheetname,
+	type_name : typename,
+	insert_date : Local::now().date_naive(),
+	rows,
+    };
+    println!("{:#?}",sheet);
+    Ok(())
+}
+
 fn main() {
     dotenv().ok();
     tauri::Builder::default()
@@ -66,7 +88,8 @@ fn main() {
 	    sheets_types_names,
 	    sheet_headers,
 	    sheet_type_name,
-	    new_id
+	    new_id,
+	    save_sheet,
 	])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -78,7 +101,7 @@ pub struct AppState {
     pub sheet_map : HashMap<String,Vec<ConfigValue>>,
 }
 
-use models::{SheetConfig, Config, ConfigValue, Name};
+use models::{SheetConfig, Config, ConfigValue, Name, Row, Sheet};
 
 impl Default for AppState {
     fn default() -> Self {

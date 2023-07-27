@@ -5,7 +5,7 @@ use models::{ConfigValue, HeaderGetter, ColumnValue, ColumnConfig, ColumnProps, 
 use serde::{Serialize, Deserialize};
 use std::{str::FromStr, collections::HashMap};
 
-use super::shared::{SheetHead, new_id};
+use super::shared::{SheetHead, new_id,alert};
 
 use uuid::Uuid;
 use tauri_sys::tauri::invoke;
@@ -14,6 +14,13 @@ use crate::Id;
 #[derive(Debug,Serialize,Deserialize)]
 struct NameArg{
     name : Option<String>
+}
+
+#[derive(Debug,Serialize,Deserialize)]
+struct SaveSheetArgs{
+    sheetname: String,
+    typename: String,
+    rows : Vec<Row>,
 }
 
 #[component]
@@ -75,6 +82,19 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
 
     let delete_row = move |id : Uuid| set_rows.update(|xs| xs.retain(|x| x.id != id));
 
+    let save_sheet = move |_| {
+	spawn_local(async move{
+	    match invoke::<_, ()>("save_sheet", &SaveSheetArgs{
+		sheetname : sheet_name.get(),
+		typename : sheet_type_name_resource.read(cx).unwrap_or_default(),
+		rows : rows.get(),
+	    }).await {
+		Ok(_) => set_rows.set(Vec::new()),
+		Err(err) => alert(err.to_string().as_str()).await,
+	    }
+	});
+    };
+
     view! { cx,
         <section>
             <A class="left-corner" href=format!("/sheet/{}", sheet_id().unwrap_or_default())>
@@ -111,6 +131,9 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
                     />
                 </tbody>
             </table>
+            <button on:click=save_sheet class="centered-button">
+                "حفظ الشيت"
+            </button>
             <Outlet/>
         </section>
     }

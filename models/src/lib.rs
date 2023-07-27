@@ -52,7 +52,7 @@ pub struct Row {
 pub struct Sheet {
     pub id: Uuid,
     pub sheet_name: String,
-    pub sheet_type_name: String,
+    pub type_name: String,
     pub insert_date: NaiveDate,
     pub rows: Vec<Row>,
 }

@@ -1,0 +1,25 @@
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+CREATE TABLE IF NOT EXISTS sheets (
+  id UUID PRIMARY KEY NOT NULL,
+  sheet_name VARCHAR(80) NOT NULL,
+  sheet_type VARCHAR(80) NOT NULL,
+  insert_date DATE NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS rows (
+  id UUID PRIMARY KEY NOT NULL,
+  sheet_id UUID NOT NULL,
+  insert_date DATE DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (sheet_id) REFERENCES sheets (id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS columns (
+  id UUID PRIMARY KEY NOT NULL,
+  row_id UUID NOT NULL,
+  header_name VARCHAR(80) NOT NULL,
+  is_basic BOOLEAN NOT NULL,
+  value JSON NOT NULL,
+  UNIQUE(row_id,header_name),
+  FOREIGN KEY (row_id) REFERENCES rows (id) ON DELETE CASCADE
+);
