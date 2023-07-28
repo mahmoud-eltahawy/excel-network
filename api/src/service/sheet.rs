@@ -219,12 +219,11 @@ async fn save_cloumn(
     header_name: String,
     column : Column,
 ) -> Result<(), Box<dyn Error>> {
-    let Column { is_basic, value } = column;
-    if !is_basic {
+    if !column.is_basic {
 	return Ok(());
     }
     let id = Uuid::new_v4();
-    let value = serde_json::json!(value);
+    let value = serde_json::json!(column);
     query!(
         r#"
 	INSERT INTO columns(id,row_id,header_name,value)

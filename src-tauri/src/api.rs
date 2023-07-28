@@ -1,5 +1,6 @@
 use models::{Sheet, SheetShearchParams, Name};
 use reqwest::StatusCode;
+use uuid::Uuid;
 
 use crate::AppState;
 
@@ -35,4 +36,19 @@ pub async fn search_for_5_sheets(
 	.await?;
 
     Ok(names)
+}
+
+pub async fn get_sheet_by_id(
+    app_state: &AppState,
+    id : &Uuid,
+) -> Result<Sheet, Box<dyn std::error::Error>> {
+    let origin = &app_state.origin;
+    let sheet = reqwest::Client::new()
+        .get(format!("{origin}/sheet/{}",id))
+        .send()
+        .await?
+	.json::<Sheet>()
+	.await?;
+
+    Ok(sheet)
 }

@@ -1,23 +1,17 @@
-use chrono::NaiveDate;
 use leptos::*;
 use leptos_router::*;
 use models::{
-    Column, ColumnConfig, ColumnProps, ColumnValue, ConfigValue, HeaderGetter, Operation,
-    OperationConfig, Row, ValueType,
+    Column, ColumnConfig, ColumnProps, ColumnValue, ConfigValue, HeaderGetter,
+    OperationConfig, Row,
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, str::FromStr};
 
-use super::shared::{alert,message, new_id, SheetHead};
+use super::shared::{alert,message, new_id, SheetHead,NameArg,match_operation,ColumnSignal};
 
 use crate::Id;
 use tauri_sys::tauri::invoke;
 use uuid::Uuid;
-
-#[derive(Debug, Serialize, Deserialize)]
-struct NameArg {
-    name: Option<String>,
-}
 
 #[derive(Debug, Serialize, Deserialize)]
 struct SaveSheetArgs {
@@ -31,7 +25,7 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
     let (sheet_name, set_sheet_name) = create_signal(cx, String::from(""));
     let (rows, set_rows) = create_signal(cx, Vec::new());
     let params = use_params_map(cx);
-    let sheet_id = move || {
+    let sheet_type_id = move || {
         params.with(|params| match params.get("sheet_type_id") {
             Some(id) => Uuid::from_str(id).ok(),
             None => None,
@@ -41,7 +35,7 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
         cx,
         || (),
         move |_| async move {
-            invoke::<Id, String>("sheet_type_name", &Id { id: sheet_id() })
+            invoke::<Id, String>("sheet_type_name", &Id { id: sheet_type_id() })
                 .await
                 .unwrap_or_default()
         },
@@ -133,7 +127,7 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
 
     view! { cx,
         <section>
-            <A class="left-corner" href=format!("/sheet/{}", sheet_id().unwrap_or_default())>
+            <A class="left-corner" href=format!("/sheet/{}", sheet_type_id().unwrap_or_default())>
                 "->"
             </A>
             <br/>
@@ -212,15 +206,6 @@ where
     }
 }
 
-type GetterSetter<T> = (ReadSignal<T>, WriteSignal<T>);
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum ColumnSignal {
-    String(GetterSetter<String>),
-    Float(GetterSetter<f64>),
-    Date(GetterSetter<NaiveDate>),
-}
-
 use chrono::Local;
 
 #[component]
@@ -273,7 +258,7 @@ where
     let calc_signals_map = create_memo(cx, move |_| {
         let mut map = HashMap::new();
         for OperationConfig { header, value } in calc_columns.get().into_iter() {
-            map.insert(header, match_operation(value, basic_signals_map));
+            map.insert(header, match_operation(value, basic_signals_map.get()));
         }
         map
     });
@@ -345,92 +330,6 @@ where
                 </td>
             </tr>
         </>
-    }
-}
-
-fn match_operation(
-    value: Operation,
-    basic_signals_map: Memo<HashMap<String, ColumnSignal>>,
-) -> f64 {
-    fn sum(v1: f64, v2: f64) -> f64 {
-        v1 + v2
-    }
-    fn div(v1: f64, v2: f64) -> f64 {
-        v1 / v2
-    }
-    fn mul(v1: f64, v2: f64) -> f64 {
-        v1 * v2
-    }
-    fn sub(v1: f64, v2: f64) -> f64 {
-        v1 - v2
-    }
-    fn basic_calc<F>(
-        basic_signals_map: Memo<HashMap<String, ColumnSignal>>,
-        vt1: ValueType,
-        vt2: ValueType,
-        calc: F,
-    ) -> f64
-    where
-        F: Fn(f64, f64) -> f64 + 'static,
-    {
-        match (vt1, vt2) {
-            (ValueType::Const(val1), ValueType::Const(val2)) => calc(val1, val2),
-            (ValueType::Variable(var), ValueType::Const(val2)) => {
-                match basic_signals_map.get().get(&var) {
-                    Some(ColumnSignal::Float((val1, _))) => calc(val1.get(), val2),
-                    _ => 0.0,
-                }
-            }
-            (ValueType::Const(val1), ValueType::Variable(var)) => {
-                match basic_signals_map.get().get(&var) {
-                    Some(ColumnSignal::Float((val2, _))) => calc(val1, val2.get()),
-                    _ => 0.0,
-                }
-            }
-            (ValueType::Variable(var1), ValueType::Variable(var2)) => {
-                let bsm = basic_signals_map.get();
-                match (bsm.get(&var1), bsm.get(&var2)) {
-                    (
-                        Some(ColumnSignal::Float((val1, _))),
-                        Some(ColumnSignal::Float((val2, _))),
-                    ) => calc(val1.get(), val2.get()),
-                    _ => 0.0,
-                }
-            }
-        }
-    }
-    fn calc_o<F>(
-        basic_signals_map: Memo<HashMap<String, ColumnSignal>>,
-        v: ValueType,
-        bop: Box<Operation>,
-        calc: F,
-    ) -> f64
-    where
-        F: Fn(f64, f64) -> f64 + 'static,
-    {
-        match (v, bop) {
-            (ValueType::Const(val), bop) => calc(val, match_operation(*bop, basic_signals_map)),
-            (ValueType::Variable(var), bop) => match basic_signals_map.get().get(&var) {
-                Some(ColumnSignal::Float((val, _))) => {
-                    calc(val.get(), match_operation(*bop, basic_signals_map))
-                }
-                _ => 0.0,
-            },
-        }
-    }
-    match value {
-        Operation::Multiply((v1, v2)) => basic_calc(basic_signals_map, v1, v2, mul),
-        Operation::Add((v1, v2)) => basic_calc(basic_signals_map, v1, v2, sum),
-        Operation::Divide((v1, v2)) => basic_calc(basic_signals_map, v1, v2, div),
-        Operation::Minus((v1, v2)) => basic_calc(basic_signals_map, v1, v2, sub),
-        Operation::MultiplyO((v, bop)) => calc_o(basic_signals_map, v, bop, mul),
-        Operation::AddO((v, bop)) => calc_o(basic_signals_map, v, bop, sum),
-        Operation::DivideO((v, bop)) => calc_o(basic_signals_map, v, bop, div),
-        Operation::MinusO((v, bop)) => calc_o(basic_signals_map, v, bop, sub),
-        Operation::OMultiply((bop, v)) => calc_o(basic_signals_map, v, bop, mul),
-        Operation::OAdd((bop, v)) => calc_o(basic_signals_map, v, bop, sum),
-        Operation::ODivide((bop, v)) => calc_o(basic_signals_map, v, bop, div),
-        Operation::OMinus((bop, v)) => calc_o(basic_signals_map, v, bop, sub),
     }
 }
 

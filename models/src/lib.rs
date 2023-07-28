@@ -18,7 +18,7 @@ pub struct Name {
     pub the_name: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone,PartialEq)]
 pub enum ColumnValue {
     String(Option<String>),
     Float(f64),
@@ -36,19 +36,19 @@ impl ToString for ColumnValue {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone,PartialEq)]
 pub struct Column {
     pub is_basic: bool,
     pub value: ColumnValue,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone,PartialEq)]
 pub struct Row {
     pub id: Uuid,
     pub columns: HashMap<String, Column>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize,Default,Clone,PartialEq)]
 pub struct Sheet {
     pub id: Uuid,
     pub sheet_name: String,
