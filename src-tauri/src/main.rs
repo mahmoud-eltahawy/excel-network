@@ -1,6 +1,8 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod api;
+
 use chrono::Local;
 use dotenv::dotenv;
 use std::collections::HashMap;
@@ -65,8 +67,22 @@ async fn save_sheet(
         insert_date: Local::now().date_naive(),
         rows,
     };
-    println!("{:#?}", sheet);
-    Ok(())
+    match api::save_sheet(&app_state, &sheet).await {
+	Ok(_) => Ok(()),
+	Err(err) => Err(err.to_string())
+    }
+}
+
+
+#[tauri::command]
+async fn top_5_sheets(
+    app_state: tauri::State<'_, AppState>,
+    params : SheetShearchParams,
+) -> Result<Vec<Name>, String> {
+    match api::search_for_5_sheets(&app_state, &params).await {
+	Ok(names) => Ok(names),
+	Err(err) => Err(err.to_string())
+    }
 }
 
 fn main() {
@@ -79,6 +95,7 @@ fn main() {
             sheet_type_name,
             new_id,
             save_sheet,
+	    top_5_sheets,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -90,7 +107,7 @@ pub struct AppState {
     pub sheet_map: HashMap<String, Vec<ConfigValue>>,
 }
 
-use models::{Config, ConfigValue, Name, Row, Sheet, SheetConfig};
+use models::{Config, ConfigValue, Name, Row, Sheet, SheetConfig, SheetShearchParams};
 
 impl Default for AppState {
     fn default() -> Self {

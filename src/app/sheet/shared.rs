@@ -19,6 +19,14 @@ pub async fn alert(message: &str) {
     builder.message(message).await.unwrap_or_default();
 }
 
+pub async fn message(message: &str) {
+    let mut builder = MessageDialogBuilder::new();
+    builder.set_title("رسالة");
+    builder.set_kind(MessageDialogKind::Info);
+
+    builder.message(message).await.unwrap_or_default();
+}
+
 #[component]
 pub fn SheetHead<Fa, Fb>(cx: Scope, basic_headers: Fa, calc_headers: Fb) -> impl IntoView
 where

@@ -8,7 +8,7 @@ use models::{
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, str::FromStr};
 
-use super::shared::{alert, new_id, SheetHead};
+use super::shared::{alert,message, new_id, SheetHead};
 
 use crate::Id;
 use tauri_sys::tauri::invoke;
@@ -122,7 +122,10 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
             )
             .await
             {
-                Ok(_) => set_rows.set(Vec::new()),
+                Ok(_) => {
+		    set_rows.set(Vec::new());
+		    message("نجح الحفظ").await
+		},
                 Err(err) => alert(err.to_string().as_str()).await,
             }
         });
