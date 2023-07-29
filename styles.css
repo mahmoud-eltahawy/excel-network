@@ -209,3 +209,8 @@ button:hover{
     margin: 17px;
     font-size: 24px;
 }
+
+.deleted {
+  text-decoration: line-through;
+  color: transparent;
+}

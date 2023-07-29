@@ -1,4 +1,4 @@
-use models::{Sheet, SearchSheetParams, Name};
+use models::{Name, SearchSheetParams, Sheet};
 use reqwest::StatusCode;
 use uuid::Uuid;
 
@@ -32,23 +32,23 @@ pub async fn search_for_5_sheets(
         .json(params)
         .send()
         .await?
-	.json::<Vec<Name>>()
-	.await?;
+        .json::<Vec<Name>>()
+        .await?;
 
     Ok(names)
 }
 
 pub async fn get_sheet_by_id(
     app_state: &AppState,
-    id : &Uuid,
+    id: &Uuid,
 ) -> Result<Sheet, Box<dyn std::error::Error>> {
     let origin = &app_state.origin;
     let sheet = reqwest::Client::new()
-        .get(format!("{origin}/sheet/{}",id))
+        .get(format!("{origin}/sheet/{}", id))
         .send()
         .await?
-	.json::<Sheet>()
-	.await?;
+        .json::<Sheet>()
+        .await?;
 
     Ok(sheet)
 }

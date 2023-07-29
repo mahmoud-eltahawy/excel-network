@@ -27,7 +27,7 @@ async fn main() -> std::io::Result<()> {
                 db: db_pool.clone(),
             }))
             .wrap(Logger::default())
-	    .service(sheet::scope())
+            .service(sheet::scope())
     })
     .bind(get_configs_server())?
     .run()
