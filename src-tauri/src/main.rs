@@ -8,7 +8,7 @@ use dotenv::dotenv;
 use std::collections::HashMap;
 use std::env;
 use uuid::Uuid;
-use models::{ColumnValue,Config, ConfigValue, Name, Row, Sheet, SheetConfig, SheetShearchParams};
+use models::{ColumnValue,Config, ConfigValue, Name, Row, Sheet, SheetConfig, SearchSheetParams};
 
 use rust_xlsxwriter::{Color, Format, FormatBorder, Workbook};
 use std::path::MAIN_SEPARATOR;
@@ -81,7 +81,7 @@ async fn save_sheet(
 #[tauri::command]
 async fn top_5_sheets(
     app_state: tauri::State<'_, AppState>,
-    params : SheetShearchParams,
+    params : SearchSheetParams,
 ) -> Result<Vec<Name>, String> {
     match api::search_for_5_sheets(&app_state, &params).await {
 	Ok(names) => Ok(names),

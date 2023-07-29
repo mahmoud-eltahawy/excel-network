@@ -1,4 +1,4 @@
-use models::{Sheet, SheetShearchParams, Name};
+use models::{Sheet, SearchSheetParams, Name};
 use reqwest::StatusCode;
 use uuid::Uuid;
 
@@ -24,7 +24,7 @@ pub async fn save_sheet(
 
 pub async fn search_for_5_sheets(
     app_state: &AppState,
-    params: &SheetShearchParams,
+    params: &SearchSheetParams,
 ) -> Result<Vec<Name>, Box<dyn std::error::Error>> {
     let origin = &app_state.origin;
     let names = reqwest::Client::new()

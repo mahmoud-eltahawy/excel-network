@@ -7,7 +7,7 @@ use models::{
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, str::FromStr};
 
-use super::shared::{alert,message, new_id, SheetHead,NameArg,match_operation,ColumnSignal};
+use super::shared::{alert,message, new_id, SheetHead,NameArg,calculate_operation,ColumnSignal};
 
 use crate::Id;
 use tauri_sys::tauri::invoke;
@@ -258,7 +258,16 @@ where
     let calc_signals_map = create_memo(cx, move |_| {
         let mut map = HashMap::new();
         for OperationConfig { header, value } in calc_columns.get().into_iter() {
-            map.insert(header, match_operation(value, basic_signals_map.get()));
+	    let mut basic_map = HashMap::new();
+	    for (header,column_signal) in basic_signals_map.get() {
+		let column_value = match column_signal {
+		    ColumnSignal::String((reader,_)) => ColumnValue::String(Some(reader.get())),
+		    ColumnSignal::Float((reader,_)) => ColumnValue::Float(reader.get()),
+		    ColumnSignal::Date((reader,_)) => ColumnValue::Date(Some(reader.get())),
+		};
+		basic_map.insert(header, column_value);
+	    }
+            map.insert(header, calculate_operation(value, basic_map));
         }
         map
     });

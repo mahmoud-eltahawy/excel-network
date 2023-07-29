@@ -8,7 +8,7 @@ use uuid::Uuid;
 use sqlx::{query, query_as};
 use std::{error::Error, collections::HashMap};
 
-use models::{Sheet, Row, Column, SheetShearchParams, Name};
+use models::{Sheet, Row, Column, SearchSheetParams, Name};
 
 pub fn scope() -> Scope {
     web::scope("/sheet")
@@ -94,9 +94,9 @@ async fn get_by_id(
 
 async fn search_by_params(
     state: &AppState,
-    params : SheetShearchParams,
+    params : SearchSheetParams,
 ) -> Result<Vec<Name>, Box<dyn Error>> {
-    let SheetShearchParams {
+    let SearchSheetParams {
 	offset,
 	sheet_type_name,
 	begin,
@@ -205,7 +205,7 @@ async fn search_by_params(
 #[post("/search")]
 async fn search(
     state: Data<AppState>,
-    params: web::Json<SheetShearchParams>,
+    params: web::Json<SearchSheetParams>,
 ) -> impl Responder {
     match search_by_params(&state, params.into_inner()).await {
         Ok(dep) => HttpResponse::Ok().json(dep),

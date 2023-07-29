@@ -8,11 +8,11 @@ use uuid::Uuid;
 use crate::Id;
 use tauri_sys::tauri::invoke;
 
-use models::{Name, SheetShearchParams};
+use models::{Name, SearchSheetParams};
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 struct SheetArgs {
-    params: SheetShearchParams,
+    params: SearchSheetParams,
 }
 
 pub mod add;
@@ -49,7 +49,7 @@ pub fn SheetHome(cx: Scope) -> impl IntoView {
     let (sheet_name, set_sheet_name) = create_signal(cx, None::<String>);
 
     let search_args = move || SheetArgs {
-        params: SheetShearchParams {
+        params: SearchSheetParams {
             offset: offset.get() as i64,
             sheet_type_name: sheet_type_name(),
             sheet_name: sheet_name.get(),

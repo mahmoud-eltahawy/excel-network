@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct SheetShearchParams {
+pub struct SearchSheetParams {
     pub offset: i64,
     pub begin: Option<NaiveDate>,
     pub end: Option<NaiveDate>,

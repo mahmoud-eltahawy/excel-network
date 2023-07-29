@@ -135,6 +135,14 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
         map
     });
 
+    // let calc_signals_map = create_memo(cx, move |_| {
+    //     let mut map = HashMap::new();
+    //     for OperationConfig { header, value } in calc_columns.get().into_iter() {
+    //         map.insert(header, calculate_operation(value, basic_signals_map.get()));
+    //     }
+    //     map
+    // });
+
     let sheet = create_memo(cx,move |_| {
 	let mut sheet = sheet_resource
 	.read(cx)

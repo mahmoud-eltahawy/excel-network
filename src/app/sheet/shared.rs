@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use chrono::NaiveDate;
 
 use models::{
-    Operation, ValueType,
+    Operation, ValueType, ColumnValue,
 };
 
 pub async fn new_id() -> Uuid {
@@ -90,7 +90,7 @@ fn sub(v1: f64, v2: f64) -> f64 {
     v1 - v2
 }
 fn basic_calc<F>(
-    basic_signals_map: HashMap<String, ColumnSignal>,
+    basic_signals_map: HashMap<String, ColumnValue>,
     vt1: ValueType,
     vt2: ValueType,
     calc: F,
@@ -102,29 +102,29 @@ where
 	(ValueType::Const(val1), ValueType::Const(val2)) => calc(val1, val2),
 	(ValueType::Variable(var), ValueType::Const(val2)) => {
 	    match basic_signals_map.get(&var) {
-		Some(ColumnSignal::Float((val1, _))) => calc(val1.get(), val2),
+		Some(ColumnValue::Float(val1)) => calc(*val1, val2),
 		_ => 0.0,
 	    }
 	}
 	(ValueType::Const(val1), ValueType::Variable(var)) => {
 	    match basic_signals_map.get(&var) {
-		Some(ColumnSignal::Float((val2, _))) => calc(val1, val2.get()),
+		Some(ColumnValue::Float(val2)) => calc(val1, *val2),
 		_ => 0.0,
 	    }
 	}
 	(ValueType::Variable(var1), ValueType::Variable(var2)) => {
 	    match (basic_signals_map.get(&var1), basic_signals_map.get(&var2)) {
 		(
-		    Some(ColumnSignal::Float((val1, _))),
-		    Some(ColumnSignal::Float((val2, _))),
-		) => calc(val1.get(), val2.get()),
+		    Some(ColumnValue::Float(val1)),
+		    Some(ColumnValue::Float(val2)),
+		) => calc(*val1, *val2),
 		_ => 0.0,
 	    }
 	}
     }
 }
 fn calc_o<F>(
-    basic_signals_map: HashMap<String, ColumnSignal>,
+    basic_signals_map: HashMap<String, ColumnValue>,
     v: ValueType,
     bop: Box<Operation>,
     calc: F,
@@ -133,19 +133,19 @@ where
     F: Fn(f64, f64) -> f64 + 'static,
 {
     match (v, bop) {
-	(ValueType::Const(val), bop) => calc(val, match_operation(*bop, basic_signals_map)),
+	(ValueType::Const(val), bop) => calc(val, calculate_operation(*bop, basic_signals_map)),
 	(ValueType::Variable(var), bop) => match basic_signals_map.get(&var) {
-	    Some(ColumnSignal::Float((val, _))) => {
-		calc(val.get(), match_operation(*bop, basic_signals_map))
+	    Some(ColumnValue::Float(val)) => {
+		calc(*val, calculate_operation(*bop, basic_signals_map))
 	    }
 	    _ => 0.0,
 	},
     }
 }
 
-pub fn match_operation(
+pub fn calculate_operation(
     value: Operation,
-    basic_signals_map: HashMap<String, ColumnSignal>,
+    basic_signals_map: HashMap<String, ColumnValue>,
 ) -> f64 {
     match value {
         Operation::Multiply((v1, v2)) => basic_calc(basic_signals_map, v1, v2, mul),
