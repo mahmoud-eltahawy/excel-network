@@ -191,9 +191,37 @@ pub fn get_config_example() {
             SheetConfig {
                 sheet_type_name: String::from("مشتريات"),
                 row: vec![
-                    ConfigValue::Basic(ColumnConfig::String(tcp("name".to_string()))),
-                    ConfigValue::Basic(ColumnConfig::Float(fcp("tax".to_string()))),
-                    ConfigValue::Basic(ColumnConfig::Float(fcp("i32".to_string()))),
+                    ConfigValue::Basic(ColumnConfig::Float(fcp("رقم الفاتورة".to_string()))),
+                    ConfigValue::Basic(ColumnConfig::Date(fcp("التاريخ".to_string()))),
+                    ConfigValue::Basic(ColumnConfig::String(tcp("بيان".to_string()))),
+                    ConfigValue::Basic(ColumnConfig::Float(fcp("رقم الاصناف".to_string()))),
+                    ConfigValue::Basic(ColumnConfig::Float(fcp("السعر".to_string()))),
+                    ConfigValue::Basic(ColumnConfig::Float(fcp("العدد".to_string()))),
+                    ConfigValue::Calculated(OperationConfig {
+                        header: "الاجمالي".to_string(),
+                        value: Operation::Multiply((
+                            ValueType::Variable("السعر".to_string()),
+                            ValueType::Variable("العدد".to_string()),
+			)),
+                    }),
+                ],
+            },
+            SheetConfig {
+                sheet_type_name: String::from("كارت صنف"),
+                row: vec![
+                    ConfigValue::Basic(ColumnConfig::Float(fcp("رقم الفاتورة".to_string()))),
+                    ConfigValue::Basic(ColumnConfig::Date(fcp("التاريخ".to_string()))),
+                    ConfigValue::Basic(ColumnConfig::Float(fcp("كود الصنف".to_string()))),
+                    ConfigValue::Basic(ColumnConfig::String(tcp("اسم الصنف".to_string()))),
+                    ConfigValue::Basic(ColumnConfig::Float(fcp("السعر".to_string()))),
+                    ConfigValue::Basic(ColumnConfig::Float(fcp("الكمية".to_string()))),
+                    ConfigValue::Calculated(OperationConfig {
+                        header: "القيمة".to_string(),
+                        value: Operation::Multiply((
+                            ValueType::Variable("السعر".to_string()),
+                            ValueType::Variable("الكمية".to_string()),
+			)),
+                    }),
                 ],
             },
         ],

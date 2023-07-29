@@ -1,4 +1,4 @@
-use models::{Name, SearchSheetParams, Sheet};
+use models::{Name, SearchSheetParams, Sheet, Row};
 use reqwest::StatusCode;
 use uuid::Uuid;
 
@@ -12,6 +12,61 @@ pub async fn save_sheet(
     let res = reqwest::Client::new()
         .post(format!("{origin}/sheet/"))
         .json(sheet)
+        .send()
+        .await?;
+
+    if res.status() == StatusCode::OK {
+        Ok(())
+    } else {
+        Err("failed".into())
+    }
+}
+
+pub async fn update_sheet_name(
+    app_state: &AppState,
+    name :&Name
+) -> Result<(), Box<dyn std::error::Error>> {
+    let origin = &app_state.origin;
+    let res = reqwest::Client::new()
+        .put(format!("{origin}/sheet/name"))
+        .json(name)
+        .send()
+        .await?;
+
+    if res.status() == StatusCode::OK {
+        Ok(())
+    } else {
+        Err("failed".into())
+    }
+}
+
+pub async fn add_row_to_sheet(
+    app_state: &AppState,
+    sheet_id: &Uuid,
+    row: &Row,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let origin = &app_state.origin;
+    let res = reqwest::Client::new()
+        .post(format!("{origin}/sheet/{sheet_id}/row"))
+        .json(row)
+        .send()
+        .await?;
+
+    if res.status() == StatusCode::OK {
+        Ok(())
+    } else {
+        Err("failed".into())
+    }
+}
+
+pub async fn delete_row_from_sheet(
+    app_state: &AppState,
+    sheet_id: &Uuid,
+    row_id: &Uuid,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let origin = &app_state.origin;
+    let res = reqwest::Client::new()
+        .delete(format!("{origin}/sheet/{sheet_id}/{row_id}/row"))
         .send()
         .await?;
 

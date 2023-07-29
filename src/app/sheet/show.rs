@@ -1,7 +1,7 @@
 use crate::Id;
 use leptos::*;
 use leptos_router::*;
-use models::{Column, ColumnValue, ConfigValue, HeaderGetter};
+use models::{Column, ColumnValue, ConfigValue, HeaderGetter, Name};
 use models::{Row, Sheet};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -15,6 +15,23 @@ use super::shared::{alert,confirm,calculate_operation,message,NameArg,SheetHead,
 struct ExportSheetArg {
     headers: Vec<String>,
     sheet: Sheet,
+}
+
+#[derive(Serialize, Deserialize)]
+struct SheetNameArg {
+    name: Name
+}
+
+#[derive(Serialize, Deserialize)]
+struct RowsDeleteArg {
+    sheetid : Uuid,
+    rowsids : Vec<Uuid>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct RowsAddArg {
+    sheetid : Uuid,
+    rows : Vec<Row>,
 }
 
 #[component]
@@ -192,7 +209,71 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
 	set_edit_mode.set(true);
     };
     let append = move |row| set_added_rows.update(|xs| xs.push(row));
-    let save_edits = move |_| {};
+    let save_edits = move |_| {
+	let Some(sheet) = sheet_resource.read(cx) else {
+	    return;
+	};
+	let sheet_name = sheet_name.get();
+	let deleted_rows = deleted_rows.get();
+	let added_rows = added_rows.get();
+	spawn_local(async move{
+	    if !sheet_name.is_empty() && sheet_name != sheet.sheet_name {
+		match invoke::<_, ()>(
+		    "update_sheet_name",
+		    &SheetNameArg{
+			name:Name {
+			    id: sheet.id,
+			    the_name: sheet_name
+			},
+		    }
+		)
+		.await
+		{
+		    Ok(_) => {
+			set_sheet_name.set(String::from(""));
+			message("نجح تغيير الاسم").await
+		    },
+		    Err(err) => alert(err.to_string().as_str()).await,
+		}
+	    }
+	    if !deleted_rows.is_empty() {
+		match invoke::<_, ()>(
+		    "delete_rows_from_sheet",
+		    &RowsDeleteArg{
+			sheetid : sheet.id,
+			rowsids : deleted_rows,
+		    }
+		)
+		.await
+		{
+		    Ok(_) => {
+			set_deleted_rows.set(Vec::new());
+			message("نجح الحذف").await
+		    },
+		    Err(err) => alert(err.to_string().as_str()).await,
+		}
+	    }
+	    if !added_rows.is_empty() {
+		match invoke::<_, ()>(
+		    "add_rows_to_sheet",
+		    &RowsAddArg{
+			sheetid: sheet.id,
+			rows: added_rows,
+		    }
+		)
+		.await
+		{
+		    Ok(_) => {
+			set_added_rows.set(Vec::new());
+			message("نجحت الاضافة").await
+		    },
+		    Err(err) => alert(err.to_string().as_str()).await,
+		}
+	    }
+	});
+	set_edit_mode.set(false);
+	sheet_resource.refetch();
+    };
 
     view! { cx,
         <section>

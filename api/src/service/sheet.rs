@@ -2,7 +2,7 @@ use crate::AppState;
 use actix_web::{
     get, post,
     web::{self, Data},
-    HttpResponse, Responder, Scope,
+    HttpResponse, Responder, Scope, delete, put,
 };
 use sqlx::{query, query_as};
 use std::{collections::HashMap, error::Error};
@@ -15,6 +15,65 @@ pub fn scope() -> Scope {
         .service(get_by_id)
         .service(search)
         .service(save)
+        .service(update_name)
+        .service(delete_row)
+        .service(add_row_to_sheet)
+
+}
+
+#[post("/search")]
+async fn search(state: Data<AppState>, params: web::Json<SearchSheetParams>) -> impl Responder {
+    match search_by_params(&state, params.into_inner()).await {
+        Ok(dep) => HttpResponse::Ok().json(dep),
+        Err(_) => HttpResponse::InternalServerError().into(),
+    }
+}
+
+#[post("/")]
+async fn save(state: Data<AppState>, sheet: web::Json<Sheet>) -> impl Responder {
+    match save_sheet(&state, sheet.into_inner()).await {
+        Ok(_) => HttpResponse::Ok(),
+        Err(_) => HttpResponse::InternalServerError(),
+    }
+}
+
+#[put("/name")]
+async fn update_name(state: Data<AppState>, name : web::Json<Name>) -> impl Responder {
+    match update_sheet_name(&state, name .into_inner()).await {
+        Ok(_) => HttpResponse::Ok(),
+        Err(_) => HttpResponse::InternalServerError(),
+    }
+}
+
+#[get("/{id}")]
+async fn get_by_id(state: Data<AppState>, id: web::Path<Uuid>) -> impl Responder {
+    match fetch_sheet_by_id(&state, id.into_inner()).await {
+        Ok(dep) => HttpResponse::Ok().json(dep),
+        Err(_) => HttpResponse::InternalServerError().into(),
+    }
+}
+
+#[post("/{sheet_id}/row")]
+async fn add_row_to_sheet(
+    state: Data<AppState>,
+    sheet_id: web::Path<Uuid>,
+    row: web::Json<Row>,
+) -> impl Responder {
+    let sheet_id = sheet_id.into_inner();
+    let row = row.into_inner();
+    match save_row(&state, &sheet_id, row).await {
+        Ok(dep) => HttpResponse::Ok().json(dep),
+        Err(_) => HttpResponse::InternalServerError().into(),
+    }
+}
+
+#[delete("/{sheet_id}/{row_id}/row")]
+async fn delete_row(state: Data<AppState>, ids : web::Path<(Uuid,Uuid)>) -> impl Responder {
+    let (sheet_id,row_id) = ids.into_inner();
+    match delete_row_by_id(&state, sheet_id,row_id).await {
+        Ok(_) => HttpResponse::Ok(),
+        Err(_) => HttpResponse::InternalServerError(),
+    }
 }
 
 pub async fn fetch_columns_by_row_id(
@@ -31,7 +90,11 @@ pub async fn fetch_columns_by_row_id(
     .await?;
     let mut map = HashMap::new();
     for record in records.into_iter() {
-        map.insert(record.header_name, serde_json::from_value(record.value)?);
+        map.insert(record.header_name,
+		   Column {
+		       is_basic: true,
+		       value: serde_json::from_value(record.value)?
+		   });
     }
     Ok(map)
 }
@@ -49,6 +112,23 @@ pub async fn fetch_rows_ids_by_sheet_id(
     .fetch_all(&state.db)
     .await?;
     Ok(records.into_iter().map(|x| x.id).collect())
+}
+
+pub async fn delete_row_by_id(
+    state: &AppState,
+    sheet_id: Uuid,
+    row_id: Uuid,
+) -> Result<(), Box<dyn Error>> {
+    query!(
+        r#"
+        DELETE FROM rows 
+        WHERE sheet_id = $1 AND id = $2"#,
+        sheet_id,
+	row_id,
+    )
+    .execute(&state.db)
+    .await?;
+    Ok(())
 }
 
 async fn fetch_sheet_by_id(state: &AppState, id: Uuid) -> Result<Sheet, Box<dyn Error>> {
@@ -73,14 +153,6 @@ async fn fetch_sheet_by_id(state: &AppState, id: Uuid) -> Result<Sheet, Box<dyn 
         insert_date: record.insert_date,
         rows,
     })
-}
-
-#[get("/{id}")]
-async fn get_by_id(state: Data<AppState>, id: web::Path<Uuid>) -> impl Responder {
-    match fetch_sheet_by_id(&state, id.into_inner()).await {
-        Ok(dep) => HttpResponse::Ok().json(dep),
-        Err(_) => HttpResponse::InternalServerError().into(),
-    }
 }
 
 async fn search_by_params(
@@ -217,14 +289,6 @@ async fn search_by_params(
     Ok(names)
 }
 
-#[post("/search")]
-async fn search(state: Data<AppState>, params: web::Json<SearchSheetParams>) -> impl Responder {
-    match search_by_params(&state, params.into_inner()).await {
-        Ok(dep) => HttpResponse::Ok().json(dep),
-        Err(_) => HttpResponse::InternalServerError().into(),
-    }
-}
-
 async fn save_cloumn(
     state: &AppState,
     row_id: &Uuid,
@@ -235,7 +299,7 @@ async fn save_cloumn(
         return Ok(());
     }
     let id = Uuid::new_v4();
-    let value = serde_json::json!(column);
+    let value = serde_json::json!(column.value);
     query!(
         r#"
 	INSERT INTO columns(id,row_id,header_name,value)
@@ -292,10 +356,15 @@ async fn save_sheet(state: &AppState, sheet: Sheet) -> Result<(), Box<dyn Error>
     Ok(())
 }
 
-#[post("/")]
-async fn save(state: Data<AppState>, sheet: web::Json<Sheet>) -> impl Responder {
-    match save_sheet(&state, sheet.into_inner()).await {
-        Ok(_) => HttpResponse::Ok(),
-        Err(_) => HttpResponse::InternalServerError(),
-    }
+async fn update_sheet_name(state: &AppState, name: Name) -> Result<(), Box<dyn Error>> {
+    let Name { id, the_name } = name;
+    query!(
+        r#"
+        UPDATE sheets SET sheet_name = $2 WHERE id = $1;"#,
+        id,
+        the_name,
+    )
+    .execute(&state.db)
+    .await?;
+    Ok(())
 }

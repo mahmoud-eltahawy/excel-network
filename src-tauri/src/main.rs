@@ -103,6 +103,48 @@ async fn get_sheet(
 }
 
 #[tauri::command]
+async fn update_sheet_name(
+    app_state: tauri::State<'_, AppState>,
+    name: Name,
+) -> Result<(), String> {
+    match api::update_sheet_name(&app_state, &name).await {
+	Ok(_) => Ok(()),
+	Err(err) => Err(err.to_string()),
+    }
+}
+
+#[tauri::command]
+async fn add_rows_to_sheet(
+    app_state: tauri::State<'_, AppState>,
+    sheetid: Uuid,
+    rows: Vec<Row>,
+) -> Result<(), String> {
+    let mut res = Ok(());
+    for row in rows.into_iter(){
+	if let Err(err) = api::add_row_to_sheet(&app_state, &sheetid,&row).await{
+	    res = Err(err.to_string());
+	    break;
+	};
+    }
+    res
+}
+
+#[tauri::command]
+async fn delete_rows_from_sheet(
+    app_state: tauri::State<'_, AppState>,
+    sheetid: Uuid,
+    rowsids: Vec<Uuid>,
+) -> Result<(), String> {
+    let mut res = Ok(());
+    for row_id in rowsids.into_iter(){
+	if let Err(err) = api::delete_row_from_sheet(&app_state, &sheetid,&row_id).await{
+	    res = Err(err.to_string());
+	    break;
+	};
+    }
+    res
+}
+#[tauri::command]
 async fn export_sheet(headers: Vec<String>, sheet: Sheet) -> Result<(), String> {
     match write_sheet(headers, sheet).await {
         Ok(_) => Ok(()),
@@ -123,6 +165,9 @@ fn main() {
             top_5_sheets,
             get_sheet,
             export_sheet,
+	    update_sheet_name,
+	    add_rows_to_sheet,
+	    delete_rows_from_sheet,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
