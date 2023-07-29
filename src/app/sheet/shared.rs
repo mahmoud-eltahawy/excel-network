@@ -109,10 +109,10 @@ where
     }
 }
 
-type GetterSetter<T> = (ReadSignal<T>, WriteSignal<T>);
+type GetterSetter<T> = (ReadSignal<(T,bool)>, WriteSignal<(T,bool)>);
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ColumnSignal {
+enum ColumnSignal {
     String(GetterSetter<String>),
     Float(GetterSetter<f64>),
     Date(GetterSetter<NaiveDate>),
@@ -138,27 +138,27 @@ where
             match x {
                 ColumnConfig::String(ColumnProps {
                     header,
-                    is_completable: _,
+                    is_completable,
                 }) => {
                     map.insert(
                         header,
-                        ColumnSignal::String(create_signal(cx, String::from(""))),
+                        ColumnSignal::String(create_signal(cx, (String::from(""),is_completable))),
                     );
                 }
                 ColumnConfig::Date(ColumnProps {
                     header,
-                    is_completable: _,
+                    is_completable,
                 }) => {
                     map.insert(
                         header,
-                        ColumnSignal::Date(create_signal(cx, Local::now().date_naive())),
+                        ColumnSignal::Date(create_signal(cx, (Local::now().date_naive(),is_completable))),
                     );
                 }
                 ColumnConfig::Float(ColumnProps {
                     header,
-                    is_completable: _,
+                    is_completable,
                 }) => {
-                    map.insert(header, ColumnSignal::Float(create_signal(cx, 0.0)));
+                    map.insert(header, ColumnSignal::Float(create_signal(cx,(0.0,is_completable))));
                 }
             }
         }
@@ -171,9 +171,9 @@ where
             let mut basic_map = HashMap::new();
             for (header, column_signal) in basic_signals_map.get() {
                 let column_value = match column_signal {
-                    ColumnSignal::String((reader, _)) => ColumnValue::String(Some(reader.get())),
-                    ColumnSignal::Float((reader, _)) => ColumnValue::Float(reader.get()),
-                    ColumnSignal::Date((reader, _)) => ColumnValue::Date(Some(reader.get())),
+                    ColumnSignal::String((reader, _)) => ColumnValue::String(Some(reader.get().0)),
+                    ColumnSignal::Float((reader, _)) => ColumnValue::Float(reader.get().0),
+                    ColumnSignal::Date((reader, _)) => ColumnValue::Date(Some(reader.get().0)),
                 };
                 basic_map.insert(header, column_value);
             }
@@ -190,15 +190,15 @@ where
                 match value {
                     ColumnSignal::String((reader, _)) => Column {
                         is_basic: true,
-                        value: ColumnValue::String(Some(reader.get())),
+                        value: ColumnValue::String(Some(reader.get().0)),
                     },
                     ColumnSignal::Float((reader, _)) => Column {
                         is_basic: true,
-                        value: ColumnValue::Float(reader.get()),
+                        value: ColumnValue::Float(reader.get().0),
                     },
                     ColumnSignal::Date((reader, _)) => Column {
                         is_basic: true,
-                        value: ColumnValue::Date(Some(reader.get())),
+                        value: ColumnValue::Date(Some(reader.get().0)),
                     },
                 },
             );
@@ -226,7 +226,12 @@ where
                 each=move || basic_headers().clone()
                 key=|x| x.clone()
                 view=move |cx, header| {
-                    view! { cx, <>{move || make_input(cx, header.clone(), basic_signals_map)}</> }
+                    view! { cx,
+			    <MyInput
+				header=header
+				basic_signals_map=basic_signals_map
+			    />
+		    }
                 }
             />
             <For
@@ -252,37 +257,37 @@ where
     }
 }
 
-fn make_input(
+#[component]
+fn MyInput(
     cx: Scope,
     header: String,
     basic_signals_map: Memo<HashMap<String, ColumnSignal>>,
 ) -> impl IntoView {
     let cmp_arg = basic_signals_map.get();
     let (i_type, value) = match cmp_arg.get(&header) {
-        Some(ColumnSignal::String((read, _))) => ("text", read.get().to_string()),
-        Some(ColumnSignal::Float((read, _))) => ("number", read.get().to_string()),
-        Some(ColumnSignal::Date((read, _))) => ("date", read.get().to_string()),
+        Some(ColumnSignal::String((read, _))) => ("text", read.get().0.to_string()),
+        Some(ColumnSignal::Float((read, _))) => ("number", read.get().0.to_string()),
+        Some(ColumnSignal::Date((read, _))) => ("date", read.get().0.to_string()),
         None => ("", "".to_string()),
     };
     view! { cx,
-        <>
-            <td>
-                <input
-                    type=i_type
-                    value=move || value.clone()
-                    on:change=move |ev| match cmp_arg.get(&header) {
-                        Some(ColumnSignal::String((_, write))) => write.set(event_target_value(&ev)),
-                        Some(ColumnSignal::Float((_, write))) => {
-                            write.set(event_target_value(&ev).parse().unwrap_or_default())
-                        }
-                        Some(ColumnSignal::Date((_, write))) => {
-                            write.set(event_target_value(&ev).parse().unwrap_or_default())
-                        }
-                        None => {}
-                    }
-                />
-            </td>
-        </>
+	<td>
+	    <input
+		type=i_type
+		value=move || value.clone()
+		on:change=move |ev| match cmp_arg.get(&header) {
+		    Some(ColumnSignal::String((_, write))) =>
+			write.update(|x| x.0 = event_target_value(&ev)),
+		    Some(ColumnSignal::Float((_, write))) => {
+			write.update(|x| x.0 = event_target_value(&ev).parse().unwrap_or_default())
+		    }
+		    Some(ColumnSignal::Date((_, write))) => {
+			write.update(|x| x.0 = event_target_value(&ev).parse().unwrap_or_default())
+		    }
+		    None => {}
+		}
+	    />
+	</td>
     }
 }
 

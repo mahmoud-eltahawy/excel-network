@@ -265,12 +265,12 @@ pub async fn write_sheet(
     worksheet.set_name(&type_name)?;
 
     let file_path = format!(
-        "{}{MAIN_SEPARATOR}Downloads{MAIN_SEPARATOR}.xlsx",
+        "{}{MAIN_SEPARATOR}Downloads{MAIN_SEPARATOR}",
         dirs::home_dir().unwrap_or_default().display()
     );
 
     let file_name = format!(
-        "{} {}\n{} {}\n{} {}.xlsx",
+        "_{}_{}_--_{}_{}_--_{}_{}.xlsx",
         "شيت",
         type_name,
         "باسم",
