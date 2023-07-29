@@ -91,29 +91,29 @@ fn sub(v1: f64, v2: f64) -> f64 {
 }
 fn basic_calc<F>(
     basic_signals_map: HashMap<String, ColumnValue>,
-    vt1: ValueType,
-    vt2: ValueType,
+    vt1: &ValueType,
+    vt2: &ValueType,
     calc: F,
 ) -> f64
 where
     F: Fn(f64, f64) -> f64 + 'static,
 {
     match (vt1, vt2) {
-	(ValueType::Const(val1), ValueType::Const(val2)) => calc(val1, val2),
+	(ValueType::Const(val1), ValueType::Const(val2)) => calc(*val1, *val2),
 	(ValueType::Variable(var), ValueType::Const(val2)) => {
-	    match basic_signals_map.get(&var) {
-		Some(ColumnValue::Float(val1)) => calc(*val1, val2),
+	    match basic_signals_map.get(var) {
+		Some(ColumnValue::Float(val1)) => calc(*val1, *val2),
 		_ => 0.0,
 	    }
 	}
 	(ValueType::Const(val1), ValueType::Variable(var)) => {
-	    match basic_signals_map.get(&var) {
-		Some(ColumnValue::Float(val2)) => calc(val1, *val2),
+	    match basic_signals_map.get(var) {
+		Some(ColumnValue::Float(val2)) => calc(*val1, *val2),
 		_ => 0.0,
 	    }
 	}
 	(ValueType::Variable(var1), ValueType::Variable(var2)) => {
-	    match (basic_signals_map.get(&var1), basic_signals_map.get(&var2)) {
+	    match (basic_signals_map.get(var1), basic_signals_map.get(var2)) {
 		(
 		    Some(ColumnValue::Float(val1)),
 		    Some(ColumnValue::Float(val2)),
@@ -125,18 +125,18 @@ where
 }
 fn calc_o<F>(
     basic_signals_map: HashMap<String, ColumnValue>,
-    v: ValueType,
-    bop: Box<Operation>,
+    v: &ValueType,
+    bop: &Box<Operation>,
     calc: F,
 ) -> f64
 where
     F: Fn(f64, f64) -> f64 + 'static,
 {
     match (v, bop) {
-	(ValueType::Const(val), bop) => calc(val, calculate_operation(*bop, basic_signals_map)),
-	(ValueType::Variable(var), bop) => match basic_signals_map.get(&var) {
+	(ValueType::Const(val), bop) => calc(*val, calculate_operation(bop, basic_signals_map)),
+	(ValueType::Variable(var), bop) => match basic_signals_map.get(var) {
 	    Some(ColumnValue::Float(val)) => {
-		calc(*val, calculate_operation(*bop, basic_signals_map))
+		calc(*val, calculate_operation(bop, basic_signals_map))
 	    }
 	    _ => 0.0,
 	},
@@ -144,7 +144,7 @@ where
 }
 
 pub fn calculate_operation(
-    value: Operation,
+    value: &Operation,
     basic_signals_map: HashMap<String, ColumnValue>,
 ) -> f64 {
     match value {

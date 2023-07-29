@@ -6,11 +6,10 @@ use std::str::FromStr;
 use uuid::Uuid;
 use tauri_sys::tauri::invoke;
 use crate::Id;
-use models::{Column,ColumnValue,ColumnConfig,ConfigValue,HeaderGetter,ColumnProps};
-use chrono::Local;
+use models::{Column,ColumnValue,ConfigValue,HeaderGetter};
 use std::collections::HashMap;
 
-use super::shared::{NameArg,SheetHead,ColumnSignal,alert,message};
+use super::shared::{NameArg,SheetHead,alert,message,calculate_operation};
 
 #[derive(Serialize,Deserialize)]
 struct ExportSheetArg{
@@ -102,48 +101,8 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
             .collect::<Vec<_>>()
     };
 
-    let basic_signals_map = create_memo(cx, move |_| {
-        let mut map = HashMap::new();
-        for x in basic_columns.get().into_iter() {
-            match x {
-                ColumnConfig::String(ColumnProps {
-                    header,
-                    is_completable: _,
-                }) => {
-                    map.insert(
-                        header,
-                        ColumnSignal::String(create_signal(cx, String::from(""))),
-                    );
-                }
-                ColumnConfig::Date(ColumnProps {
-                    header,
-                    is_completable: _,
-                }) => {
-                    map.insert(
-                        header,
-                        ColumnSignal::Date(create_signal(cx, Local::now().date_naive())),
-                    );
-                }
-                ColumnConfig::Float(ColumnProps {
-                    header,
-                    is_completable: _,
-                }) => {
-                    map.insert(header, ColumnSignal::Float(create_signal(cx, 0.0)));
-                }
-            }
-        }
-        map
-    });
-
-    // let calc_signals_map = create_memo(cx, move |_| {
-    //     let mut map = HashMap::new();
-    //     for OperationConfig { header, value } in calc_columns.get().into_iter() {
-    //         map.insert(header, calculate_operation(value, basic_signals_map.get()));
-    //     }
-    //     map
-    // });
-
     let sheet = create_memo(cx,move |_| {
+	let c_cols= calc_columns.get();
 	let mut sheet = sheet_resource
 	.read(cx)
 	.unwrap_or_default();
@@ -154,9 +113,19 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
 	    columns : {
 		let mut columns = columns;
 		for header in calc_headers().into_iter(){
+		    let mut map = HashMap::new();
+		    for (col_header,Column { is_basic:_, value }) in &columns{
+			map.insert(col_header.clone(), value.clone());
+		    }
+		    let value = &c_cols;
+		    let value = value
+			.iter().filter(|x| x.header == header)
+			.collect::<Vec<_>>();
+		    let value = value.first().unwrap();
+		   
 		    columns.insert(header, Column {
 			is_basic: false,
-			value: ColumnValue::Float(0.0)
+			value: ColumnValue::Float(calculate_operation(&value.value, map))
 		    });
 		}
 		columns

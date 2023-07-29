@@ -267,7 +267,7 @@ where
 		};
 		basic_map.insert(header, column_value);
 	    }
-            map.insert(header, calculate_operation(value, basic_map));
+            map.insert(header, calculate_operation(&value, basic_map));
         }
         map
     });
