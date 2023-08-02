@@ -28,5 +28,6 @@ pkgs.mkShell {
   shellHook =
     ''
       export LD_LIBRARY_PATH=${pkgs.lib.makeLibraryPath libraries}:$LD_LIBRARY_PATH
+      export XDG_DATA_DIRS=$XDG_DATA_DIRS:$GSETTINGS_SCHEMAS_PATH
     '';
 }

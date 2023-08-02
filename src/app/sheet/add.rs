@@ -21,6 +21,12 @@ struct SaveSheetArgs {
     rows: Vec<Row>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct ImportSheetArgs{
+    sheettype: String,
+    name: String,
+}
+
 #[component]
 pub fn AddSheet(cx: Scope) -> impl IntoView {
     let (sheet_name, set_sheet_name) = create_signal(cx, String::from(""));
@@ -131,6 +137,25 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
         });
     };
 
+    let load_file = move |name: String| {
+	let sheettype = sheet_type_name_resource.read(cx).unwrap_or_default();
+	let name = name.split('\\').collect::<Vec<_>>();
+	let [..,name] = name[..] else {
+	    return;
+	};
+	let name = name.to_string();
+	spawn_local(async move {
+	    let a = invoke::<ImportSheetArgs, Vec<Row>>(
+		"import_sheet",
+		&ImportSheetArgs {
+		    sheettype,
+		    name,
+		})
+		.await;
+		log!("{:#?}",a);
+	});
+    };
+
     view! { cx,
         <section>
             <A class="left-corner" href=format!("/sheet/{}", sheet_type_id().unwrap_or_default())>
@@ -167,6 +192,11 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
                     />
                 </tbody>
             </table>
+            <input
+                type="file"
+	        accept="application/json"
+                on:change=move |ev| load_file(event_target_value(&ev))
+            />
             <button on:click=save_sheet class="centered-button">
                 "حفظ الشيت"
             </button>

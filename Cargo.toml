@@ -17,12 +17,13 @@ serde_json = "^1"
 chrono = "^0.4"
 sqlx = "^0.6"
 uuid = "^1"
-strum = "^0.24"
-strum_macros = "^0.24"
-bcrypt = "^0.13"
 dotenv  = "^0.15"
+anyhow = "^1"
 bigdecimal = "0.3.1"
-anyhow = "1.0.71"
+bcrypt = "^0.13"
+dirs = "5.0.1"
+# strum = "^0.24"
+# strum_macros = "^0.24"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
@@ -31,9 +32,9 @@ uuid = {workspace = true , features = ["serde"]}
 chrono = {workspace = true , features = ["serde"]}
 serde_json = {workspace = true}
 bigdecimal = {workspace = true , features = ["serde"]}
-leptos = { version = "0.4.6" , features = ["csr"] }
-leptos_router = { version = "0.4.6" , features = ["csr"]}
 serde = { workspace = true, features = ["derive"] }
+leptos = { version = "0.4.8" , features = ["csr"] }
+leptos_router = { version = "0.4.8" , features = ["csr"]}
 serde-wasm-bindgen = "0.5"
 wasm-bindgen = { version = "0.2", features = ["serde-serialize"] }
 wasm-bindgen-futures = "0.4"

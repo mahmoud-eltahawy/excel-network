@@ -5,15 +5,13 @@ mod api;
 
 use chrono::Local;
 use dotenv::dotenv;
-use models::{ColumnValue, Config, ConfigValue, Name, Row, SearchSheetParams, Sheet, SheetConfig};
-use std::collections::HashMap;
-use std::env;
+use models::{ColumnValue, Config, ConfigValue, Name, Row, SearchSheetParams, Sheet, SheetConfig, ImportConfig};
+use std::{env,fs::File,path::MAIN_SEPARATOR,collections::HashMap};
 use uuid::Uuid;
 
 use rust_xlsxwriter::{Color, Format, FormatBorder, Workbook};
-use std::path::MAIN_SEPARATOR;
 
-use std::fs::File;
+use serde_json::{Value,Deserializer};
 
 #[tauri::command]
 fn sheets_types_names(app_state: tauri::State<'_, AppState>) -> Vec<Name> {
@@ -152,6 +150,67 @@ async fn export_sheet(headers: Vec<String>, sheet: Sheet) -> Result<(), String> 
     }
 }
 
+#[tauri::command]
+async fn import_sheet(
+    app_state: tauri::State<'_, AppState>,
+    sheettype: String,
+    name: String,
+) -> Result<Vec<Row>, String> {
+    let ImportConfig{
+	unique,
+	repeated,
+	repeated_location,
+    } = match app_state.sheet_import.get(&sheettype){
+	Some(v) => v,
+	None => return Ok(vec![]),
+    };
+    let full_path = app_state.import_path.clone() + &name;
+    
+    let Ok(file) = File::open(&full_path) else {
+	return Ok(vec![]);
+    };
+    let reader = Deserializer::from_reader(file);
+    match reader.into_iter::<Value>().next() {
+	Some(Ok(json)) => {
+	    let json = json.get("document").unwrap_or(&Value::Null);
+	    if let Value::String(json) = json {
+		let json : Value = serde_json::from_str(json.as_str()).unwrap_or_default();
+		println!("Value : {:#?}",json);
+	    } else {
+		println!("Value : {:#?}",json);
+	    }
+	},
+	Some(Err(err)) => println!("\n Error : {:#?}",err),
+	_ => ()
+    };
+    // let mut rows = Vec::<Row>::new();
+    // match a {
+    // 	Value::Object(map) => {
+    // 	    let (_,lv) = resolve_json_config(repeated_location, &map);
+    // 	    for jc in unique  {
+    // 		let (header,value)= resolve_json_config(jc, &map);
+    // 	    }
+    // 	    match lv {
+    // 		Value::Array(arr) => {},
+    // 		_ => unreachable!(),
+    // 	    }
+    // 	},
+    // 	_ => return Err("non object json".to_string())
+    // }
+    Ok(vec![])
+}
+
+// fn resolve_json_config(
+//     json_config : &JsonConfig,
+//     map : &Map<String,Value>
+// ) -> (String,Value){
+//     match json_config {
+// 	JsonConfig::Value(header, js_header) => (header,map.get(js_header).unwrap()),
+// 	JsonConfig::Object(header, ob) => (header,resolve_json_config(&ob,map)),
+// 	JsonConfig::Location(ob) => (String::from(""),resolve_json_config(&ob, map))
+//     }
+// }
+
 fn main() {
     dotenv().ok();
     tauri::Builder::default()
@@ -168,6 +227,7 @@ fn main() {
 	    update_sheet_name,
 	    add_rows_to_sheet,
 	    delete_rows_from_sheet,
+	    import_sheet
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -175,8 +235,10 @@ fn main() {
 
 pub struct AppState {
     pub origin: String,
+    pub import_path : String,
     pub sheets_types_names: Vec<Name>,
     pub sheet_map: HashMap<String, Vec<ConfigValue>>,
+    pub sheet_import: HashMap<String, ImportConfig>,
 }
 
 impl Default for AppState {
@@ -188,7 +250,7 @@ impl Default for AppState {
         let mut file = File::open(file_path).expect("config file does not exist");
 
         let config: Config = serde_json::from_reader(&mut file).unwrap();
-        let Config { sheets } = config;
+        let Config { import_path,sheets } = config;
         let sheets_types_names = sheets
             .iter()
             .map(|x| Name {
@@ -197,18 +259,23 @@ impl Default for AppState {
             })
             .collect::<Vec<_>>();
         let mut sheet_map = HashMap::new();
+        let mut sheet_import = HashMap::new();
         for SheetConfig {
             sheet_type_name,
             row,
+	    importing,
         } in sheets.into_iter()
         {
-            sheet_map.insert(sheet_type_name, row);
+            sheet_map.insert(sheet_type_name.clone(), row);
+            sheet_import.insert(sheet_type_name, importing);
         }
 
         AppState {
             origin: format!("http://{host}:{port}"),
             sheets_types_names,
             sheet_map,
+	    import_path,
+	    sheet_import,
         }
     }
 }
@@ -271,12 +338,9 @@ pub async fn write_sheet(
 
     let file_name = format!(
         "_{}_{}_--_{}_{}_--_{}_{}.xlsx",
-        "شيت",
-        type_name,
-        "باسم",
-        sheet_name,
-        "بتاريخ",
-        insert_date.to_string(),
+        "شيت",type_name,
+        "باسم",sheet_name,
+        "بتاريخ",insert_date.to_string(),
     );
     let path_name = file_path + &file_name;
     workbook.save(&path_name)?;

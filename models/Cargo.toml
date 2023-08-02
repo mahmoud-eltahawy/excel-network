@@ -10,3 +10,4 @@ uuid = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
 chrono = { workspace = true, features = ["serde"] }
 serde_json = { workspace = true}
+dirs = { workspace = true}
