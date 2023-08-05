@@ -3,9 +3,9 @@
 
 mod api;
 
-use chrono::Local;
+use chrono::{Local, NaiveDate};
 use dotenv::dotenv;
-use models::{ColumnValue, Config, ConfigValue, Name, Row, SearchSheetParams, Sheet, SheetConfig, ImportConfig};
+use models::{ColumnValue, Config, ConfigValue, Name, Row, SearchSheetParams, Sheet, SheetConfig, ImportConfig, Column};
 use std::{env,fs::File,path::MAIN_SEPARATOR,collections::HashMap};
 use uuid::Uuid;
 
@@ -150,6 +150,20 @@ async fn export_sheet(headers: Vec<String>, sheet: Sheet) -> Result<(), String> 
     }
 }
 
+fn get_main_json_entry<'a>(
+    json : &'a Value,
+    entry : &Vec<String>,
+) -> &'a Value{
+    if entry.is_empty() {
+	return json;
+    }
+    let mut json = json;
+    for i in 0..entry.len() {
+	json = json.get(entry[i].clone()).unwrap_or(&Value::Null);
+    }
+    json
+}
+
 #[tauri::command]
 async fn import_sheet(
     app_state: tauri::State<'_, AppState>,
@@ -157,59 +171,72 @@ async fn import_sheet(
     name: String,
 ) -> Result<Vec<Row>, String> {
     let ImportConfig{
+	main_entry,
+	repeated_entry,
 	unique,
 	repeated,
-	repeated_location,
     } = match app_state.sheet_import.get(&sheettype){
 	Some(v) => v,
 	None => return Ok(vec![]),
     };
     let full_path = app_state.import_path.clone() + &name;
-    
     let Ok(file) = File::open(&full_path) else {
 	return Ok(vec![]);
     };
     let reader = Deserializer::from_reader(file);
-    match reader.into_iter::<Value>().next() {
-	Some(Ok(json)) => {
-	    let json = json.get("document").unwrap_or(&Value::Null);
-	    if let Value::String(json) = json {
-		let json : Value = serde_json::from_str(json.as_str()).unwrap_or_default();
-		println!("Value : {:#?}",json);
-	    } else {
-		println!("Value : {:#?}",json);
-	    }
-	},
-	Some(Err(err)) => println!("\n Error : {:#?}",err),
-	_ => ()
+    let Some(Ok(main_json)) = reader.into_iter::<Value>().next() else {
+	return Ok(vec![]);
     };
-    // let mut rows = Vec::<Row>::new();
-    // match a {
-    // 	Value::Object(map) => {
-    // 	    let (_,lv) = resolve_json_config(repeated_location, &map);
-    // 	    for jc in unique  {
-    // 		let (header,value)= resolve_json_config(jc, &map);
-    // 	    }
-    // 	    match lv {
-    // 		Value::Array(arr) => {},
-    // 		_ => unreachable!(),
-    // 	    }
-    // 	},
-    // 	_ => return Err("non object json".to_string())
-    // }
-    Ok(vec![])
+    let main_json = get_main_json_entry(&main_json, main_entry);
+    let main_json = match main_json {
+	Value::String(s) => {
+	    serde_json::from_str(s).unwrap_or(Value::Null)
+	},
+	_ => main_json.clone(),
+    };
+    println!("UNIQUE SECTION");
+    for (header,entry) in unique.into_iter() {
+	let value = get_main_json_entry(&main_json, entry);
+	println!("{} => {:#?} => {:#?}",header,entry,value);
+    }
+    println!("REPEATED SECTION");
+    let repeated_json = get_main_json_entry(&main_json, repeated_entry);
+    let Value::Array(list) = repeated_json else {
+	return Ok(vec![]);
+    };
+    let mut result = Vec::new();
+    for value in list.into_iter() {
+	let mut columns = HashMap::new();
+	for (header,entry) in repeated.into_iter() {
+	    let value = get_main_json_entry(value, entry);
+	    println!("{} => {:#?} => {:#?}",header,entry,value);
+	    let column = Column{
+		is_basic : true,
+		value : match value {
+		    Value::Number(_) => ColumnValue::Float(serde_json::from_value(value.to_owned())
+							   .unwrap_or(0.0)),
+		    Value::String(v) => {
+			match v.parse::<f64>() {
+			    Ok(v) => ColumnValue::Float(v),
+			    Err(_) => match v.parse::<NaiveDate>() {
+				Ok(v) => ColumnValue::Date(Some(v)),
+				Err(_) => ColumnValue::String(Some(v.to_owned()))
+			    }
+			}
+		    },
+		    _ => ColumnValue::Float(0.0),
+		}
+	    };
+	    columns.insert(header.to_owned(), column);
+	}
+	result.push(Row{
+	    id:Uuid::new_v4(),
+	    columns
+	});
+    }
+    println!("{:#?}",result);
+    Ok(result)
 }
-
-// fn resolve_json_config(
-//     json_config : &JsonConfig,
-//     map : &Map<String,Value>
-// ) -> (String,Value){
-//     match json_config {
-// 	JsonConfig::Value(header, js_header) => (header,map.get(js_header).unwrap()),
-// 	JsonConfig::Object(header, ob) => (header,resolve_json_config(&ob,map)),
-// 	JsonConfig::Location(ob) => (String::from(""),resolve_json_config(&ob, map))
-//     }
-// }
 
 fn main() {
     dotenv().ok();

@@ -134,16 +134,10 @@ impl HeaderGetter for ConfigValue {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ImportConfig {
-    pub unique : Vec<JsonConfig>,
-    pub repeated_location : JsonConfig,
-    pub repeated : Vec<JsonConfig>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub enum JsonConfig {
-    Value(String,String),
-    Object(String,Box<JsonConfig>),
-    Location(Box<JsonConfig>),
+    pub main_entry : Vec<String>,
+    pub repeated_entry : Vec<String>,
+    pub unique : HashMap<String,Vec<String>>,
+    pub repeated : HashMap<String,Vec<String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -181,12 +175,10 @@ pub fn get_config_example() {
             SheetConfig {
                 sheet_type_name: String::from("مبيعات"),
 		importing : ImportConfig{
-		    unique : vec![],
-		    repeated_location : JsonConfig::Location(
-				       Box::new(JsonConfig::Value(
-					   "document".to_string(),
-					   "invoiceLines".to_string()))),
-		    repeated : vec![]
+		    main_entry : vec![String::from("document")],
+		    repeated_entry : vec!["invoiceLines".to_string()],
+		    unique : HashMap::new(),
+		    repeated : HashMap::new(),
 		},
                 row: vec![
                     ConfigValue::Basic(ColumnConfig::Float(fcp("رقم الفاتورة".to_string()))),
@@ -221,12 +213,10 @@ pub fn get_config_example() {
             SheetConfig {
                 sheet_type_name: String::from("مشتريات"),
 		importing : ImportConfig{
-		    unique : vec![],
-		    repeated_location : JsonConfig::Location(
-				       Box::new(JsonConfig::Value(
-					   "document".to_string(),
-					   "invoiceLines".to_string()))),
-		    repeated : vec![]
+		    main_entry : vec![String::from("document")],
+		    repeated_entry : vec!["invoiceLines".to_string()],
+		    unique : HashMap::new(),
+		    repeated : HashMap::new(),
 		},
                 row: vec![
                     ConfigValue::Basic(ColumnConfig::Float(fcp("رقم الفاتورة".to_string()))),
@@ -247,27 +237,19 @@ pub fn get_config_example() {
             SheetConfig {
                 sheet_type_name: String::from("كارت صنف"),
 		importing : ImportConfig{
-		    unique : vec![
-			JsonConfig::Object("رقم الفاتورة".to_string(),
-				       Box::new(JsonConfig::Value(
-					   "document".to_string(),
-					   "internalID".to_string()))),
-			JsonConfig::Object("التاريخ".to_string(), 
-				       Box::new(JsonConfig::Value(
-					   "document".to_string(),
-					   "dateTimeIssued".to_string())))],
-		    repeated_location : JsonConfig::Location(
-				       Box::new(JsonConfig::Value(
-					   "document".to_string(),
-					   "invoiceLines".to_string()))),
-		    repeated : vec![
-			JsonConfig::Value("كود الصنف".to_string(), "itemCode".to_string()),
-			JsonConfig::Value("اسم الصنف".to_string(), "description".to_string()),
-			JsonConfig::Object("السعر".to_string(),
-				       Box::new(JsonConfig::Value("unitValue".to_string(),
-								  "amountEGP".to_string()))),
-			JsonConfig::Value("الكمية".to_string(), "quantity".to_string()),
-		]},
+		    main_entry : vec![String::from("document")],
+		    repeated_entry : vec!["invoiceLines".to_string()],
+		    unique : HashMap::from([
+			("رقم الفاتورة".to_string(),vec!["internalID".to_string()]),
+			("التاريخ".to_string(),vec!["dateTimeIssued".to_string()]),
+		    ]),
+		    repeated : HashMap::from([
+			("كود الصنف".to_string(),vec!["itemCode".to_string()]),
+			("اسم الصنف".to_string(),vec!["description".to_string()]),
+			("السعر".to_string(),vec!["unitValue".to_string(),"amountEGP".to_string()]),
+			("الكمية".to_string(),vec!["quantity".to_string()]),
+		    ]),
+		},
                 row: vec![
                     ConfigValue::Basic(ColumnConfig::Float(fcp("رقم الفاتورة".to_string()))),
                     ConfigValue::Basic(ColumnConfig::Date(fcp("التاريخ".to_string()))),
