@@ -237,7 +237,6 @@ async fn import_sheet(
 	    columns
 	});
     }
-    println!("{:#?}",result);
     Ok(result)
 }
 

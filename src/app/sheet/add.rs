@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 use super::shared::{
-    alert, message, NameArg, SheetHead,InputRow,ShowNewRows
+    alert, message, NameArg, SheetHead,InputRow,ShowNewRows,import_sheet_rows
 };
 
 use crate::Id;
@@ -19,12 +19,6 @@ struct SaveSheetArgs {
     sheetname: String,
     typename: String,
     rows: Vec<Row>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct ImportSheetArgs{
-    sheettype: String,
-    name: String,
 }
 
 #[component]
@@ -145,14 +139,8 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
 	};
 	let name = name.to_string();
 	spawn_local(async move {
-	    let a = invoke::<ImportSheetArgs, Vec<Row>>(
-		"import_sheet",
-		&ImportSheetArgs {
-		    sheettype,
-		    name,
-		})
-		.await;
-		log!("{:#?}",a);
+	    let rows = import_sheet_rows(sheettype,name).await;
+	    set_rows.update(|xs| xs.extend(rows));
 	});
     };
 
@@ -194,6 +182,7 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
             </table>
             <input
                 type="file"
+		class="custom-file-input"
 	        accept="application/json"
                 on:change=move |ev| load_file(event_target_value(&ev))
             />

@@ -9,7 +9,9 @@ use std::str::FromStr;
 use tauri_sys::tauri::invoke;
 use uuid::Uuid;
 
-use super::shared::{alert,confirm,calculate_operation,message,NameArg,SheetHead,InputRow,ShowNewRows};
+use super::shared::{
+    alert,confirm,calculate_operation,message,NameArg,SheetHead,InputRow,ShowNewRows,import_sheet_rows
+};
 
 #[derive(Serialize, Deserialize)]
 struct ExportSheetArg {
@@ -275,6 +277,19 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
 	sheet_resource.refetch();
     };
 
+    let load_file = move |name: String| {
+	let sheettype = sheet_type_name_resource.read(cx).unwrap_or_default();
+	let name = name.split('\\').collect::<Vec<_>>();
+	let [..,name] = name[..] else {
+	    return;
+	};
+	let name = name.to_string();
+	spawn_local(async move {
+	    let rows = import_sheet_rows(sheettype,name).await;
+	    set_added_rows.update(|xs| xs.extend(rows));
+	});
+    };
+
     view! { cx,
         <section>
             <A class="left-corner" href=format!("/sheet/{}", sheet_type_id().unwrap_or_default())>
@@ -346,6 +361,11 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
 		}
 	    >
 		<button on:click=save_edits>"تاكيد"</button>
+		<input
+		    type="file"
+		    accept="application/json"
+		    on:change=move |ev| load_file(event_target_value(&ev))
+		/>
 	    </Show>
         </section>
     }

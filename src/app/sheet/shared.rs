@@ -22,6 +22,26 @@ pub struct NameArg {
     pub name: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct ImportSheetArgs{
+    sheettype: String,
+    name: String,
+}
+
+pub async fn import_sheet_rows(
+    sheettype :String,
+    name: String,
+) -> Vec<Row>{
+    invoke::<ImportSheetArgs, Vec<Row>>(
+	"import_sheet",
+	&ImportSheetArgs {
+	    sheettype,
+	    name,
+	})
+	.await
+	.unwrap_or_default()
+}
+
 pub async fn alert(message: &str) {
     let mut builder = MessageDialogBuilder::new();
     builder.set_title("تحذير");
