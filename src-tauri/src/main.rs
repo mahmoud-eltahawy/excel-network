@@ -179,7 +179,7 @@ fn column_from_value(value: &Value) -> Column{
 		    }
 		}
 	    },
-	    _ => ColumnValue::Float(0.0),
+	    _ => ColumnValue::Float(0.404),
 	}
     }
 }
@@ -188,7 +188,7 @@ fn column_from_value(value: &Value) -> Column{
 async fn import_sheet(
     app_state: tauri::State<'_, AppState>,
     sheettype: String,
-    name: String,
+    filepath: String,
 ) -> Result<Vec<Row>, String> {
     let ImportConfig{
 	main_entry,
@@ -199,8 +199,7 @@ async fn import_sheet(
 	Some(v) => v,
 	None => return Ok(vec![]),
     };
-    let full_path = app_state.import_path.clone() + &name;
-    let Ok(file) = File::open(&full_path) else {
+    let Ok(file) = File::open(&filepath) else {
 	return Ok(vec![]);
     };
     let reader = Deserializer::from_reader(file);

@@ -39,6 +39,6 @@ serde-wasm-bindgen = "0.5"
 wasm-bindgen = { version = "0.2", features = ["serde-serialize"] }
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
-tauri-sys = { git = "https://github.com/JonasKruckenberg/tauri-sys",features = ["tauri","event","dialog"] }
+tauri-sys = { git = "https://github.com/JonasKruckenberg/tauri-sys",features = ["tauri","event","dialog","path"] }
 futures = "0.3.28"
 

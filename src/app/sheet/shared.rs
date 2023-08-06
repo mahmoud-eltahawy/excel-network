@@ -5,8 +5,9 @@ use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tauri_sys::{
-    dialog::{MessageDialogBuilder, MessageDialogKind},
+    dialog::{MessageDialogBuilder, MessageDialogKind, FileDialogBuilder},
     tauri::invoke,
+    path::{download_dir, home_dir},
 };
 use uuid::Uuid;
 use chrono::Local;
@@ -25,18 +26,18 @@ pub struct NameArg {
 #[derive(Debug, Serialize, Deserialize)]
 struct ImportSheetArgs{
     sheettype: String,
-    name: String,
+    filepath: String,
 }
 
 pub async fn import_sheet_rows(
     sheettype :String,
-    name: String,
+    filepath: String,
 ) -> Vec<Row>{
     invoke::<ImportSheetArgs, Vec<Row>>(
 	"import_sheet",
 	&ImportSheetArgs {
 	    sheettype,
-	    name,
+	    filepath,
 	})
 	.await
 	.unwrap_or_default()
@@ -62,6 +63,29 @@ pub async fn confirm(message: &str) -> bool {
     let mut builder = MessageDialogBuilder::new();
     builder.set_title("تاكيد");
     builder.confirm(message).await.unwrap_or_default()
+}
+
+pub async fn open_file() -> Option<String> {
+    let mut builder = FileDialogBuilder::new();
+    builder.add_filter("Serialized", &["json"]);
+    builder.set_title("اختر ملف");
+    let download_dir = match download_dir().await {
+	Ok(v) => Some(v),
+	Err(_) => {
+	    let Ok(home_dir) = home_dir().await else {
+		return None;
+	    };
+	    Some(home_dir.join("Downloads"))
+	}
+    };
+    let Some(download_dir) = download_dir else {
+	return None;
+    };
+    builder.set_default_path(download_dir.as_path());
+    let Ok(Some(path)) = builder.pick_file().await else {
+	return None;
+    };
+    Some(path.display().to_string())
 }
 
 #[component]
@@ -270,7 +294,7 @@ where
             />
             <tr class="spanA">
                 <td>
-                    <button on:click=on_click>"اضافة"</button>
+                    <button on:click=on_click class="centered-button">"اضافة"</button>
                 </td>
             </tr>
         </>

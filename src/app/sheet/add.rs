@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 use super::shared::{
-    alert, message, NameArg, SheetHead,InputRow,ShowNewRows,import_sheet_rows
+    alert, message, NameArg, SheetHead,InputRow,ShowNewRows,import_sheet_rows,open_file
 };
 
 use crate::Id;
@@ -131,15 +131,13 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
         });
     };
 
-    let load_file = move |name: String| {
+    let load_file = move |_| {
 	let sheettype = sheet_type_name_resource.read(cx).unwrap_or_default();
-	let name = name.split('\\').collect::<Vec<_>>();
-	let [..,name] = name[..] else {
-	    return;
-	};
-	let name = name.to_string();
 	spawn_local(async move {
-	    let rows = import_sheet_rows(sheettype,name).await;
+	    let Some(filepath) = open_file().await else {
+		return;
+	    };
+	    let rows = import_sheet_rows(sheettype,filepath).await;
 	    set_rows.update(|xs| xs.extend(rows));
 	});
     };
@@ -180,12 +178,9 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
                     />
                 </tbody>
             </table>
-            <input
-                type="file"
-		class="custom-file-input"
-	        accept="application/json"
-                on:change=move |ev| load_file(event_target_value(&ev))
-            />
+            <button on:click=load_file class="centered-button">
+                "تحميل ملف"
+            </button>
             <button on:click=save_sheet class="centered-button">
                 "حفظ الشيت"
             </button>

@@ -10,7 +10,7 @@ use tauri_sys::tauri::invoke;
 use uuid::Uuid;
 
 use super::shared::{
-    alert,confirm,calculate_operation,message,NameArg,SheetHead,InputRow,ShowNewRows,import_sheet_rows
+    alert,confirm,calculate_operation,message,NameArg,SheetHead,InputRow,ShowNewRows,import_sheet_rows,open_file
 };
 
 #[derive(Serialize, Deserialize)]
@@ -277,15 +277,13 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
 	sheet_resource.refetch();
     };
 
-    let load_file = move |name: String| {
+    let load_file = move |_| {
 	let sheettype = sheet_type_name_resource.read(cx).unwrap_or_default();
-	let name = name.split('\\').collect::<Vec<_>>();
-	let [..,name] = name[..] else {
-	    return;
-	};
-	let name = name.to_string();
 	spawn_local(async move {
-	    let rows = import_sheet_rows(sheettype,name).await;
+	    let Some(filepath) = open_file().await else {
+		return;
+	    };
+	    let rows = import_sheet_rows(sheettype,filepath).await;
 	    set_added_rows.update(|xs| xs.extend(rows));
 	});
     };
@@ -351,7 +349,7 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
                 </tbody>
             </table>
             <Outlet/>
-            <button on:click=toggle_edit_mode>
+            <button on:click=toggle_edit_mode class="centered-button">
                 {move || if edit_mode.get() { "الغاء" } else { "تعديل" }}
             </button>
 	    <Show
@@ -360,12 +358,8 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
 		    view! { cx, <></> }
 		}
 	    >
-		<button on:click=save_edits>"تاكيد"</button>
-		<input
-		    type="file"
-		    accept="application/json"
-		    on:change=move |ev| load_file(event_target_value(&ev))
-		/>
+		<button on:click=save_edits class="centered-button">"تاكيد"</button>
+		<button on:click=load_file class="centered-button">"تحميل ملف"</button>
 	    </Show>
         </section>
     }
