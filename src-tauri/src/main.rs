@@ -164,6 +164,26 @@ fn get_main_json_entry<'a>(
     json
 }
 
+fn column_from_value(value: &Value) -> Column{
+    Column{
+	is_basic : true,
+	value : match value {
+	    Value::Number(_) => ColumnValue::Float(serde_json::from_value(value.to_owned())
+						.unwrap_or(0.0)),
+	    Value::String(v) => {
+		match v.parse::<f64>() {
+		    Ok(v) => ColumnValue::Float(v),
+		    Err(_) => match v[0..10].parse::<NaiveDate>() {
+			Ok(v) => ColumnValue::Date(Some(v)),
+			Err(_) => ColumnValue::String(Some(v.to_owned()))
+		    }
+		}
+	    },
+	    _ => ColumnValue::Float(0.0),
+	}
+    }
+}
+
 #[tauri::command]
 async fn import_sheet(
     app_state: tauri::State<'_, AppState>,
@@ -194,39 +214,22 @@ async fn import_sheet(
 	},
 	_ => main_json.clone(),
     };
-    println!("UNIQUE SECTION");
+    let mut unique_columns = HashMap::new();
     for (header,entry) in unique.into_iter() {
 	let value = get_main_json_entry(&main_json, entry);
-	println!("{} => {:#?} => {:#?}",header,entry,value);
+	let column = column_from_value(value);
+	unique_columns.insert(header.to_owned(), column);
     }
-    println!("REPEATED SECTION");
     let repeated_json = get_main_json_entry(&main_json, repeated_entry);
     let Value::Array(list) = repeated_json else {
 	return Ok(vec![]);
     };
     let mut result = Vec::new();
     for value in list.into_iter() {
-	let mut columns = HashMap::new();
+	let mut columns = unique_columns.clone();
 	for (header,entry) in repeated.into_iter() {
 	    let value = get_main_json_entry(value, entry);
-	    println!("{} => {:#?} => {:#?}",header,entry,value);
-	    let column = Column{
-		is_basic : true,
-		value : match value {
-		    Value::Number(_) => ColumnValue::Float(serde_json::from_value(value.to_owned())
-							   .unwrap_or(0.0)),
-		    Value::String(v) => {
-			match v.parse::<f64>() {
-			    Ok(v) => ColumnValue::Float(v),
-			    Err(_) => match v.parse::<NaiveDate>() {
-				Ok(v) => ColumnValue::Date(Some(v)),
-				Err(_) => ColumnValue::String(Some(v.to_owned()))
-			    }
-			}
-		    },
-		    _ => ColumnValue::Float(0.0),
-		}
-	    };
+	    let column = column_from_value(value);
 	    columns.insert(header.to_owned(), column);
 	}
 	result.push(Row{
