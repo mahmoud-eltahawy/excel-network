@@ -9,7 +9,7 @@ use models::{
     Column, ColumnValue, Config, ConfigValue, ImportConfig, Name, Row, SearchSheetParams, Sheet,
     SheetConfig,
 };
-use std::{collections::HashMap, env, fs::File, path::MAIN_SEPARATOR};
+use std::{collections::HashMap, env, fs::{File, create_dir_all, rename}, path::Path};
 use uuid::Uuid;
 
 use rust_xlsxwriter::{Color, Format, FormatBorder, Workbook};
@@ -233,6 +233,27 @@ async fn import_sheet(
             columns,
         });
     }
+
+    let old_path = Path::new(&filepath);
+    let new_path = dirs::home_dir()
+	.unwrap_or_default()
+        .join("Downloads")
+        .join(WORKDIR)
+	.join(&sheettype)
+	.join("الملفات المستوردة");
+
+
+    if !create_dir_all(new_path.clone()).is_ok() {
+	println!("Directory already exists");
+    }
+
+    let new_path = new_path
+	.join(old_path.file_name().unwrap_or_default());
+
+    if !rename(old_path, new_path).is_ok(){
+	println!("failed to move file");
+    };
+
     Ok(result)
 }
 
@@ -357,10 +378,16 @@ pub async fn write_sheet(
 
     worksheet.set_name(&type_name)?;
 
-    let file_path = format!(
-        "{}{MAIN_SEPARATOR}Downloads{MAIN_SEPARATOR}",
-        dirs::home_dir().unwrap_or_default().display()
-    );
+    let file_path = dirs::home_dir()
+	.unwrap_or_default()
+        .join("Downloads")
+        .join(WORKDIR)
+	.join(&type_name)
+	.join("الشيتات المصدرة");
+
+    if !create_dir_all(file_path.clone()).is_ok() {
+	println!("Directory already exists");
+    }
 
     let file_name = format!(
         "_{}_{}_--_{}_{}_--_{}_{}.xlsx",
@@ -371,8 +398,13 @@ pub async fn write_sheet(
         "بتاريخ",
         insert_date.to_string(),
     );
-    let path_name = file_path + &file_name;
+
+    let path_name = file_path
+	.join(file_name);
+			    
     workbook.save(&path_name)?;
 
     Ok(())
 }
+
+static WORKDIR : &str = "excel_network";
