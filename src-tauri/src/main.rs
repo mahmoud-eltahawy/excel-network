@@ -5,13 +5,16 @@ mod api;
 
 use chrono::{Local, NaiveDate};
 use dotenv::dotenv;
-use models::{ColumnValue, Config, ConfigValue, Name, Row, SearchSheetParams, Sheet, SheetConfig, ImportConfig, Column};
-use std::{env,fs::File,path::MAIN_SEPARATOR,collections::HashMap};
+use models::{
+    Column, ColumnValue, Config, ConfigValue, ImportConfig, Name, Row, SearchSheetParams, Sheet,
+    SheetConfig,
+};
+use std::{collections::HashMap, env, fs::File, path::MAIN_SEPARATOR};
 use uuid::Uuid;
 
 use rust_xlsxwriter::{Color, Format, FormatBorder, Workbook};
 
-use serde_json::{Value,Deserializer};
+use serde_json::{Deserializer, Value};
 
 #[tauri::command]
 fn sheets_types_names(app_state: tauri::State<'_, AppState>) -> Vec<Name> {
@@ -106,8 +109,8 @@ async fn update_sheet_name(
     name: Name,
 ) -> Result<(), String> {
     match api::update_sheet_name(&app_state, &name).await {
-	Ok(_) => Ok(()),
-	Err(err) => Err(err.to_string()),
+        Ok(_) => Ok(()),
+        Err(err) => Err(err.to_string()),
     }
 }
 
@@ -118,11 +121,11 @@ async fn add_rows_to_sheet(
     rows: Vec<Row>,
 ) -> Result<(), String> {
     let mut res = Ok(());
-    for row in rows.into_iter(){
-	if let Err(err) = api::add_row_to_sheet(&app_state, &sheetid,&row).await{
-	    res = Err(err.to_string());
-	    break;
-	};
+    for row in rows.into_iter() {
+        if let Err(err) = api::add_row_to_sheet(&app_state, &sheetid, &row).await {
+            res = Err(err.to_string());
+            break;
+        };
     }
     res
 }
@@ -134,11 +137,11 @@ async fn delete_rows_from_sheet(
     rowsids: Vec<Uuid>,
 ) -> Result<(), String> {
     let mut res = Ok(());
-    for row_id in rowsids.into_iter(){
-	if let Err(err) = api::delete_row_from_sheet(&app_state, &sheetid,&row_id).await{
-	    res = Err(err.to_string());
-	    break;
-	};
+    for row_id in rowsids.into_iter() {
+        if let Err(err) = api::delete_row_from_sheet(&app_state, &sheetid, &row_id).await {
+            res = Err(err.to_string());
+            break;
+        };
     }
     res
 }
@@ -150,37 +153,33 @@ async fn export_sheet(headers: Vec<String>, sheet: Sheet) -> Result<(), String> 
     }
 }
 
-fn get_main_json_entry<'a>(
-    json : &'a Value,
-    entry : &Vec<String>,
-) -> &'a Value{
+fn get_main_json_entry<'a>(json: &'a Value, entry: &Vec<String>) -> &'a Value {
     if entry.is_empty() {
-	return json;
+        return json;
     }
     let mut json = json;
     for i in 0..entry.len() {
-	json = json.get(entry[i].clone()).unwrap_or(&Value::Null);
+        json = json.get(entry[i].clone()).unwrap_or(&Value::Null);
     }
     json
 }
 
-fn column_from_value(value: &Value) -> Column{
-    Column{
-	is_basic : true,
-	value : match value {
-	    Value::Number(_) => ColumnValue::Float(serde_json::from_value(value.to_owned())
-						.unwrap_or(0.0)),
-	    Value::String(v) => {
-		match v.parse::<f64>() {
-		    Ok(v) => ColumnValue::Float(v),
-		    Err(_) => match v[0..10].parse::<NaiveDate>() {
-			Ok(v) => ColumnValue::Date(Some(v)),
-			Err(_) => ColumnValue::String(Some(v.to_owned()))
-		    }
-		}
-	    },
-	    _ => ColumnValue::Float(0.404),
-	}
+fn column_from_value(value: &Value) -> Column {
+    Column {
+        is_basic: true,
+        value: match value {
+            Value::Number(_) => {
+                ColumnValue::Float(serde_json::from_value(value.to_owned()).unwrap_or(0.0))
+            }
+            Value::String(v) => match v.parse::<f64>() {
+                Ok(v) => ColumnValue::Float(v),
+                Err(_) => match v[0..10].parse::<NaiveDate>() {
+                    Ok(v) => ColumnValue::Date(Some(v)),
+                    Err(_) => ColumnValue::String(Some(v.to_owned())),
+                },
+            },
+            _ => ColumnValue::Float(0.404),
+        },
     }
 }
 
@@ -190,14 +189,14 @@ async fn import_sheet(
     sheettype: String,
     filepath: String,
 ) -> Result<Vec<Row>, String> {
-    let ImportConfig{
-	main_entry,
-	repeated_entry,
-	unique,
-	repeated,
-    } = match app_state.sheet_import.get(&sheettype){
-	Some(v) => v,
-	None => return Ok(vec![]),
+    let ImportConfig {
+        main_entry,
+        repeated_entry,
+        unique,
+        repeated,
+    } = match app_state.sheet_import.get(&sheettype) {
+        Some(v) => v,
+        None => return Ok(vec![]),
     };
     let Ok(file) = File::open(&filepath) else {
 	return Ok(vec![]);
@@ -208,16 +207,14 @@ async fn import_sheet(
     };
     let main_json = get_main_json_entry(&main_json, main_entry);
     let main_json = match main_json {
-	Value::String(s) => {
-	    serde_json::from_str(s).unwrap_or(Value::Null)
-	},
-	_ => main_json.clone(),
+        Value::String(s) => serde_json::from_str(s).unwrap_or(Value::Null),
+        _ => main_json.clone(),
     };
     let mut unique_columns = HashMap::new();
-    for (header,entry) in unique.into_iter() {
-	let value = get_main_json_entry(&main_json, entry);
-	let column = column_from_value(value);
-	unique_columns.insert(header.to_owned(), column);
+    for (header, entry) in unique.into_iter() {
+        let value = get_main_json_entry(&main_json, entry);
+        let column = column_from_value(value);
+        unique_columns.insert(header.to_owned(), column);
     }
     let repeated_json = get_main_json_entry(&main_json, repeated_entry);
     let Value::Array(list) = repeated_json else {
@@ -225,16 +222,16 @@ async fn import_sheet(
     };
     let mut result = Vec::new();
     for value in list.into_iter() {
-	let mut columns = unique_columns.clone();
-	for (header,entry) in repeated.into_iter() {
-	    let value = get_main_json_entry(value, entry);
-	    let column = column_from_value(value);
-	    columns.insert(header.to_owned(), column);
-	}
-	result.push(Row{
-	    id:Uuid::new_v4(),
-	    columns
-	});
+        let mut columns = unique_columns.clone();
+        for (header, entry) in repeated.into_iter() {
+            let value = get_main_json_entry(value, entry);
+            let column = column_from_value(value);
+            columns.insert(header.to_owned(), column);
+        }
+        result.push(Row {
+            id: Uuid::new_v4(),
+            columns,
+        });
     }
     Ok(result)
 }
@@ -252,10 +249,10 @@ fn main() {
             top_5_sheets,
             get_sheet,
             export_sheet,
-	    update_sheet_name,
-	    add_rows_to_sheet,
-	    delete_rows_from_sheet,
-	    import_sheet
+            update_sheet_name,
+            add_rows_to_sheet,
+            delete_rows_from_sheet,
+            import_sheet
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -263,7 +260,6 @@ fn main() {
 
 pub struct AppState {
     pub origin: String,
-    pub import_path : String,
     pub sheets_types_names: Vec<Name>,
     pub sheet_map: HashMap<String, Vec<ConfigValue>>,
     pub sheet_import: HashMap<String, ImportConfig>,
@@ -278,7 +274,9 @@ impl Default for AppState {
         let mut file = File::open(file_path).expect("config file does not exist");
 
         let config: Config = serde_json::from_reader(&mut file).unwrap();
-        let Config { import_path,sheets } = config;
+        let Config {
+            sheets,
+        } = config;
         let sheets_types_names = sheets
             .iter()
             .map(|x| Name {
@@ -291,7 +289,7 @@ impl Default for AppState {
         for SheetConfig {
             sheet_type_name,
             row,
-	    importing,
+            importing,
         } in sheets.into_iter()
         {
             sheet_map.insert(sheet_type_name.clone(), row);
@@ -302,8 +300,7 @@ impl Default for AppState {
             origin: format!("http://{host}:{port}"),
             sheets_types_names,
             sheet_map,
-	    import_path,
-	    sheet_import,
+            sheet_import,
         }
     }
 }
@@ -331,6 +328,7 @@ pub async fn write_sheet(
     for (row, columns) in rows.into_iter().map(|x| x.columns).enumerate() {
         for (col, header) in headers.iter().enumerate() {
             let (row, col) = (row as u32 + 1, col as u16);
+	    worksheet.set_row_height(row, 30)?;
             match &columns.get(header).unwrap().value {
                 ColumnValue::Date(Some(date)) => {
                     let string = date.to_string();
@@ -343,8 +341,7 @@ pub async fn write_sheet(
         }
     }
 
-    worksheet.autofit();
-    worksheet.set_row_height(0, 25)?;
+    worksheet.set_row_height(0, 45)?;
     worksheet.set_row_format(
         0,
         &Format::new()
@@ -354,6 +351,7 @@ pub async fn write_sheet(
             .set_bold()
             .set_border(FormatBorder::DashDotDot),
     )?;
+    worksheet.autofit();
 
     worksheet.set_right_to_left(true);
 
@@ -366,9 +364,12 @@ pub async fn write_sheet(
 
     let file_name = format!(
         "_{}_{}_--_{}_{}_--_{}_{}.xlsx",
-        "شيت",type_name,
-        "باسم",sheet_name,
-        "بتاريخ",insert_date.to_string(),
+        "شيت",
+        type_name,
+        "باسم",
+        sheet_name,
+        "بتاريخ",
+        insert_date.to_string(),
     );
     let path_name = file_path + &file_name;
     workbook.save(&path_name)?;

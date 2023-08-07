@@ -1,8 +1,8 @@
 use crate::AppState;
 use actix_web::{
-    get, post,
+    delete, get, post, put,
     web::{self, Data},
-    HttpResponse, Responder, Scope, delete, put,
+    HttpResponse, Responder, Scope,
 };
 use sqlx::{query, query_as};
 use std::{collections::HashMap, error::Error};
@@ -18,7 +18,6 @@ pub fn scope() -> Scope {
         .service(update_name)
         .service(delete_row)
         .service(add_row_to_sheet)
-
 }
 
 #[post("/search")]
@@ -38,8 +37,8 @@ async fn save(state: Data<AppState>, sheet: web::Json<Sheet>) -> impl Responder 
 }
 
 #[put("/name")]
-async fn update_name(state: Data<AppState>, name : web::Json<Name>) -> impl Responder {
-    match update_sheet_name(&state, name .into_inner()).await {
+async fn update_name(state: Data<AppState>, name: web::Json<Name>) -> impl Responder {
+    match update_sheet_name(&state, name.into_inner()).await {
         Ok(_) => HttpResponse::Ok(),
         Err(_) => HttpResponse::InternalServerError(),
     }
@@ -68,9 +67,9 @@ async fn add_row_to_sheet(
 }
 
 #[delete("/{sheet_id}/{row_id}/row")]
-async fn delete_row(state: Data<AppState>, ids : web::Path<(Uuid,Uuid)>) -> impl Responder {
-    let (sheet_id,row_id) = ids.into_inner();
-    match delete_row_by_id(&state, sheet_id,row_id).await {
+async fn delete_row(state: Data<AppState>, ids: web::Path<(Uuid, Uuid)>) -> impl Responder {
+    let (sheet_id, row_id) = ids.into_inner();
+    match delete_row_by_id(&state, sheet_id, row_id).await {
         Ok(_) => HttpResponse::Ok(),
         Err(_) => HttpResponse::InternalServerError(),
     }
@@ -90,11 +89,13 @@ pub async fn fetch_columns_by_row_id(
     .await?;
     let mut map = HashMap::new();
     for record in records.into_iter() {
-        map.insert(record.header_name,
-		   Column {
-		       is_basic: true,
-		       value: serde_json::from_value(record.value)?
-		   });
+        map.insert(
+            record.header_name,
+            Column {
+                is_basic: true,
+                value: serde_json::from_value(record.value)?,
+            },
+        );
     }
     Ok(map)
 }
@@ -124,7 +125,7 @@ pub async fn delete_row_by_id(
         DELETE FROM rows 
         WHERE sheet_id = $1 AND id = $2"#,
         sheet_id,
-	row_id,
+        row_id,
     )
     .execute(&state.db)
     .await?;

@@ -1,4 +1,4 @@
-use models::{Name, SearchSheetParams, Sheet, Row};
+use models::{Name, Row, SearchSheetParams, Sheet};
 use reqwest::StatusCode;
 use uuid::Uuid;
 
@@ -24,7 +24,7 @@ pub async fn save_sheet(
 
 pub async fn update_sheet_name(
     app_state: &AppState,
-    name :&Name
+    name: &Name,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let origin = &app_state.origin;
     let res = reqwest::Client::new()

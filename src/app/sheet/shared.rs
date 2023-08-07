@@ -1,18 +1,20 @@
 use leptos::*;
 
 use crate::Non;
+use chrono::Local;
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tauri_sys::{
-    dialog::{MessageDialogBuilder, MessageDialogKind, FileDialogBuilder},
-    tauri::invoke,
+    dialog::{FileDialogBuilder, MessageDialogBuilder, MessageDialogKind},
     path::{download_dir, home_dir},
+    tauri::invoke,
 };
 use uuid::Uuid;
-use chrono::Local;
 
-use models::{ColumnValue, Operation, ValueType,Row,ColumnConfig,OperationConfig,ColumnProps,Column};
+use models::{
+    Column, ColumnConfig, ColumnProps, ColumnValue, Operation, OperationConfig, Row, ValueType,
+};
 
 pub async fn new_id() -> Uuid {
     invoke::<_, Uuid>("new_id", &Non {}).await.unwrap()
@@ -24,23 +26,21 @@ pub struct NameArg {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct ImportSheetArgs{
+struct ImportSheetArgs {
     sheettype: String,
     filepath: String,
 }
 
-pub async fn import_sheet_rows(
-    sheettype :String,
-    filepath: String,
-) -> Vec<Row>{
+pub async fn import_sheet_rows(sheettype: String, filepath: String) -> Vec<Row> {
     invoke::<ImportSheetArgs, Vec<Row>>(
-	"import_sheet",
-	&ImportSheetArgs {
-	    sheettype,
-	    filepath,
-	})
-	.await
-	.unwrap_or_default()
+        "import_sheet",
+        &ImportSheetArgs {
+            sheettype,
+            filepath,
+        },
+    )
+    .await
+    .unwrap_or_default()
 }
 
 pub async fn alert(message: &str) {
@@ -70,13 +70,13 @@ pub async fn open_file() -> Option<String> {
     builder.add_filter("Serialized", &["json"]);
     builder.set_title("اختر ملف");
     let download_dir = match download_dir().await {
-	Ok(v) => Some(v),
-	Err(_) => {
-	    let Ok(home_dir) = home_dir().await else {
+        Ok(v) => Some(v),
+        Err(_) => {
+            let Ok(home_dir) = home_dir().await else {
 		return None;
 	    };
-	    Some(home_dir.join("Downloads"))
-	}
+            Some(home_dir.join("Downloads"))
+        }
     };
     let Some(download_dir) = download_dir else {
 	return None;
@@ -104,6 +104,7 @@ where
                         view! { cx, <th>{x}</th> }
                     }
                 />
+                <th class="shapeless">"  "</th>
                 <For
                     each=calc_headers
                     key=move |x| x.clone()
@@ -134,16 +135,34 @@ where
             each=move || rows.get()
             key=|row| row.id
             view=move |cx, Row { columns, id }| {
+                let columns = std::rc::Rc::new(columns);
                 view! { cx,
                     <tr>
-                        <For
-                            each=move || basic_headers().into_iter().chain(calc_headers())
-                            key=|key| key.clone()
-                            view=move |cx, column| {
-                                view! { cx, <td>{columns.get(&column).map(|x| x.value.to_string())}</td> }
+                        {
+                            let columns = columns.clone();
+                            view! { cx,
+                                <For
+                                    each=move || basic_headers()
+                                    key=|key| key.clone()
+                                    view=move |cx, column| {
+					let columns = columns.clone();
+                                        view! { cx, <td>{move || columns.get(&column).map(|x| x.value.to_string())}</td> }
+                                    }
+                                />
                             }
-                        />
-                        <td>
+                        } <td class="shapeless">"  "</td> {
+                            let columns = columns.clone();
+                            view! { cx,
+                                <For
+                                    each=move || calc_headers()
+                                    key=|key| key.clone()
+                                    view=move |cx, column| {
+					let columns = columns.clone();
+                                        view! { cx, <td>{move || columns.get(&column).map(|x| x.value.to_string())}</td> }
+                                    }
+                                />
+                            }
+                        } <td>
                             <button on:click=move |_| delete_row(id)>"X"</button>
                         </td>
                     </tr>
@@ -153,7 +172,7 @@ where
     }
 }
 
-type GetterSetter<T> = (ReadSignal<(T,bool)>, WriteSignal<(T,bool)>);
+type GetterSetter<T> = (ReadSignal<(T, bool)>, WriteSignal<(T, bool)>);
 
 #[derive(Debug, Clone, PartialEq)]
 enum ColumnSignal {
@@ -186,7 +205,7 @@ where
                 }) => {
                     map.insert(
                         header,
-                        ColumnSignal::String(create_signal(cx, (String::from(""),is_completable))),
+                        ColumnSignal::String(create_signal(cx, (String::from(""), is_completable))),
                     );
                 }
                 ColumnConfig::Date(ColumnProps {
@@ -195,14 +214,20 @@ where
                 }) => {
                     map.insert(
                         header,
-                        ColumnSignal::Date(create_signal(cx, (Local::now().date_naive(),is_completable))),
+                        ColumnSignal::Date(create_signal(
+                            cx,
+                            (Local::now().date_naive(), is_completable),
+                        )),
                     );
                 }
                 ColumnConfig::Float(ColumnProps {
                     header,
                     is_completable,
                 }) => {
-                    map.insert(header, ColumnSignal::Float(create_signal(cx,(0.0,is_completable))));
+                    map.insert(
+                        header,
+                        ColumnSignal::Float(create_signal(cx, (0.0, is_completable))),
+                    );
                 }
             }
         }
@@ -270,14 +295,10 @@ where
                 each=move || basic_headers().clone()
                 key=|x| x.clone()
                 view=move |cx, header| {
-                    view! { cx,
-			    <MyInput
-				header=header
-				basic_signals_map=basic_signals_map
-			    />
-		    }
+                    view! { cx, <MyInput header=header basic_signals_map=basic_signals_map/> }
                 }
             />
+	    <td class="shapeless">"  "</td>
             <For
                 each=move || calc_headers().clone()
                 key=|x| x.clone()
@@ -294,7 +315,9 @@ where
             />
             <tr class="spanA">
                 <td>
-                    <button on:click=on_click class="centered-button">"اضافة"</button>
+                    <button on:click=on_click class="centered-button">
+                        "اضافة"
+                    </button>
                 </td>
             </tr>
         </>
@@ -315,23 +338,24 @@ fn MyInput(
         None => ("", "".to_string()),
     };
     view! { cx,
-	<td>
-	    <input
-		type=i_type
-		value=move || value.clone()
-		on:change=move |ev| match cmp_arg.get(&header) {
-		    Some(ColumnSignal::String((_, write))) =>
-			write.update(|x| x.0 = event_target_value(&ev)),
-		    Some(ColumnSignal::Float((_, write))) => {
-			write.update(|x| x.0 = event_target_value(&ev).parse().unwrap_or_default())
-		    }
-		    Some(ColumnSignal::Date((_, write))) => {
-			write.update(|x| x.0 = event_target_value(&ev).parse().unwrap_or_default())
-		    }
-		    None => {}
-		}
-	    />
-	</td>
+        <td>
+            <input
+                type=i_type
+                value=move || value.clone()
+                on:change=move |ev| match cmp_arg.get(&header) {
+                    Some(ColumnSignal::String((_, write))) => {
+                        write.update(|x| x.0 = event_target_value(&ev))
+                    }
+                    Some(ColumnSignal::Float((_, write))) => {
+                        write.update(|x| x.0 = event_target_value(&ev).parse().unwrap_or_default())
+                    }
+                    Some(ColumnSignal::Date((_, write))) => {
+                        write.update(|x| x.0 = event_target_value(&ev).parse().unwrap_or_default())
+                    }
+                    None => {}
+                }
+            />
+        </td>
     }
 }
 

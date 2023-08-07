@@ -10,7 +10,8 @@ use tauri_sys::tauri::invoke;
 use uuid::Uuid;
 
 use super::shared::{
-    alert,confirm,calculate_operation,message,NameArg,SheetHead,InputRow,ShowNewRows,import_sheet_rows,open_file
+    alert, calculate_operation, confirm, import_sheet_rows, message, open_file, InputRow, NameArg,
+    SheetHead, ShowNewRows,
 };
 
 #[derive(Serialize, Deserialize)]
@@ -21,19 +22,19 @@ struct ExportSheetArg {
 
 #[derive(Serialize, Deserialize)]
 struct SheetNameArg {
-    name: Name
+    name: Name,
 }
 
 #[derive(Serialize, Deserialize)]
 struct RowsDeleteArg {
-    sheetid : Uuid,
-    rowsids : Vec<Uuid>,
+    sheetid: Uuid,
+    rowsids: Vec<Uuid>,
 }
 
 #[derive(Serialize, Deserialize)]
 struct RowsAddArg {
-    sheetid : Uuid,
-    rows : Vec<Row>,
+    sheetid: Uuid,
+    rows: Vec<Row>,
 }
 
 #[component]
@@ -194,98 +195,100 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
         }
     };
     let delete_new_row = move |id| set_added_rows.update(|xs| xs.retain(|x| x.id != id));
-    let toggle_edit_mode = move |_| if edit_mode.get() {
-	spawn_local(async move {
-	    let reset = if !deleted_rows.get().is_empty() || !added_rows.get().is_empty() {
-		confirm("سيتم تجاهل كل التعديلات").await
-	    } else {
-		true
-	    };
-	    if reset {
-		set_edit_mode.set(false);
-		set_deleted_rows.set(Vec::new());
-		set_added_rows.set(Vec::new());
-	    }
-	})
-    } else {
-	set_edit_mode.set(true);
+    let toggle_edit_mode = move |_| {
+        if edit_mode.get() {
+            spawn_local(async move {
+                let reset = if !deleted_rows.get().is_empty() || !added_rows.get().is_empty() {
+                    confirm("سيتم تجاهل كل التعديلات").await
+                } else {
+                    true
+                };
+                if reset {
+                    set_edit_mode.set(false);
+                    set_deleted_rows.set(Vec::new());
+                    set_added_rows.set(Vec::new());
+                }
+            })
+        } else {
+            set_edit_mode.set(true);
+        }
     };
     let append = move |row| set_added_rows.update(|xs| xs.push(row));
     let save_edits = move |_| {
-	let Some(sheet) = sheet_resource.read(cx) else {
+        let Some(sheet) = sheet_resource.read(cx) else {
 	    return;
 	};
-	let sheet_name = sheet_name.get();
-	let deleted_rows = deleted_rows.get();
-	let added_rows = added_rows.get();
-	spawn_local(async move{
-	    if !sheet_name.is_empty() && sheet_name != sheet.sheet_name {
-		match invoke::<_, ()>(
-		    "update_sheet_name",
-		    &SheetNameArg{
-			name:Name {
-			    id: sheet.id,
-			    the_name: sheet_name
-			},
-		    }
-		)
-		.await
-		{
-		    Ok(_) => {
-			set_sheet_name.set(String::from(""));
-			message("نجح تغيير الاسم").await
-		    },
-		    Err(err) => alert(err.to_string().as_str()).await,
-		}
-	    }
-	    if !deleted_rows.is_empty() {
-		match invoke::<_, ()>(
-		    "delete_rows_from_sheet",
-		    &RowsDeleteArg{
-			sheetid : sheet.id,
-			rowsids : deleted_rows,
-		    }
-		)
-		.await
-		{
-		    Ok(_) => {
-			set_deleted_rows.set(Vec::new());
-			message("نجح الحذف").await
-		    },
-		    Err(err) => alert(err.to_string().as_str()).await,
-		}
-	    }
-	    if !added_rows.is_empty() {
-		match invoke::<_, ()>(
-		    "add_rows_to_sheet",
-		    &RowsAddArg{
-			sheetid: sheet.id,
-			rows: added_rows,
-		    }
-		)
-		.await
-		{
-		    Ok(_) => {
-			set_added_rows.set(Vec::new());
-			message("نجحت الاضافة").await
-		    },
-		    Err(err) => alert(err.to_string().as_str()).await,
-		}
-	    }
-	});
-	set_edit_mode.set(false);
-	sheet_resource.refetch();
+        let sheet_name = sheet_name.get();
+        let deleted_rows = deleted_rows.get();
+        let added_rows = added_rows.get();
+        spawn_local(async move {
+            if !sheet_name.is_empty() && sheet_name != sheet.sheet_name {
+                match invoke::<_, ()>(
+                    "update_sheet_name",
+                    &SheetNameArg {
+                        name: Name {
+                            id: sheet.id,
+                            the_name: sheet_name,
+                        },
+                    },
+                )
+                .await
+                {
+                    Ok(_) => {
+                        set_sheet_name.set(String::from(""));
+                        message("نجح تغيير الاسم").await
+                    }
+                    Err(err) => alert(err.to_string().as_str()).await,
+                }
+            }
+            if !deleted_rows.is_empty() {
+                match invoke::<_, ()>(
+                    "delete_rows_from_sheet",
+                    &RowsDeleteArg {
+                        sheetid: sheet.id,
+                        rowsids: deleted_rows,
+                    },
+                )
+                .await
+                {
+                    Ok(_) => {
+                        set_deleted_rows.set(Vec::new());
+                        message("نجح الحذف").await
+                    }
+                    Err(err) => alert(err.to_string().as_str()).await,
+                }
+            }
+            if !added_rows.is_empty() {
+                match invoke::<_, ()>(
+                    "add_rows_to_sheet",
+                    &RowsAddArg {
+                        sheetid: sheet.id,
+                        rows: added_rows,
+                    },
+                )
+                .await
+                {
+                    Ok(_) => {
+                        set_added_rows.set(Vec::new());
+                        message("نجحت الاضافة").await
+                    }
+                    Err(err) => alert(err.to_string().as_str()).await,
+                }
+            }
+        });
+        set_edit_mode.set(false);
+        sheet_resource.refetch();
     };
 
     let load_file = move |_| {
-	let sheettype = sheet_type_name_resource.read(cx).unwrap_or_default();
-	spawn_local(async move {
-	    let Some(filepath) = open_file().await else {
+        let sheettype = sheet_type_name_resource.read(cx).unwrap_or_default();
+        spawn_local(async move {
+            let Some(filepath) = open_file().await else {
 		return;
 	    };
-	    let rows = import_sheet_rows(sheettype,filepath).await;
-	    set_added_rows.update(|xs| xs.extend(rows));
-	});
+            let rows = import_sheet_rows(sheettype, filepath).await;
+            set_added_rows.update(|xs| xs.extend(rows));
+        });
     };
 
     view! { cx,
@@ -297,24 +300,25 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
                 "🏹"
             </button>
             <br/>
-	    <Show
-	    when=move || edit_mode.get()
-	    fallback=move |_| view!{cx,
-		<h1>{move || sheet_resource.read(cx).unwrap_or_default().sheet_name}</h1>
-	    }
-	    >
-            <input
-                type="string"
-                class="centered-input"
-                placeholder=move || {
-                    format!(
-                        "{} ({})", "اسم الشيت", sheet_resource.read(cx).unwrap_or_default().sheet_name
-                    )
+            <Show
+                when=move || edit_mode.get()
+                fallback=move |_| {
+                    view! { cx, <h1>{move || sheet_resource.read(cx).unwrap_or_default().sheet_name}</h1> }
                 }
-                value=move || sheet_name.get()
-                on:input=move |ev| set_sheet_name.set(event_target_value(&ev))
-            />
-	    </Show>
+            >
+                <input
+                    type="string"
+                    class="centered-input"
+                    placeholder=move || {
+                        format!(
+                            "{} ({})", "اسم الشيت", sheet_resource.read(cx).unwrap_or_default()
+                            .sheet_name
+                        )
+                    }
+                    value=move || sheet_name.get()
+                    on:input=move |ev| set_sheet_name.set(event_target_value(&ev))
+                />
+            </Show>
             <table>
                 <SheetHead basic_headers=basic_headers calc_headers=calc_headers/>
                 <tbody>
@@ -332,35 +336,39 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
                         calc_headers=calc_headers
                         rows=added_rows
                     />
-		    <Show
-			when=move || edit_mode.get()
-			fallback=|_| {
-			    view! { cx, <></> }
-			}
-		    >
-                    <InputRow
-                        basic_headers=basic_headers
-                        calc_headers=calc_headers
-                        append=append
-                        basic_columns=basic_columns
-                        calc_columns=calc_columns
-                    />
-		    </Show>
+                    <Show
+                        when=move || edit_mode.get()
+                        fallback=|_| {
+                            view! { cx, <></> }
+                        }
+                    >
+                        <InputRow
+                            basic_headers=basic_headers
+                            calc_headers=calc_headers
+                            append=append
+                            basic_columns=basic_columns
+                            calc_columns=calc_columns
+                        />
+                    </Show>
                 </tbody>
             </table>
             <Outlet/>
             <button on:click=toggle_edit_mode class="centered-button">
                 {move || if edit_mode.get() { "الغاء" } else { "تعديل" }}
             </button>
-	    <Show
-		when=move || edit_mode.get()
-		fallback=|_| {
-		    view! { cx, <></> }
-		}
-	    >
-		<button on:click=save_edits class="centered-button">"تاكيد"</button>
-		<button on:click=load_file class="centered-button">"تحميل ملف"</button>
-	    </Show>
+            <Show
+                when=move || edit_mode.get()
+                fallback=|_| {
+                    view! { cx, <></> }
+                }
+            >
+                <button on:click=save_edits class="centered-button">
+                    "تاكيد"
+                </button>
+                <button on:click=load_file class="centered-button">
+                    "تحميل ملف"
+                </button>
+            </Show>
         </section>
     }
 }
@@ -386,19 +394,34 @@ where
             each=move || rows.get()
             key=|row| row.id
             view=move |cx, Row { columns, id }| {
+		let columns = std::rc::Rc::new(columns);
                 view! { cx,
                     <tr>
-                        <For
-                            each=move || basic_headers().into_iter().chain(calc_headers())
-                            key=|key| key.clone()
-                            view=move |cx, column| {
-                                view! { cx,
-                                    <td class=move || if is_deleted(id) { "deleted" } else { "" }>
-                                        {columns.get(&column).map(|x| x.value.to_string())}
-                                    </td>
-                                }
+                        {
+                            let columns = columns.clone();
+                            view! { cx,
+                                <For
+                                    each=move || basic_headers()
+                                    key=|key| key.clone()
+                                    view=move |cx, column| {
+					let columns = columns.clone();
+                                        view! { cx, <td>{move || columns.get(&column).map(|x| x.value.to_string())}</td> }
+                                    }
+                                />
                             }
-                        />
+                        } <td class="shapeless">"  "</td> {
+                            let columns = columns.clone();
+                            view! { cx,
+                                <For
+                                    each=move || calc_headers()
+                                    key=|key| key.clone()
+                                    view=move |cx, column| {
+					let columns = columns.clone();
+                                        view! { cx, <td>{move || columns.get(&column).map(|x| x.value.to_string())}</td> }
+                                    }
+                                />
+                            }
+                        }
                         <Show
                             when=move || edit_mode.get()
                             fallback=|_| {

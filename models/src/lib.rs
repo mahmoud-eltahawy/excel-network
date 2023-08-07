@@ -1,7 +1,6 @@
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::MAIN_SEPARATOR;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -134,22 +133,21 @@ impl HeaderGetter for ConfigValue {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ImportConfig {
-    pub main_entry : Vec<String>,
-    pub repeated_entry : Vec<String>,
-    pub unique : HashMap<String,Vec<String>>,
-    pub repeated : HashMap<String,Vec<String>>,
+    pub main_entry: Vec<String>,
+    pub repeated_entry: Vec<String>,
+    pub unique: HashMap<String, Vec<String>>,
+    pub repeated: HashMap<String, Vec<String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SheetConfig {
     pub sheet_type_name: String,
-    pub importing : ImportConfig,
+    pub importing: ImportConfig,
     pub row: Vec<ConfigValue>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
-    pub import_path : String,
     pub sheets: Vec<SheetConfig>,
 }
 
@@ -166,20 +164,15 @@ pub fn get_config_example() {
         is_completable: true,
     };
     let a = Config {
-	import_path : format!("{}{}Downloads{}",
-			      dirs::home_dir().unwrap_or_default().display(),
-			      MAIN_SEPARATOR,
-			      MAIN_SEPARATOR,
-	),
         sheets: vec![
             SheetConfig {
                 sheet_type_name: String::from("مبيعات"),
-		importing : ImportConfig{
-		    main_entry : vec![String::from("document")],
-		    repeated_entry : vec!["invoiceLines".to_string()],
-		    unique : HashMap::new(),
-		    repeated : HashMap::new(),
-		},
+                importing: ImportConfig {
+                    main_entry: vec![String::from("document")],
+                    repeated_entry: vec!["invoiceLines".to_string()],
+                    unique: HashMap::new(),
+                    repeated: HashMap::new(),
+                },
                 row: vec![
                     ConfigValue::Basic(ColumnConfig::Float(fcp("رقم الفاتورة".to_string()))),
                     ConfigValue::Basic(ColumnConfig::Date(fcp("التاريخ".to_string()))),
@@ -212,12 +205,12 @@ pub fn get_config_example() {
             },
             SheetConfig {
                 sheet_type_name: String::from("مشتريات"),
-		importing : ImportConfig{
-		    main_entry : vec![String::from("document")],
-		    repeated_entry : vec!["invoiceLines".to_string()],
-		    unique : HashMap::new(),
-		    repeated : HashMap::new(),
-		},
+                importing: ImportConfig {
+                    main_entry: vec![String::from("document")],
+                    repeated_entry: vec!["invoiceLines".to_string()],
+                    unique: HashMap::new(),
+                    repeated: HashMap::new(),
+                },
                 row: vec![
                     ConfigValue::Basic(ColumnConfig::Float(fcp("رقم الفاتورة".to_string()))),
                     ConfigValue::Basic(ColumnConfig::Date(fcp("التاريخ".to_string()))),
@@ -230,26 +223,29 @@ pub fn get_config_example() {
                         value: Operation::Multiply((
                             ValueType::Variable("السعر".to_string()),
                             ValueType::Variable("العدد".to_string()),
-			)),
+                        )),
                     }),
                 ],
             },
             SheetConfig {
                 sheet_type_name: String::from("كارت صنف"),
-		importing : ImportConfig{
-		    main_entry : vec![String::from("document")],
-		    repeated_entry : vec!["invoiceLines".to_string()],
-		    unique : HashMap::from([
-			("رقم الفاتورة".to_string(),vec!["internalID".to_string()]),
-			("التاريخ".to_string(),vec!["dateTimeIssued".to_string()]),
-		    ]),
-		    repeated : HashMap::from([
-			("كود الصنف".to_string(),vec!["itemCode".to_string()]),
-			("اسم الصنف".to_string(),vec!["description".to_string()]),
-			("السعر".to_string(),vec!["unitValue".to_string(),"amountEGP".to_string()]),
-			("الكمية".to_string(),vec!["quantity".to_string()]),
-		    ]),
-		},
+                importing: ImportConfig {
+                    main_entry: vec![String::from("document")],
+                    repeated_entry: vec!["invoiceLines".to_string()],
+                    unique: HashMap::from([
+                        ("رقم الفاتورة".to_string(), vec!["internalID".to_string()]),
+                        ("التاريخ".to_string(), vec!["dateTimeIssued".to_string()]),
+                    ]),
+                    repeated: HashMap::from([
+                        ("كود الصنف".to_string(), vec!["itemCode".to_string()]),
+                        ("اسم الصنف".to_string(), vec!["description".to_string()]),
+                        (
+                            "السعر".to_string(),
+                            vec!["unitValue".to_string(), "amountEGP".to_string()],
+                        ),
+                        ("الكمية".to_string(), vec!["quantity".to_string()]),
+                    ]),
+                },
                 row: vec![
                     ConfigValue::Basic(ColumnConfig::Float(fcp("رقم الفاتورة".to_string()))),
                     ConfigValue::Basic(ColumnConfig::Date(fcp("التاريخ".to_string()))),
@@ -262,7 +258,7 @@ pub fn get_config_example() {
                         value: Operation::Multiply((
                             ValueType::Variable("السعر".to_string()),
                             ValueType::Variable("الكمية".to_string()),
-			)),
+                        )),
                     }),
                 ],
             },
