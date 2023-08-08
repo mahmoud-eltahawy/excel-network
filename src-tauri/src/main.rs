@@ -173,7 +173,8 @@ fn column_from_value(value: &Value) -> Column {
             }
             Value::String(v) => match v.parse::<f64>() {
                 Ok(v) => ColumnValue::Float(v),
-                Err(_) => match v[0..10].parse::<NaiveDate>() {
+                Err(_) => match v.get(..10)
+		    .unwrap_or("unparsable string to date").parse::<NaiveDate>() {
                     Ok(v) => ColumnValue::Date(Some(v)),
                     Err(_) => ColumnValue::String(Some(v.to_owned())),
                 },
@@ -350,15 +351,18 @@ pub async fn write_sheet(
         for (col, header) in headers.iter().enumerate() {
             let (row, col) = (row as u32 + 1, col as u16);
 	    worksheet.set_row_height(row, 30)?;
-            match &columns.get(header).unwrap().value {
-                ColumnValue::Date(Some(date)) => {
-                    let string = date.to_string();
-                    worksheet.write_string(row, col, string)?
-                }
-                ColumnValue::String(Some(string)) => worksheet.write_string(row, col, string)?,
-                ColumnValue::Float(number) => worksheet.write_number(row, col, *number)?,
-                _ => worksheet.write_string(row, col, "فارغ")?,
-            };
+	    match &columns.get(header) {
+		Some(column) => match &column.value {
+		    ColumnValue::Date(Some(date)) => {
+			let string = date.to_string();
+			worksheet.write_string(row, col, string)?;
+		    },
+		    ColumnValue::String(Some(string)) => {worksheet.write_string(row, col, string)?;},
+		    ColumnValue::Float(number) => {worksheet.write_number(row, col, *number)?;},
+		    _ => (),
+		},
+		None => (),
+	    }
         }
     }
 

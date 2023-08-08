@@ -170,8 +170,18 @@ pub fn get_config_example() {
                 importing: ImportConfig {
                     main_entry: vec![String::from("document")],
                     repeated_entry: vec!["invoiceLines".to_string()],
-                    unique: HashMap::new(),
-                    repeated: HashMap::new(),
+                    unique: HashMap::from([
+                        ("رقم الفاتورة".to_string(), vec!["internalID".to_string()]),
+                        ("التاريخ".to_string(), vec!["dateTimeIssued".to_string()]),
+                        ("رقم التسجيل الضريبي".to_string(), vec!["receiver".to_string(),"id".to_string()]),
+                        ("اسم العميل".to_string(), vec!["receiver".to_string(),"name".to_string()]),
+		    ]),
+                    repeated: HashMap::from([
+                        (
+                            "القيمة".to_string(),
+                            vec!["unitValue".to_string(), "amountEGP".to_string()],
+                        ),
+		    ]),
                 },
                 row: vec![
                     ConfigValue::Basic(ColumnConfig::Float(fcp("رقم الفاتورة".to_string()))),
@@ -180,6 +190,7 @@ pub fn get_config_example() {
                     ConfigValue::Basic(ColumnConfig::String(tcp("اسم العميل".to_string()))),
                     ConfigValue::Basic(ColumnConfig::String(tcp("تبع".to_string()))),
                     ConfigValue::Basic(ColumnConfig::Float(fcp("القيمة".to_string()))),
+                    ConfigValue::Basic(ColumnConfig::Float(fcp("الخصم".to_string()))),
                     ConfigValue::Calculated(OperationConfig {
                         header: "ض.ق.م".to_string(),
                         value: Operation::Multiply((
@@ -187,7 +198,6 @@ pub fn get_config_example() {
                             ValueType::Const(0.14),
                         )),
                     }),
-                    ConfigValue::Basic(ColumnConfig::Float(fcp("الخصم".to_string()))),
                     ConfigValue::Calculated(OperationConfig {
                         header: "الاجمالي".to_string(),
                         value: Operation::AddO((
@@ -208,8 +218,18 @@ pub fn get_config_example() {
                 importing: ImportConfig {
                     main_entry: vec![String::from("document")],
                     repeated_entry: vec!["invoiceLines".to_string()],
-                    unique: HashMap::new(),
-                    repeated: HashMap::new(),
+                    unique: HashMap::from([
+                        ("رقم الفاتورة".to_string(), vec!["internalID".to_string()]),
+                        ("التاريخ".to_string(), vec!["dateTimeIssued".to_string()]),
+		    ]),
+                    repeated: HashMap::from([
+                        ("بيان".to_string(), vec!["description".to_string()]),
+                        ("العدد".to_string(), vec!["quantity".to_string()]),
+                        (
+                            "السعر".to_string(),
+                            vec!["unitValue".to_string(), "amountEGP".to_string()],
+                        ),
+		    ]),
                 },
                 row: vec![
                     ConfigValue::Basic(ColumnConfig::Float(fcp("رقم الفاتورة".to_string()))),
