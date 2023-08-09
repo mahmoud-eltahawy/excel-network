@@ -1,6 +1,6 @@
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{cmp::Ordering,collections::HashMap};
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -42,10 +42,58 @@ pub struct Column {
     pub value: ColumnValue,
 }
 
+impl Column {
+    fn compare(&self,other: &Column) -> Option<Ordering> {
+	match (self.value.clone(),other.value.clone()) {
+	    (ColumnValue::Float(n1),ColumnValue::Float(n2)) => {
+		Some(if n1 > n2 {
+		    Ordering::Greater
+		} else if n1 < n2 {
+		    Ordering::Less
+		} else {
+		    Ordering::Equal
+		})
+	    },
+	    (ColumnValue::String(Some(s1)),ColumnValue::String(Some(s2))) => {
+		Some(s1.cmp(&s2))
+	    },
+	    (ColumnValue::Date(Some(b1)),ColumnValue::Date(Some(b2))) => {
+		Some(b1.cmp(&b2))
+	    },
+	    _ => None,
+	}
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Row {
     pub id: Uuid,
     pub columns: HashMap<String, Column>,
+}
+
+pub trait RowsSort {
+    fn sort_rows(&mut self,keys : Vec<String>);
+}
+
+impl RowsSort for Vec<Row> {
+    fn sort_rows(&mut self,keys : Vec<String>){
+	self.sort_by(|row_one,row_two| {
+	    let mut result = Ordering::Equal;
+	    for key in keys.iter() {
+		let column_one = row_one.columns.get(key);
+		let column_two = row_two.columns.get(key);
+		if let (Some(column_one),Some(column_two)) = (column_one,column_two) {
+		    if let Some(ordering) = column_one.compare(column_two){
+			if ordering != Ordering::Equal {
+			    result = ordering;
+			    break;
+			}
+		    };
+		}
+	    }
+	    result
+	});
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]

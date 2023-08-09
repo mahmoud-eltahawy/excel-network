@@ -1,7 +1,7 @@
 use crate::Id;
 use leptos::*;
 use leptos_router::*;
-use models::{Column, ColumnValue, ConfigValue, HeaderGetter, Name};
+use models::{Column, ColumnValue, ConfigValue, HeaderGetter, Name, RowsSort};
 use models::{Row, Sheet};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -213,7 +213,10 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
             set_edit_mode.set(true);
         }
     };
-    let append = move |row| set_added_rows.update(|xs| xs.push(row));
+    let append = move |row| set_added_rows.update(|xs| {
+	xs.push(row);
+	xs.sort_rows(vec![]);
+    });
     let save_edits = move |_| {
         let Some(sheet) = sheet_resource.read(cx) else {
 	    return;
@@ -287,7 +290,10 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
 		return;
 	    };
             let rows = import_sheet_rows(sheettype, filepath).await;
-            set_added_rows.update(|xs| xs.extend(rows));
+            set_added_rows.update(|xs| {
+		xs.extend(rows);
+		xs.sort_rows(vec![]);
+	    });
         });
     };
 
@@ -401,7 +407,7 @@ where
                             let columns = columns.clone();
                             view! { cx,
                                 <For
-                                    each=move || basic_headers()
+                                    each=basic_headers
                                     key=|key| key.clone()
                                     view=move |cx, column| {
 					let columns = columns.clone();
@@ -413,7 +419,7 @@ where
                             let columns = columns.clone();
                             view! { cx,
                                 <For
-                                    each=move || calc_headers()
+                                    each=calc_headers
                                     key=|key| key.clone()
                                     view=move |cx, column| {
 					let columns = columns.clone();

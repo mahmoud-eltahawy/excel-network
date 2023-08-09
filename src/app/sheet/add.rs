@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use models::{Column, ConfigValue, HeaderGetter, Row};
+use models::{Column, ConfigValue, HeaderGetter, Row, RowsSort};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
@@ -94,7 +94,10 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
             .collect::<Vec<_>>()
     };
 
-    let append = move |row: Row| set_rows.update(|xs| xs.push(row));
+    let append = move |row: Row| set_rows.update(|xs| {
+	xs.push(row);
+	xs.sort_rows(vec![]);
+    });
 
     let delete_row = move |id: Uuid| set_rows.update(|xs| xs.retain(|x| x.id != id));
 
@@ -136,7 +139,10 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
 		return;
 	    };
             let rows = import_sheet_rows(sheettype, filepath).await;
-            set_rows.update(|xs| xs.extend(rows));
+            set_rows.update(|xs| {
+		xs.extend(rows);
+		xs.sort_rows(vec![]);
+	    });
         });
     };
 

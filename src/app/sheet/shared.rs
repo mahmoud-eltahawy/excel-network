@@ -142,7 +142,7 @@ where
                             let columns = columns.clone();
                             view! { cx,
                                 <For
-                                    each=move || basic_headers()
+                                    each=basic_headers
                                     key=|key| key.clone()
                                     view=move |cx, column| {
 					let columns = columns.clone();
@@ -154,7 +154,7 @@ where
                             let columns = columns.clone();
                             view! { cx,
                                 <For
-                                    each=move || calc_headers()
+                                    each=calc_headers
                                     key=|key| key.clone()
                                     view=move |cx, column| {
 					let columns = columns.clone();
@@ -403,7 +403,7 @@ where
 fn calc_o<F>(
     basic_signals_map: HashMap<String, ColumnValue>,
     v: &ValueType,
-    bop: &Box<Operation>,
+    bop: &Operation,
     calc: F,
 ) -> f64
 where
