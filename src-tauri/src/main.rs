@@ -236,9 +236,10 @@ async fn import_sheet(
     }
 
     let old_path = Path::new(&filepath);
-    let new_path = dirs::home_dir()
+    let download_dir = dirs::home_dir()
 	.unwrap_or_default()
-        .join("Downloads")
+        .join("Downloads");
+    let new_path = download_dir
         .join(WORKDIR)
 	.join(&sheettype)
 	.join("الملفات المستوردة");
@@ -251,8 +252,10 @@ async fn import_sheet(
     let new_path = new_path
 	.join(old_path.file_name().unwrap_or_default());
 
-    if !rename(old_path, new_path).is_ok(){
-	println!("failed to move file");
+    if download_dir == old_path.parent().unwrap_or(old_path) {
+	if !rename(old_path, new_path).is_ok() {
+	    println!("failed to move file");
+	};
     };
 
     Ok(result)
