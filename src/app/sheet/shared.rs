@@ -16,6 +16,8 @@ use models::{
     Column, ColumnConfig, ColumnProps, ColumnValue, Operation, OperationConfig, Row, ValueType,
 };
 
+use std::rc::Rc;
+
 pub async fn new_id() -> Uuid {
     invoke::<_, Uuid>("new_id", &Non {}).await.unwrap()
 }
@@ -117,6 +119,79 @@ where
     }
 }
 
+
+#[component]
+pub fn ColumnEdit<F1,F2>(
+    cx: Scope,
+    mode : F1,
+    cancel : F2,
+    set_rows: WriteSignal<Vec<Row>>,
+) -> impl IntoView
+    where
+	F1 : Fn() -> (String,Uuid,Rc<HashMap<String,Column>>) + 'static,
+        F2 : Fn() + 'static + Clone + Copy
+{
+    let (header,id ,map) = mode();
+    let (column_value,set_column_value) = create_signal(cx, map.clone().get(&header).map(|x| x.value.clone()));
+    let header = Rc::new(header);
+    let on_input = move |ev| {
+	let value = event_target_value(&ev);
+	let value = match column_value.get() {
+	    Some(ColumnValue::Float(_)) => ColumnValue::Float(value.parse().unwrap_or_default()),
+	    Some(ColumnValue::Date(_)) => ColumnValue::Date(Some(value.parse().unwrap_or_default())),
+	    _ => ColumnValue::String(Some(value)),
+	};
+	set_column_value.set(Some(value));
+    };
+
+    let save = move |_| {
+	let header_binding = header.to_string();
+	let column_binding = Column { is_basic: true, value: column_value.get().unwrap() };
+	let map = map.iter().chain(HashMap::from([
+	    (&header_binding, &column_binding)
+	])).collect::<HashMap<_,_>>();
+	let map = map
+	    .into_iter()
+	    .map(|(k,v)| (k.clone(),v.clone()))
+	    .collect::<HashMap<_,_>>();
+	let row = Row{id,columns : map};
+	let mut indexg = 0;
+	set_rows.update(|xs| {
+	    let index = xs.iter().position(|x| x.id == row.id);
+	    if let Some(index) = index {
+		indexg = index;
+		xs.remove(index);
+	    }
+	});
+	set_rows.update(|xs| xs.insert(indexg, row));
+	cancel()
+    };
+    view! { cx,
+        <div class="popup">
+            <input
+                type=move || match column_value.get() {
+                    Some(ColumnValue::Float(_)) => "number",
+                    Some(ColumnValue::Date(_)) => "date",
+                    _ => "text",
+                }
+                placeholder=move || {
+                    format!(
+                        "{} ({})", "القيمة الحالية", column_value.get().map(| x | x
+                        .to_string()).unwrap_or_default()
+                    )
+                }
+                on:input=on_input
+            />
+            <button on:click=move|_| cancel() class="centered-button">
+                "الغاء"
+            </button>
+            <button on:click=save class="centered-button">
+                "تاكيد"
+            </button>
+        </div>
+    }
+}
+
 #[component]
 pub fn ShowNewRows<BH, CH, FD>(
     cx: Scope,
@@ -124,51 +199,77 @@ pub fn ShowNewRows<BH, CH, FD>(
     calc_headers: CH,
     delete_row: FD,
     rows: ReadSignal<Vec<Row>>,
+    set_rows: WriteSignal<Vec<Row>>,
 ) -> impl IntoView
 where
     BH: Fn() -> Vec<String> + 'static + Clone + Copy,
     CH: Fn() -> Vec<String> + 'static + Clone + Copy,
     FD: Fn(Uuid) + 'static + Clone + Copy,
 {
+    let (edit_column,set_edit_column) = create_signal(cx, None::<(String,Uuid,Rc<HashMap<String,Column>>)>);
     view! { cx,
-        <For
-            each=move || rows.get()
-            key=|row| row.id
-            view=move |cx, Row { columns, id }| {
-                let columns = std::rc::Rc::new(columns);
-                view! { cx,
-                    <tr>
-                        {
-                            let columns = columns.clone();
-                            view! { cx,
-                                <For
-                                    each=basic_headers
-                                    key=|key| key.clone()
-                                    view=move |cx, column| {
-                                        let columns = columns.clone();
-                                        view! { cx, <td>{move || columns.get(&column).map(|x| x.value.to_string())}</td> }
-                                    }
-                                />
-                            }
-                        } <td class="shapeless">"  "</td> {
-                            let columns = columns.clone();
-                            view! { cx,
-                                <For
-                                    each=calc_headers
-                                    key=|key| key.clone()
-                                    view=move |cx, column| {
-                                        let columns = columns.clone();
-                                        view! { cx, <td>{move || columns.get(&column).map(|x| x.value.to_string())}</td> }
-                                    }
-                                />
-                            }
-                        } <td>
-                            <button on:click=move |_| delete_row(id)>"X"</button>
-                        </td>
-                    </tr>
+        <>
+            <Show
+                when=move || edit_column.get().is_some()
+                fallback=|_| {
+                    view! { cx, <></> }
                 }
-            }
-        />
+            >
+                <ColumnEdit
+                    mode=move || edit_column.get().unwrap()
+                    cancel=move || set_edit_column.set(None)
+                    set_rows=set_rows
+                />
+            </Show>
+            <For
+                each=move || rows.get()
+                key=|row| row.id
+                view=move |cx, Row { columns, id }| {
+                    let columns = Rc::new(columns);
+                    view! { cx,
+                        <tr>
+                            {
+                                let columns = columns.clone();
+                                view! { cx,
+                                    <For
+                                        each=basic_headers
+                                        key=|key| key.clone()
+                                        view=move |cx, column| {
+                                            let columns1 = columns.clone();
+                                            let columns2 = columns1.clone();
+                                            let col_name1 = column;
+                                            let col_name2 = col_name1.clone();
+                                            view! { cx,
+                                                <td
+                                                    style="cursor: pointer"
+                                                    on:dblclick=move |_| set_edit_column.set(Some((col_name1.clone(), id, columns1.clone())))
+                                                >
+                                                    {move || columns2.get(&col_name2).map(|x| x.value.to_string())}
+                                                </td>
+                                            }
+                                        }
+                                    />
+                                }
+                            } <td class="shapeless">"  "</td> {
+                                let columns = columns.clone();
+                                view! { cx,
+                                    <For
+                                        each=calc_headers
+                                        key=|key| key.clone()
+                                        view=move |cx, column| {
+                                            let columns = columns.clone();
+                                            view! { cx, <td>{move || columns.get(&column).map(|x| x.value.to_string())}</td> }
+                                        }
+                                    />
+                                }
+                            } <td>
+                                <button on:click=move |_| delete_row(id)>"X"</button>
+                            </td>
+                        </tr>
+                    }
+                }
+            />
+        </>
     }
 }
 

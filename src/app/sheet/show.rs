@@ -348,12 +348,19 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
                         rows=sheet_rows
                         edit_mode=edit_mode
                         is_deleted=is_deleted
-                    />
+		    />
+		    <Show
+		    when=move || !added_rows.get().is_empty()
+		    fallback=move |_| view!{cx,<></>}
+		    >
+			<tr><td class="shapeless">r"+"</td></tr>
+		    </Show>
                     <ShowNewRows
                         delete_row=delete_new_row
                         basic_headers=basic_headers
                         calc_headers=calc_headers
                         rows=added_rows
+                        set_rows=set_added_rows
                     />
                     <Show
                         when=move || edit_mode.get()
@@ -371,7 +378,6 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
                     </Show>
                 </tbody>
             </table>
-            <Outlet/>
             <button on:click=toggle_edit_mode class="centered-button">
                 {move || if edit_mode.get() { "الغاء" } else { "تعديل" }}
             </button>
@@ -388,6 +394,7 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
                     "تحميل ملف"
                 </button>
             </Show>
+            <Outlet/>
         </section>
     }
 }

@@ -184,6 +184,7 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
                         basic_headers=basic_headers
                         calc_headers=calc_headers
                         rows=rows
+                        set_rows=set_rows
                     />
                     <InputRow
                         basic_headers=basic_headers
