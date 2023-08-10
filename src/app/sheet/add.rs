@@ -45,6 +45,16 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
         },
     );
 
+    let sheet_priorities_resource = create_resource(
+        cx,
+        move || sheet_type_name_resource.read(cx),
+        move |name| async move {
+            invoke::<NameArg, Vec<String>>("get_priorities", &NameArg { name })
+                .await
+                .unwrap_or_default()
+        },
+    );
+
     let sheet_headers_resource = create_resource(
         cx,
         move || sheet_type_name_resource.read(cx),
@@ -94,10 +104,12 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
             .collect::<Vec<_>>()
     };
 
-    let append = move |row: Row| set_rows.update(|xs| {
-	xs.push(row);
-	xs.sort_rows(vec![]);
-    });
+    let append = move |row: Row| {
+        set_rows.update(|xs| {
+            xs.push(row);
+            xs.sort_rows(sheet_priorities_resource.read(cx).unwrap_or_default());
+        })
+    };
 
     let delete_row = move |id: Uuid| set_rows.update(|xs| xs.retain(|x| x.id != id));
 
@@ -140,9 +152,9 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
 	    };
             let rows = import_sheet_rows(sheettype, filepath).await;
             set_rows.update(|xs| {
-		xs.extend(rows);
-		xs.sort_rows(vec![]);
-	    });
+                xs.extend(rows);
+                xs.sort_rows(sheet_priorities_resource.read(cx).unwrap_or_default());
+            });
         });
     };
 

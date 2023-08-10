@@ -145,7 +145,7 @@ where
                                     each=basic_headers
                                     key=|key| key.clone()
                                     view=move |cx, column| {
-					let columns = columns.clone();
+                                        let columns = columns.clone();
                                         view! { cx, <td>{move || columns.get(&column).map(|x| x.value.to_string())}</td> }
                                     }
                                 />
@@ -157,7 +157,7 @@ where
                                     each=calc_headers
                                     key=|key| key.clone()
                                     view=move |cx, column| {
-					let columns = columns.clone();
+                                        let columns = columns.clone();
                                         view! { cx, <td>{move || columns.get(&column).map(|x| x.value.to_string())}</td> }
                                     }
                                 />
@@ -298,7 +298,7 @@ where
                     view! { cx, <MyInput header=header basic_signals_map=basic_signals_map/> }
                 }
             />
-	    <td class="shapeless">"  "</td>
+            <td class="shapeless">"  "</td>
             <For
                 each=move || calc_headers().clone()
                 key=|x| x.clone()

@@ -1,6 +1,6 @@
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
-use std::{cmp::Ordering,collections::HashMap};
+use std::{cmp::Ordering, collections::HashMap};
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -43,25 +43,19 @@ pub struct Column {
 }
 
 impl Column {
-    fn compare(&self,other: &Column) -> Option<Ordering> {
-	match (self.value.clone(),other.value.clone()) {
-	    (ColumnValue::Float(n1),ColumnValue::Float(n2)) => {
-		Some(if n1 > n2 {
-		    Ordering::Greater
-		} else if n1 < n2 {
-		    Ordering::Less
-		} else {
-		    Ordering::Equal
-		})
-	    },
-	    (ColumnValue::String(Some(s1)),ColumnValue::String(Some(s2))) => {
-		Some(s1.cmp(&s2))
-	    },
-	    (ColumnValue::Date(Some(b1)),ColumnValue::Date(Some(b2))) => {
-		Some(b1.cmp(&b2))
-	    },
-	    _ => None,
-	}
+    fn compare(&self, other: &Column) -> Option<Ordering> {
+        match (self.value.clone(), other.value.clone()) {
+            (ColumnValue::Float(n1), ColumnValue::Float(n2)) => Some(if n1 > n2 {
+                Ordering::Greater
+            } else if n1 < n2 {
+                Ordering::Less
+            } else {
+                Ordering::Equal
+            }),
+            (ColumnValue::String(Some(s1)), ColumnValue::String(Some(s2))) => Some(s1.cmp(&s2)),
+            (ColumnValue::Date(Some(b1)), ColumnValue::Date(Some(b2))) => Some(b1.cmp(&b2)),
+            _ => None,
+        }
     }
 }
 
@@ -72,27 +66,27 @@ pub struct Row {
 }
 
 pub trait RowsSort {
-    fn sort_rows(&mut self,keys : Vec<String>);
+    fn sort_rows(&mut self, keys: Vec<String>);
 }
 
 impl RowsSort for Vec<Row> {
-    fn sort_rows(&mut self,keys : Vec<String>){
-	self.sort_by(|row_one,row_two| {
-	    let mut result = Ordering::Equal;
-	    for key in keys.iter() {
-		let column_one = row_one.columns.get(key);
-		let column_two = row_two.columns.get(key);
-		if let (Some(column_one),Some(column_two)) = (column_one,column_two) {
-		    if let Some(ordering) = column_one.compare(column_two){
-			if ordering != Ordering::Equal {
-			    result = ordering;
-			    break;
-			}
-		    };
-		}
-	    }
-	    result
-	});
+    fn sort_rows(&mut self, keys: Vec<String>) {
+        self.sort_by(|row_one, row_two| {
+            let mut result = Ordering::Equal;
+            for key in keys.iter() {
+                let column_one = row_one.columns.get(key);
+                let column_two = row_two.columns.get(key);
+                if let (Some(column_one), Some(column_two)) = (column_one, column_two) {
+                    if let Some(ordering) = column_one.compare(column_two) {
+                        if ordering != Ordering::Equal {
+                            result = ordering;
+                            break;
+                        }
+                    };
+                }
+            }
+            result
+        });
     }
 }
 
@@ -196,6 +190,7 @@ pub struct SheetConfig {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
+    pub priorities: HashMap<String, Vec<String>>,
     pub sheets: Vec<SheetConfig>,
 }
 
@@ -212,6 +207,38 @@ pub fn get_config_example() {
         is_completable: true,
     };
     let a = Config {
+        priorities: HashMap::from([
+            (
+                String::from("مبيعات"),
+                vec![
+                    "رقم الفاتورة".to_string(),
+                    "التاريخ".to_string(),
+                    "رقم التسجيل الضريبي".to_string(),
+                    "اسم العميل".to_string(),
+                    "القيمة".to_string(),
+                ],
+            ),
+            (
+                String::from("مشتريات"),
+                vec![
+                    "رقم الفاتورة".to_string(),
+                    "التاريخ".to_string(),
+                    "بيان".to_string(),
+                    "العدد".to_string(),
+                    "السعر".to_string(),
+                ],
+            ),
+            (
+                String::from("كارت صنف"),
+                vec![
+                    "رقم الفاتورة".to_string(),
+                    "التاريخ".to_string(),
+                    "كود الصنف".to_string(),
+                    "اسم الصنف".to_string(),
+                    "السعر".to_string(),
+                ],
+            ),
+        ]),
         sheets: vec![
             SheetConfig {
                 sheet_type_name: String::from("مبيعات"),
@@ -221,15 +248,19 @@ pub fn get_config_example() {
                     unique: HashMap::from([
                         ("رقم الفاتورة".to_string(), vec!["internalID".to_string()]),
                         ("التاريخ".to_string(), vec!["dateTimeIssued".to_string()]),
-                        ("رقم التسجيل الضريبي".to_string(), vec!["receiver".to_string(),"id".to_string()]),
-                        ("اسم العميل".to_string(), vec!["receiver".to_string(),"name".to_string()]),
-		    ]),
-                    repeated: HashMap::from([
                         (
-                            "القيمة".to_string(),
-                            vec!["unitValue".to_string(), "amountEGP".to_string()],
+                            "رقم التسجيل الضريبي".to_string(),
+                            vec!["receiver".to_string(), "id".to_string()],
                         ),
-		    ]),
+                        (
+                            "اسم العميل".to_string(),
+                            vec!["receiver".to_string(), "name".to_string()],
+                        ),
+                    ]),
+                    repeated: HashMap::from([(
+                        "القيمة".to_string(),
+                        vec!["unitValue".to_string(), "amountEGP".to_string()],
+                    )]),
                 },
                 row: vec![
                     ConfigValue::Basic(ColumnConfig::Float(fcp("رقم الفاتورة".to_string()))),
@@ -269,7 +300,7 @@ pub fn get_config_example() {
                     unique: HashMap::from([
                         ("رقم الفاتورة".to_string(), vec!["internalID".to_string()]),
                         ("التاريخ".to_string(), vec!["dateTimeIssued".to_string()]),
-		    ]),
+                    ]),
                     repeated: HashMap::from([
                         ("بيان".to_string(), vec!["description".to_string()]),
                         ("العدد".to_string(), vec!["quantity".to_string()]),
@@ -277,7 +308,7 @@ pub fn get_config_example() {
                             "السعر".to_string(),
                             vec!["unitValue".to_string(), "amountEGP".to_string()],
                         ),
-		    ]),
+                    ]),
                 },
                 row: vec![
                     ConfigValue::Basic(ColumnConfig::Float(fcp("رقم الفاتورة".to_string()))),

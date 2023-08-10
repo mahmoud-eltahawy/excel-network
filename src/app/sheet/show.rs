@@ -64,6 +64,17 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
             .unwrap_or_default()
         },
     );
+
+    let sheet_priorities_resource = create_resource(
+        cx,
+        move || sheet_type_name_resource.read(cx),
+        move |name| async move {
+            invoke::<NameArg, Vec<String>>("get_priorities", &NameArg { name })
+                .await
+                .unwrap_or_default()
+        },
+    );
+
     let sheet_id = move || {
         params.with(|params| match params.get("sheet_id") {
             Some(id) => Uuid::from_str(id).ok(),
@@ -213,10 +224,12 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
             set_edit_mode.set(true);
         }
     };
-    let append = move |row| set_added_rows.update(|xs| {
-	xs.push(row);
-	xs.sort_rows(vec![]);
-    });
+    let append = move |row| {
+        set_added_rows.update(|xs| {
+            xs.push(row);
+            xs.sort_rows(sheet_priorities_resource.read(cx).unwrap_or_default());
+        })
+    };
     let save_edits = move |_| {
         let Some(sheet) = sheet_resource.read(cx) else {
 	    return;
@@ -291,9 +304,9 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
 	    };
             let rows = import_sheet_rows(sheettype, filepath).await;
             set_added_rows.update(|xs| {
-		xs.extend(rows);
-		xs.sort_rows(vec![]);
-	    });
+                xs.extend(rows);
+                xs.sort_rows(sheet_priorities_resource.read(cx).unwrap_or_default());
+            });
         });
     };
 
@@ -400,7 +413,7 @@ where
             each=move || rows.get()
             key=|row| row.id
             view=move |cx, Row { columns, id }| {
-		let columns = std::rc::Rc::new(columns);
+                let columns = std::rc::Rc::new(columns);
                 view! { cx,
                     <tr>
                         {
@@ -410,7 +423,7 @@ where
                                     each=basic_headers
                                     key=|key| key.clone()
                                     view=move |cx, column| {
-					let columns = columns.clone();
+                                        let columns = columns.clone();
                                         view! { cx, <td>{move || columns.get(&column).map(|x| x.value.to_string())}</td> }
                                     }
                                 />
@@ -422,7 +435,7 @@ where
                                     each=calc_headers
                                     key=|key| key.clone()
                                     view=move |cx, column| {
-					let columns = columns.clone();
+                                        let columns = columns.clone();
                                         view! { cx, <td>{move || columns.get(&column).map(|x| x.value.to_string())}</td> }
                                     }
                                 />

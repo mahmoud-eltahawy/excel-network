@@ -6,10 +6,15 @@ mod api;
 use chrono::{Local, NaiveDate};
 use dotenv::dotenv;
 use models::{
-    Column, ColumnValue, Config, ConfigValue, ImportConfig, Name, Row, SearchSheetParams, Sheet,
-    SheetConfig,
+    Column, ColumnValue, Config, ConfigValue, ImportConfig, Name, Row, RowsSort, SearchSheetParams,
+    Sheet, SheetConfig,
 };
-use std::{collections::HashMap, env, fs::{File, create_dir_all, rename}, path::Path};
+use std::{
+    collections::HashMap,
+    env,
+    fs::{create_dir_all, rename, File},
+    path::Path,
+};
 use uuid::Uuid;
 
 use rust_xlsxwriter::{Color, Format, FormatBorder, Workbook};
@@ -96,10 +101,34 @@ async fn get_sheet(
 ) -> Result<Sheet, String> {
     match id {
         Some(id) => match api::get_sheet_by_id(&app_state, &id).await {
-            Ok(sheet) => Ok(sheet),
+            Ok(sheet) => {
+                let mut sheet = sheet;
+                sheet.rows.sort_rows(
+                    app_state
+                        .priorities
+                        .get(&sheet.type_name)
+                        .unwrap_or(&vec![])
+                        .to_vec(),
+                );
+                Ok(sheet)
+            }
             Err(err) => Err(err.to_string()),
         },
         None => Err("id is none".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_priorities(
+    app_state: tauri::State<'_, AppState>,
+    name: Option<String>,
+) -> Result<Vec<String>, String> {
+    let Some(name) = name else {
+	return Ok(vec![]);
+    };
+    match app_state.priorities.get(&name) {
+        Some(list) => Ok(list.to_vec()),
+        None => Err("priority does not exist".to_string()),
     }
 }
 
@@ -173,8 +202,11 @@ fn column_from_value(value: &Value) -> Column {
             }
             Value::String(v) => match v.parse::<f64>() {
                 Ok(v) => ColumnValue::Float(v),
-                Err(_) => match v.get(..10)
-		    .unwrap_or("unparsable string to date").parse::<NaiveDate>() {
+                Err(_) => match v
+                    .get(..10)
+                    .unwrap_or("unparsable string to date")
+                    .parse::<NaiveDate>()
+                {
                     Ok(v) => ColumnValue::Date(Some(v)),
                     Err(_) => ColumnValue::String(Some(v.to_owned())),
                 },
@@ -236,26 +268,22 @@ async fn import_sheet(
     }
 
     let old_path = Path::new(&filepath);
-    let download_dir = dirs::home_dir()
-	.unwrap_or_default()
-        .join("Downloads");
+    let download_dir = dirs::home_dir().unwrap_or_default().join("Downloads");
     let new_path = download_dir
         .join(WORKDIR)
-	.join(&sheettype)
-	.join("الملفات المستوردة");
-
+        .join(&sheettype)
+        .join("الملفات المستوردة");
 
     if !create_dir_all(new_path.clone()).is_ok() {
-	println!("Directory already exists");
+        println!("Directory already exists");
     }
 
-    let new_path = new_path
-	.join(old_path.file_name().unwrap_or_default());
+    let new_path = new_path.join(old_path.file_name().unwrap_or_default());
 
     if download_dir == old_path.parent().unwrap_or(old_path) {
-	if !rename(old_path, new_path).is_ok() {
-	    println!("failed to move file");
-	};
+        if !rename(old_path, new_path).is_ok() {
+            println!("failed to move file");
+        };
     };
 
     Ok(result)
@@ -277,7 +305,8 @@ fn main() {
             update_sheet_name,
             add_rows_to_sheet,
             delete_rows_from_sheet,
-            import_sheet
+            import_sheet,
+            get_priorities,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -286,6 +315,7 @@ fn main() {
 pub struct AppState {
     pub origin: String,
     pub sheets_types_names: Vec<Name>,
+    pub priorities: HashMap<String, Vec<String>>,
     pub sheet_map: HashMap<String, Vec<ConfigValue>>,
     pub sheet_import: HashMap<String, ImportConfig>,
 }
@@ -299,9 +329,7 @@ impl Default for AppState {
         let mut file = File::open(file_path).expect("config file does not exist");
 
         let config: Config = serde_json::from_reader(&mut file).unwrap();
-        let Config {
-            sheets,
-        } = config;
+        let Config { priorities, sheets } = config;
         let sheets_types_names = sheets
             .iter()
             .map(|x| Name {
@@ -326,6 +354,7 @@ impl Default for AppState {
             sheets_types_names,
             sheet_map,
             sheet_import,
+            priorities,
         }
     }
 }
@@ -353,19 +382,23 @@ pub async fn write_sheet(
     for (row, columns) in rows.into_iter().map(|x| x.columns).enumerate() {
         for (col, header) in headers.iter().enumerate() {
             let (row, col) = (row as u32 + 1, col as u16);
-	    worksheet.set_row_height(row, 30)?;
-	    match &columns.get(header) {
-		Some(column) => match &column.value {
-		    ColumnValue::Date(Some(date)) => {
-			let string = date.to_string();
-			worksheet.write_string(row, col, string)?;
-		    },
-		    ColumnValue::String(Some(string)) => {worksheet.write_string(row, col, string)?;},
-		    ColumnValue::Float(number) => {worksheet.write_number(row, col, *number)?;},
-		    _ => (),
-		},
-		None => (),
-	    }
+            worksheet.set_row_height(row, 30)?;
+            match &columns.get(header) {
+                Some(column) => match &column.value {
+                    ColumnValue::Date(Some(date)) => {
+                        let string = date.to_string();
+                        worksheet.write_string(row, col, string)?;
+                    }
+                    ColumnValue::String(Some(string)) => {
+                        worksheet.write_string(row, col, string)?;
+                    }
+                    ColumnValue::Float(number) => {
+                        worksheet.write_number(row, col, *number)?;
+                    }
+                    _ => (),
+                },
+                None => (),
+            }
         }
     }
 
@@ -386,14 +419,14 @@ pub async fn write_sheet(
     worksheet.set_name(&type_name)?;
 
     let file_path = dirs::home_dir()
-	.unwrap_or_default()
+        .unwrap_or_default()
         .join("Downloads")
         .join(WORKDIR)
-	.join(&type_name)
-	.join("الشيتات المصدرة");
+        .join(&type_name)
+        .join("الشيتات المصدرة");
 
     if !create_dir_all(file_path.clone()).is_ok() {
-	println!("Directory already exists");
+        println!("Directory already exists");
     }
 
     let file_name = format!(
@@ -406,12 +439,11 @@ pub async fn write_sheet(
         insert_date.to_string(),
     );
 
-    let path_name = file_path
-	.join(file_name);
-			    
+    let path_name = file_path.join(file_name);
+
     workbook.save(&path_name)?;
 
     Ok(())
 }
 
-static WORKDIR : &str = "excel_network";
+static WORKDIR: &str = "excel_network";
