@@ -1,4 +1,5 @@
 use leptos::*;
+use models::RowsSort;
 
 use crate::Non;
 use chrono::Local;
@@ -121,18 +122,22 @@ where
 
 
 #[component]
-pub fn ColumnEdit<F1,F2>(
+fn ColumnEdit<F1,F2,F3>(
     cx: Scope,
     mode : F1,
     cancel : F2,
+    priorities: F3,
     set_rows: WriteSignal<Vec<Row>>,
 ) -> impl IntoView
     where
 	F1 : Fn() -> (String,Uuid,Rc<HashMap<String,Column>>) + 'static,
-        F2 : Fn() + 'static + Clone + Copy
+        F2 : Fn() + 'static + Clone + Copy,
+        F3 : Fn() -> Vec<String> + 'static + Clone + Copy
 {
     let (header,id ,map) = mode();
     let (column_value,set_column_value) = create_signal(cx, map.clone().get(&header).map(|x| x.value.clone()));
+    let (top,set_top) = create_signal(cx, None::<usize>);
+    let (down,set_down) = create_signal(cx, None::<usize>);
     let header = Rc::new(header);
     let on_input = move |ev| {
 	let value = event_target_value(&ev);
@@ -145,25 +150,68 @@ pub fn ColumnEdit<F1,F2>(
     };
 
     let save = move |_| {
-	let header_binding = header.to_string();
-	let column_binding = Column { is_basic: true, value: column_value.get().unwrap() };
-	let map = map.iter().chain(HashMap::from([
-	    (&header_binding, &column_binding)
-	])).collect::<HashMap<_,_>>();
-	let map = map
-	    .into_iter()
-	    .map(|(k,v)| (k.clone(),v.clone()))
-	    .collect::<HashMap<_,_>>();
-	let row = Row{id,columns : map};
-	let mut indexg = 0;
+	let Some(value) = column_value.get() else {
+	    return;
+	};
+	let mut rows = Vec::new();
 	set_rows.update(|xs| {
-	    let index = xs.iter().position(|x| x.id == row.id);
-	    if let Some(index) = index {
-		indexg = index;
-		xs.remove(index);
-	    }
+	    let Some(index) = xs.iter().position(|x| x.id == id) else {
+		return;
+	    };
+	    rows = match (top.get(),down.get()) {
+		(None,None) => vec![xs.remove(index)],
+		(Some(up),None) => {
+		    let begin = if up > index {
+			0
+		    } else {
+			index - up
+		    };
+		    let mut rows = Vec::new();
+		    for i in begin..=index {
+			rows.push(xs.remove(i));
+		    }
+		    rows
+		},
+		(None,Some(down)) => {
+		    let len = xs.len();
+		    let end = if down >= len {
+			len -1
+		    } else {
+			index + down -1
+		    };
+		    let mut rows = Vec::new();
+		    for i in index..=end {
+			rows.push(xs.remove(i));
+		    }
+		    rows
+		},
+		(Some(up),Some(down)) => {
+		    let len = xs.len();
+		    let begin = if up > index {
+			0
+		    } else {
+			index - up
+		    };
+		    let end = if down >= len {
+			len -1
+		    } else {
+			index + down
+		    };
+		    let mut rows = Vec::new();
+		    for i in begin..=end {
+			rows.push(xs.remove(i));
+		    }
+		    rows
+		},
+	    };
 	});
-	set_rows.update(|xs| xs.insert(indexg, row));
+	set_rows.update(|xs| {
+	    for mut row in rows {
+		row.columns.insert(header.to_string(), Column { is_basic: true, value : value.clone() });
+		xs.push(row);
+	    }
+	    xs.sort_rows(priorities());
+	});
 	cancel()
     };
     view! { cx,
@@ -182,6 +230,16 @@ pub fn ColumnEdit<F1,F2>(
                 }
                 on:input=on_input
             />
+            <input
+		type="number"
+	        placeholder="لاعلي"
+	        on:input=move |ev| set_top.set(Some(event_target_value(&ev).parse().unwrap_or_default()))
+	    />
+            <input
+		type="number"
+	        placeholder="لاسفل"
+	        on:input=move |ev| set_down.set(Some(event_target_value(&ev).parse().unwrap_or_default()))
+	    />
             <button on:click=move|_| cancel() class="centered-button">
                 "الغاء"
             </button>
@@ -193,17 +251,19 @@ pub fn ColumnEdit<F1,F2>(
 }
 
 #[component]
-pub fn ShowNewRows<BH, CH, FD>(
+pub fn ShowNewRows<BH, CH, FD,FP>(
     cx: Scope,
     basic_headers: BH,
     calc_headers: CH,
     delete_row: FD,
+    priorities: FP,
     rows: ReadSignal<Vec<Row>>,
     set_rows: WriteSignal<Vec<Row>>,
 ) -> impl IntoView
 where
     BH: Fn() -> Vec<String> + 'static + Clone + Copy,
     CH: Fn() -> Vec<String> + 'static + Clone + Copy,
+    FP: Fn() -> Vec<String> + 'static + Clone + Copy,
     FD: Fn(Uuid) + 'static + Clone + Copy,
 {
     let (edit_column,set_edit_column) = create_signal(cx, None::<(String,Uuid,Rc<HashMap<String,Column>>)>);
@@ -219,6 +279,7 @@ where
                     mode=move || edit_column.get().unwrap()
                     cancel=move || set_edit_column.set(None)
                     set_rows=set_rows
+		    priorities=priorities
                 />
             </Show>
             <For

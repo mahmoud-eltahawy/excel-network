@@ -361,6 +361,7 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
                         calc_headers=calc_headers
                         rows=added_rows
                         set_rows=set_added_rows
+	                priorities=move || sheet_priorities_resource.read(cx).unwrap_or_default()
                     />
                     <Show
                         when=move || edit_mode.get()
