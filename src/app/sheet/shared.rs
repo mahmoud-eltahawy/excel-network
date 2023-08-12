@@ -167,7 +167,7 @@ fn ColumnEdit<F1,F2,F3>(
 			index - up
 		    };
 		    let mut rows = Vec::new();
-		    for i in begin..=index {
+		    for i in (begin..=index).rev() {
 			rows.push(xs.remove(i));
 		    }
 		    rows
@@ -180,7 +180,7 @@ fn ColumnEdit<F1,F2,F3>(
 			index + down -1
 		    };
 		    let mut rows = Vec::new();
-		    for i in index..=end {
+		    for i in (index..=end).rev() {
 			rows.push(xs.remove(i));
 		    }
 		    rows
@@ -198,7 +198,7 @@ fn ColumnEdit<F1,F2,F3>(
 			index + down
 		    };
 		    let mut rows = Vec::new();
-		    for i in begin..=end {
+		    for i in (begin..=end).rev() {
 			rows.push(xs.remove(i));
 		    }
 		    rows
@@ -206,12 +206,20 @@ fn ColumnEdit<F1,F2,F3>(
 	    };
 	});
 	set_rows.update(|xs| {
-	    for mut row in rows {
-		row.columns.insert(header.to_string(), Column { is_basic: true, value : value.clone() });
-		xs.push(row);
-	    }
-	    xs.sort_rows(priorities());
+	    let rows = rows.into_iter().map(|row| {
+		let mut columns = row.columns;
+		columns.insert(header.to_string(), Column { is_basic: true, value : value.clone() });
+		Row{columns,..row}
+	    }).collect::<Vec<_>>();
+	    let mut rows = xs.to_owned()
+		.into_iter()
+		.chain(rows)
+		.collect::<Vec<_>>();
+	    rows.sort_rows(priorities());
+	    *xs = rows;
 	});
+	set_down.set(None);
+	set_top.set(None);
 	cancel()
     };
     view! { cx,
