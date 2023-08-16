@@ -68,7 +68,7 @@ pub fn SheetHome(cx: Scope) -> impl IntoView {
                 "->"
             </A>
             <input
-                type="string"
+                type="text"
                 class="centered-input"
                 placeholder=move || {
                     format! {

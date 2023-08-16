@@ -326,7 +326,7 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
                 }
             >
                 <input
-                    type="string"
+                    type="text"
                     class="centered-input"
                     placeholder=move || {
                         format!(

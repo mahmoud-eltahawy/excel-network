@@ -210,33 +210,15 @@ pub fn get_config_example() {
         priorities: HashMap::from([
             (
                 String::from("مبيعات"),
-                vec![
-                    "رقم الفاتورة".to_string(),
-                    "التاريخ".to_string(),
-                    "رقم التسجيل الضريبي".to_string(),
-                    "اسم العميل".to_string(),
-                    "القيمة".to_string(),
-                ],
+                vec!["التاريخ".to_string()],
             ),
             (
                 String::from("مشتريات"),
-                vec![
-                    "رقم الفاتورة".to_string(),
-                    "التاريخ".to_string(),
-                    "بيان".to_string(),
-                    "العدد".to_string(),
-                    "السعر".to_string(),
-                ],
+                vec!["التاريخ".to_string()],
             ),
             (
                 String::from("كارت صنف"),
-                vec![
-                    "رقم الفاتورة".to_string(),
-                    "التاريخ".to_string(),
-                    "كود الصنف".to_string(),
-                    "اسم الصنف".to_string(),
-                    "السعر".to_string(),
-                ],
+                vec!["التاريخ".to_string()],
             ),
         ]),
         sheets: vec![
@@ -350,8 +332,8 @@ pub fn get_config_example() {
                     ConfigValue::Basic(ColumnConfig::Date(fcp("التاريخ".to_string()))),
                     ConfigValue::Basic(ColumnConfig::Float(fcp("كود الصنف".to_string()))),
                     ConfigValue::Basic(ColumnConfig::String(tcp("اسم الصنف".to_string()))),
-                    ConfigValue::Basic(ColumnConfig::Float(fcp("السعر".to_string()))),
                     ConfigValue::Basic(ColumnConfig::Float(fcp("الكمية".to_string()))),
+                    ConfigValue::Basic(ColumnConfig::Float(fcp("السعر".to_string()))),
                     ConfigValue::Calculated(OperationConfig {
                         header: "القيمة".to_string(),
                         value: Operation::Multiply((
