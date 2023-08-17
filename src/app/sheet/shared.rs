@@ -92,27 +92,27 @@ pub async fn open_file() -> Option<String> {
 }
 
 #[component]
-pub fn SheetHead<Fa, Fb>(cx: Scope, basic_headers: Fa, calc_headers: Fb) -> impl IntoView
+pub fn SheetHead<Fa, Fb>(basic_headers: Fa, calc_headers: Fb) -> impl IntoView
 where
     Fa: Fn() -> Vec<String> + 'static,
     Fb: Fn() -> Vec<String> + 'static,
 {
-    view! { cx,
+    view! { 
         <thead>
             <tr>
                 <For
                     each=basic_headers
                     key=move |x| x.clone()
-                    view=move |cx, x| {
-                        view! { cx, <th>{x}</th> }
+                    view=move | x| {
+                        view! {  <th>{x}</th> }
                     }
                 />
                 <th class="shapeless">"  "</th>
                 <For
                     each=calc_headers
                     key=move |x| x.clone()
-                    view=move |cx, x| {
-                        view! { cx, <th>{x}</th> }
+                    view=move | x| {
+                        view! {  <th>{x}</th> }
                     }
                 />
             </tr>
@@ -123,7 +123,6 @@ where
 
 #[component]
 fn ColumnEdit<F1,F2,F3>(
-    cx: Scope,
     mode : F1,
     cancel : F2,
     priorities: F3,
@@ -135,9 +134,9 @@ fn ColumnEdit<F1,F2,F3>(
         F3 : Fn() -> Vec<String> + 'static + Clone + Copy
 {
     let (header,id ,map) = mode();
-    let (column_value,set_column_value) = create_signal(cx, map.clone().get(&header).map(|x| x.value.clone()));
-    let (top,set_top) = create_signal(cx, None::<usize>);
-    let (down,set_down) = create_signal(cx, None::<usize>);
+    let (column_value,set_column_value) = create_signal( map.clone().get(&header).map(|x| x.value.clone()));
+    let (top,set_top) = create_signal( None::<usize>);
+    let (down,set_down) = create_signal( None::<usize>);
     let header = Rc::new(header);
     let on_input = move |ev| {
 	let value = event_target_value(&ev);
@@ -222,7 +221,7 @@ fn ColumnEdit<F1,F2,F3>(
 	set_top.set(None);
 	cancel()
     };
-    view! { cx,
+    view! { 
         <div class="popup">
             <input
                 type=move || match column_value.get() {
@@ -260,7 +259,6 @@ fn ColumnEdit<F1,F2,F3>(
 
 #[component]
 pub fn ShowNewRows<BH, CH, FD,FP>(
-    cx: Scope,
     basic_headers: BH,
     calc_headers: CH,
     delete_row: FD,
@@ -274,13 +272,13 @@ where
     FP: Fn() -> Vec<String> + 'static + Clone + Copy,
     FD: Fn(Uuid) + 'static + Clone + Copy,
 {
-    let (edit_column,set_edit_column) = create_signal(cx, None::<(String,Uuid,Rc<HashMap<String,Column>>)>);
-    view! { cx,
+    let (edit_column,set_edit_column) = create_signal( None::<(String,Uuid,Rc<HashMap<String,Column>>)>);
+    view! { 
         <>
             <Show
                 when=move || edit_column.get().is_some()
-                fallback=|_| {
-                    view! { cx, <></> }
+                fallback=|| {
+                    view! {  <></> }
                 }
             >
                 <ColumnEdit
@@ -293,22 +291,22 @@ where
             <For
                 each=move || rows.get()
                 key=|row| row.id
-                view=move |cx, Row { columns, id }| {
+                view=move | Row { columns, id }| {
                     let columns = Rc::new(columns);
-                    view! { cx,
+                    view! { 
                         <tr>
                             {
                                 let columns = columns.clone();
-                                view! { cx,
+                                view! { 
                                     <For
                                         each=basic_headers
                                         key=|key| key.clone()
-                                        view=move |cx, column| {
+                                        view=move | column| {
                                             let columns1 = columns.clone();
                                             let columns2 = columns1.clone();
                                             let col_name1 = column;
                                             let col_name2 = col_name1.clone();
-                                            view! { cx,
+                                            view! { 
                                                 <td
                                                     style="cursor: pointer"
                                                     on:dblclick=move |_| set_edit_column.set(Some((col_name1.clone(), id, columns1.clone())))
@@ -321,13 +319,13 @@ where
                                 }
                             } <td class="shapeless">"  "</td> {
                                 let columns = columns.clone();
-                                view! { cx,
+                                view! { 
                                     <For
                                         each=calc_headers
                                         key=|key| key.clone()
-                                        view=move |cx, column| {
+                                        view=move | column| {
                                             let columns = columns.clone();
-                                            view! { cx, <td>{move || columns.get(&column).map(|x| x.value.to_string())}</td> }
+                                            view! {  <td>{move || columns.get(&column).map(|x| x.value.to_string())}</td> }
                                         }
                                     />
                                 }
@@ -353,7 +351,6 @@ enum ColumnSignal {
 
 #[component]
 pub fn InputRow<F, BH, CH>(
-    cx: Scope,
     basic_headers: BH,
     calc_headers: CH,
     append: F,
@@ -365,7 +362,7 @@ where
     BH: Fn() -> Vec<String> + 'static + Clone,
     CH: Fn() -> Vec<String> + 'static,
 {
-    let basic_signals_map = create_memo(cx, move |_| {
+    let basic_signals_map = create_memo( move |_| {
         let mut map = HashMap::new();
         for x in basic_columns.get().into_iter() {
             match x {
@@ -375,7 +372,7 @@ where
                 }) => {
                     map.insert(
                         header,
-                        ColumnSignal::String(create_signal(cx, (String::from(""), is_completable))),
+                        ColumnSignal::String(create_signal( (String::from(""), is_completable))),
                     );
                 }
                 ColumnConfig::Date(ColumnProps {
@@ -385,7 +382,7 @@ where
                     map.insert(
                         header,
                         ColumnSignal::Date(create_signal(
-                            cx,
+                            
                             (Local::now().date_naive(), is_completable),
                         )),
                     );
@@ -396,7 +393,7 @@ where
                 }) => {
                     map.insert(
                         header,
-                        ColumnSignal::Float(create_signal(cx, (0.0, is_completable))),
+                        ColumnSignal::Float(create_signal( (0.0, is_completable))),
                     );
                 }
             }
@@ -404,7 +401,7 @@ where
         map
     });
 
-    let calc_signals_map = create_memo(cx, move |_| {
+    let calc_signals_map = create_memo( move |_| {
         let mut map = HashMap::new();
         for OperationConfig { header, value } in calc_columns.get().into_iter() {
             let mut basic_map = HashMap::new();
@@ -459,21 +456,21 @@ where
         })
     };
 
-    view! { cx,
+    view! { 
         <>
             <For
                 each=move || basic_headers().clone()
                 key=|x| x.clone()
-                view=move |cx, header| {
-                    view! { cx, <MyInput header=header basic_signals_map=basic_signals_map/> }
+                view=move | header| {
+                    view! {  <MyInput header=header basic_signals_map=basic_signals_map/> }
                 }
             />
             <td class="shapeless">"  "</td>
             <For
                 each=move || calc_headers().clone()
                 key=|x| x.clone()
-                view=move |cx, header| {
-                    view! { cx,
+                view=move | header| {
+                    view! { 
                         <td>
                             {move || match calc_signals_map.get().get(&header) {
                                 Some(x) => format!("{:.2}",* x),
@@ -496,7 +493,6 @@ where
 
 #[component]
 fn MyInput(
-    cx: Scope,
     header: String,
     basic_signals_map: Memo<HashMap<String, ColumnSignal>>,
 ) -> impl IntoView {
@@ -507,7 +503,7 @@ fn MyInput(
         Some(ColumnSignal::Date((read, _))) => ("date", read.get().0.to_string()),
         None => ("", "".to_string()),
     };
-    view! { cx,
+    view! { 
         <td>
             <input
                 type=i_type

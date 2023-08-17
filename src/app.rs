@@ -17,34 +17,34 @@ pub struct Id {
 }
 
 #[component]
-pub fn App(cx: Scope) -> impl IntoView {
-    view! { cx,
+pub fn App() -> impl IntoView {
+    view! { 
         <main>
             <Router>
                 <section>
                     <Routes>
                         <Route
                             path="/"
-                            view=|cx| {
-                                view! { cx, <Home/> }
+                            view=|| {
+                                view! {  <Home/> }
                             }
                         />
                         <Route
                             path="/sheet/:sheet_type_id"
-                            view=|cx| {
-                                view! { cx, <SheetHome/> }
+                            view=|| {
+                                view! {  <SheetHome/> }
                             }
                         />
                         <Route
                             path="/sheet/:sheet_type_id/show/:sheet_id"
-                            view=|cx| {
-                                view! { cx, <ShowSheet/> }
+                            view=|| {
+                                view! {  <ShowSheet/> }
                             }
                         />
                         <Route
                             path="/sheet/:sheet_type_id/add"
-                            view=|cx| {
-                                view! { cx, <AddSheet/> }
+                            view=|| {
+                                view! {  <AddSheet/> }
                             }
                         />
                     </Routes>
@@ -57,9 +57,9 @@ use models::Name;
 use uuid::Uuid;
 
 #[component]
-pub fn Home(cx: Scope) -> impl IntoView {
+pub fn Home() -> impl IntoView {
     let sheets_types_names = create_resource(
-        cx,
+        
         || (),
         |_| async move {
             invoke::<Non, Vec<Name>>("sheets_types_names", &Non {})
@@ -68,15 +68,15 @@ pub fn Home(cx: Scope) -> impl IntoView {
         },
     );
 
-    view! { cx,
+    view! { 
         <section>
             <br/>
             <br/>
             <For
-                each=move || sheets_types_names.read(cx).unwrap_or_default()
+                each=move || sheets_types_names.read().unwrap_or_default()
                 key=|s| s.id
-                view=move |cx, s| {
-                    view! { cx,
+                view=move | s| {
+                    view! { 
                         <A class="button" href=format!("sheet/{}", s.id)>
                             <h1>{s.the_name}</h1>
                         </A>

@@ -20,8 +20,8 @@ pub mod shared;
 pub mod show;
 
 #[component]
-pub fn SheetHome(cx: Scope) -> impl IntoView {
-    let params = use_params_map(cx);
+pub fn SheetHome() -> impl IntoView {
+    let params = use_params_map();
     let sheet_id = move || {
         params.with(|params| match params.get("sheet_type_id") {
             Some(id) => Uuid::from_str(id).ok(),
@@ -29,7 +29,7 @@ pub fn SheetHome(cx: Scope) -> impl IntoView {
         })
     };
     let sheet_type_name_resource = create_resource(
-        cx,
+        
         || (),
         move |_| async move {
             invoke::<Id, String>("sheet_type_name", &Id { id: sheet_id() })
@@ -38,15 +38,15 @@ pub fn SheetHome(cx: Scope) -> impl IntoView {
         },
     );
 
-    let sheet_type_name = move || match sheet_type_name_resource.read(cx) {
+    let sheet_type_name = move || match sheet_type_name_resource.read() {
         Some(name) => name,
         None => "none".to_string(),
     };
 
-    let (offset, set_offset) = create_signal(cx, 0_u64);
-    let (begin, set_begin) = create_signal(cx, None::<NaiveDate>);
-    let (end, set_end) = create_signal(cx, None::<NaiveDate>);
-    let (sheet_name, set_sheet_name) = create_signal(cx, None::<String>);
+    let (offset, set_offset) = create_signal( 0_u64);
+    let (begin, set_begin) = create_signal( None::<NaiveDate>);
+    let (end, set_end) = create_signal( None::<NaiveDate>);
+    let (sheet_name, set_sheet_name) = create_signal( None::<String>);
 
     let search_args = move || SheetArgs {
         params: SearchSheetParams {
@@ -58,13 +58,13 @@ pub fn SheetHome(cx: Scope) -> impl IntoView {
         },
     };
 
-    let bills = create_resource(cx, search_args, |value| async move {
+    let bills = create_resource( search_args, |value| async move {
         invoke::<_, Vec<Name>>("top_5_sheets", &value)
             .await
             .unwrap_or_default()
     });
 
-    view! { cx,
+    view! { 
         <section>
             <A class="right-corner" href="add">
                 "+"
@@ -101,8 +101,8 @@ pub fn SheetHome(cx: Scope) -> impl IntoView {
             </div>
             <Show
                 when=move || offset.get() != 0
-                fallback=|_| {
-                    view! { cx, <></> }
+                fallback=|| {
+                    view! {  <></> }
                 }
             >
                 <button on:click=move |_| set_offset.update(|x| *x -= 5) class="btn">
@@ -112,10 +112,10 @@ pub fn SheetHome(cx: Scope) -> impl IntoView {
             <br/>
             <br/>
             <For
-                each=move || bills.read(cx).unwrap_or_default()
+                each=move || bills.read().unwrap_or_default()
                 key=|s| s.id
-                view=move |cx, s| {
-                    view! { cx,
+                view=move |s| {
+                    view! { 
                         <A class="button" href=format!("show/{}", s.id)>
                             {s.the_name}
                         </A>
@@ -123,9 +123,9 @@ pub fn SheetHome(cx: Scope) -> impl IntoView {
                 }
             />
             <Show
-                when=move || { bills.read(cx).unwrap_or_default().len() >= 5 }
-                fallback=|_| {
-                    view! { cx, <></> }
+                when=move || { bills.read().unwrap_or_default().len() >= 5 }
+                fallback=|| {
+                    view! {  <></> }
                 }
             >
                 <button on:click=move |_| set_offset.update(|x| *x += 5) class="btn">

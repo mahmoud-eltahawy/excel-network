@@ -38,12 +38,12 @@ struct RowsAddArg {
 }
 
 #[component]
-pub fn ShowSheet(cx: Scope) -> impl IntoView {
-    let (edit_mode, set_edit_mode) = create_signal(cx, false);
-    let (sheet_name, set_sheet_name) = create_signal(cx, String::from(""));
-    let (deleted_rows, set_deleted_rows) = create_signal(cx, Vec::<Uuid>::new());
-    let (added_rows, set_added_rows) = create_signal(cx, Vec::<Row>::new());
-    let params = use_params_map(cx);
+pub fn ShowSheet() -> impl IntoView {
+    let (edit_mode, set_edit_mode) = create_signal( false);
+    let (sheet_name, set_sheet_name) = create_signal( String::from(""));
+    let (deleted_rows, set_deleted_rows) = create_signal( Vec::<Uuid>::new());
+    let (added_rows, set_added_rows) = create_signal( Vec::<Row>::new());
+    let params = use_params_map();
     let sheet_type_id = move || {
         params.with(|params| match params.get("sheet_type_id") {
             Some(id) => Uuid::from_str(id).ok(),
@@ -51,7 +51,7 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
         })
     };
     let sheet_type_name_resource = create_resource(
-        cx,
+        
         || (),
         move |_| async move {
             invoke::<Id, String>(
@@ -66,8 +66,8 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
     );
 
     let sheet_priorities_resource = create_resource(
-        cx,
-        move || sheet_type_name_resource.read(cx),
+        
+        move || sheet_type_name_resource.read(),
         move |name| async move {
             invoke::<NameArg, Vec<String>>("get_priorities", &NameArg { name })
                 .await
@@ -83,7 +83,7 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
     };
 
     let sheet_resource = create_resource(
-        cx,
+        
         || (),
         move |_| async move {
             invoke::<Id, Sheet>("get_sheet", &Id { id: sheet_id() })
@@ -93,17 +93,17 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
     );
 
     let sheet_headers_resource = create_resource(
-        cx,
-        move || sheet_type_name_resource.read(cx),
+        
+        move || sheet_type_name_resource.read(),
         move |name| async move {
             invoke::<NameArg, Vec<ConfigValue>>("sheet_headers", &NameArg { name })
                 .await
                 .unwrap_or_default()
         },
     );
-    let basic_columns = create_memo(cx, move |_| {
+    let basic_columns = create_memo( move |_| {
         sheet_headers_resource
-            .read(cx)
+            .read()
             .unwrap_or_default()
             .into_iter()
             .flat_map(|x| match x {
@@ -113,9 +113,9 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
             .collect::<Vec<_>>()
     });
 
-    let calc_columns = create_memo(cx, move |_| {
+    let calc_columns = create_memo( move |_| {
         sheet_headers_resource
-            .read(cx)
+            .read()
             .unwrap_or_default()
             .into_iter()
             .flat_map(|x| match x {
@@ -141,9 +141,9 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
             .collect::<Vec<_>>()
     };
 
-    let sheet = create_memo(cx, move |_| {
+    let sheet = create_memo( move |_| {
         let c_cols = calc_columns.get();
-        let mut sheet = sheet_resource.read(cx).unwrap_or_default();
+        let mut sheet = sheet_resource.read().unwrap_or_default();
         sheet.rows = sheet
             .rows
             .into_iter()
@@ -178,7 +178,7 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
         sheet
     });
 
-    let sheet_rows = create_memo(cx, move |_| sheet.get().rows);
+    let sheet_rows = create_memo( move |_| sheet.get().rows);
 
     let export = move |_| {
         spawn_local(async move {
@@ -227,11 +227,11 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
     let append = move |row| {
         set_added_rows.update(|xs| {
             xs.push(row);
-            xs.sort_rows(sheet_priorities_resource.read(cx).unwrap_or_default());
+            xs.sort_rows(sheet_priorities_resource.read().unwrap_or_default());
         })
     };
     let save_edits = move |_| {
-        let Some(sheet) = sheet_resource.read(cx) else {
+        let Some(sheet) = sheet_resource.read() else {
 	    return;
 	};
         let sheet_name = sheet_name.get();
@@ -297,7 +297,7 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
     };
 
     let load_file = move |_| {
-        let sheettype = sheet_type_name_resource.read(cx).unwrap_or_default();
+        let sheettype = sheet_type_name_resource.read().unwrap_or_default();
         spawn_local(async move {
             let Some(filepath) = open_file().await else {
 		return;
@@ -305,12 +305,12 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
             let rows = import_sheet_rows(sheettype, filepath).await;
             set_added_rows.update(|xs| {
                 xs.extend(rows);
-                xs.sort_rows(sheet_priorities_resource.read(cx).unwrap_or_default());
+                xs.sort_rows(sheet_priorities_resource.read().unwrap_or_default());
             });
         });
     };
 
-    view! { cx,
+    view! { 
         <section>
             <A class="left-corner" href=format!("/sheet/{}", sheet_type_id().unwrap_or_default())>
                 "->"
@@ -321,8 +321,8 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
             <br/>
             <Show
                 when=move || edit_mode.get()
-                fallback=move |_| {
-                    view! { cx, <h1>{move || sheet_resource.read(cx).unwrap_or_default().sheet_name}</h1> }
+                fallback=move || {
+                    view! {  <h1>{move || sheet_resource.read().unwrap_or_default().sheet_name}</h1> }
                 }
             >
                 <input
@@ -330,7 +330,7 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
                     class="centered-input"
                     placeholder=move || {
                         format!(
-                            "{} ({})", "اسم الشيت", sheet_resource.read(cx).unwrap_or_default()
+                            "{} ({})", "اسم الشيت", sheet_resource.read().unwrap_or_default()
                             .sheet_name
                         )
                     }
@@ -351,7 +351,7 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
 		    />
 		    <Show
 		    when=move || !added_rows.get().is_empty()
-		    fallback=move |_| view!{cx,<></>}
+		    fallback=move || view!{<></>}
 		    >
 			<tr><td class="shapeless">r"+"</td></tr>
 		    </Show>
@@ -361,12 +361,12 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
                         calc_headers=calc_headers
                         rows=added_rows
                         set_rows=set_added_rows
-	                priorities=move || sheet_priorities_resource.read(cx).unwrap_or_default()
+	                priorities=move || sheet_priorities_resource.read().unwrap_or_default()
                     />
                     <Show
                         when=move || edit_mode.get()
-                        fallback=|_| {
-                            view! { cx, <></> }
+                        fallback=|| {
+                            view! {  <></> }
                         }
                     >
                         <InputRow
@@ -384,8 +384,8 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
             </button>
             <Show
                 when=move || edit_mode.get()
-                fallback=|_| {
-                    view! { cx, <></> }
+                fallback=|| {
+                    view! {  <></> }
                 }
             >
                 <button on:click=save_edits class="centered-button">
@@ -402,7 +402,6 @@ pub fn ShowSheet(cx: Scope) -> impl IntoView {
 
 #[component]
 fn ShowRows<BH, CH, FD, ID>(
-    cx: Scope,
     basic_headers: BH,
     calc_headers: CH,
     delete_row: FD,
@@ -416,43 +415,43 @@ where
     ID: Fn(Uuid) -> bool + 'static + Clone + Copy,
     FD: Fn(Uuid) + 'static + Clone + Copy,
 {
-    view! { cx,
+    view! { 
         <For
             each=move || rows.get()
             key=|row| row.id
-            view=move |cx, Row { columns, id }| {
+            view=move | Row { columns, id }| {
                 let columns = std::rc::Rc::new(columns);
-                view! { cx,
+                view! { 
                     <tr>
                         {
                             let columns = columns.clone();
-                            view! { cx,
+                            view! { 
                                 <For
                                     each=basic_headers
                                     key=|key| key.clone()
-                                    view=move |cx, column| {
+                                    view=move | column| {
                                         let columns = columns.clone();
-                                        view! { cx, <td>{move || columns.get(&column).map(|x| x.value.to_string())}</td> }
+                                        view! {  <td>{move || columns.get(&column).map(|x| x.value.to_string())}</td> }
                                     }
                                 />
                             }
                         } <td class="shapeless">"  "</td> {
                             let columns = columns.clone();
-                            view! { cx,
+                            view! { 
                                 <For
                                     each=calc_headers
                                     key=|key| key.clone()
-                                    view=move |cx, column| {
+                                    view=move | column| {
                                         let columns = columns.clone();
-                                        view! { cx, <td>{move || columns.get(&column).map(|x| x.value.to_string())}</td> }
+                                        view! {  <td>{move || columns.get(&column).map(|x| x.value.to_string())}</td> }
                                     }
                                 />
                             }
                         }
                         <Show
                             when=move || edit_mode.get()
-                            fallback=|_| {
-                                view! { cx, <></> }
+                            fallback=|| {
+                                view! {  <></> }
                             }
                         >
                             <td>

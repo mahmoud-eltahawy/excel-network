@@ -20,10 +20,10 @@ struct SaveSheetArgs {
 }
 
 #[component]
-pub fn AddSheet(cx: Scope) -> impl IntoView {
-    let (sheet_name, set_sheet_name) = create_signal(cx, String::from(""));
-    let (rows, set_rows) = create_signal(cx, Vec::new());
-    let params = use_params_map(cx);
+pub fn AddSheet() -> impl IntoView {
+    let (sheet_name, set_sheet_name) = create_signal( String::from(""));
+    let (rows, set_rows) = create_signal( Vec::new());
+    let params = use_params_map();
     let sheet_type_id = move || {
         params.with(|params| match params.get("sheet_type_id") {
             Some(id) => Uuid::from_str(id).ok(),
@@ -31,7 +31,7 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
         })
     };
     let sheet_type_name_resource = create_resource(
-        cx,
+        
         || (),
         move |_| async move {
             invoke::<Id, String>(
@@ -46,8 +46,8 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
     );
 
     let sheet_priorities_resource = create_resource(
-        cx,
-        move || sheet_type_name_resource.read(cx),
+        
+        move || sheet_type_name_resource.read(),
         move |name| async move {
             invoke::<NameArg, Vec<String>>("get_priorities", &NameArg { name })
                 .await
@@ -56,17 +56,17 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
     );
 
     let sheet_headers_resource = create_resource(
-        cx,
-        move || sheet_type_name_resource.read(cx),
+        
+        move || sheet_type_name_resource.read(),
         move |name| async move {
             invoke::<NameArg, Vec<ConfigValue>>("sheet_headers", &NameArg { name })
                 .await
                 .unwrap_or_default()
         },
     );
-    let basic_columns = create_memo(cx, move |_| {
+    let basic_columns = create_memo( move |_| {
         sheet_headers_resource
-            .read(cx)
+            .read()
             .unwrap_or_default()
             .into_iter()
             .flat_map(|x| match x {
@@ -76,9 +76,9 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
             .collect::<Vec<_>>()
     });
 
-    let calc_columns = create_memo(cx, move |_| {
+    let calc_columns = create_memo( move |_| {
         sheet_headers_resource
-            .read(cx)
+            .read()
             .unwrap_or_default()
             .into_iter()
             .flat_map(|x| match x {
@@ -107,7 +107,7 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
     let append = move |row: Row| {
         set_rows.update(|xs| {
             xs.push(row);
-            xs.sort_rows(sheet_priorities_resource.read(cx).unwrap_or_default());
+            xs.sort_rows(sheet_priorities_resource.read().unwrap_or_default());
         })
     };
 
@@ -119,7 +119,7 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
                 "save_sheet",
                 &SaveSheetArgs {
                     sheetname: sheet_name.get(),
-                    typename: sheet_type_name_resource.read(cx).unwrap_or_default(),
+                    typename: sheet_type_name_resource.read().unwrap_or_default(),
                     rows: rows
                         .get()
                         .into_iter()
@@ -145,7 +145,7 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
     };
 
     let load_file = move |_| {
-        let sheettype = sheet_type_name_resource.read(cx).unwrap_or_default();
+        let sheettype = sheet_type_name_resource.read().unwrap_or_default();
         spawn_local(async move {
             let Some(filepath) = open_file().await else {
 		return;
@@ -153,12 +153,12 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
             let rows = import_sheet_rows(sheettype, filepath).await;
             set_rows.update(|xs| {
                 xs.extend(rows);
-                xs.sort_rows(sheet_priorities_resource.read(cx).unwrap_or_default());
+                xs.sort_rows(sheet_priorities_resource.read().unwrap_or_default());
             });
         });
     };
 
-    view! { cx,
+    view! { 
         <section>
             <A class="left-corner" href=format!("/sheet/{}", sheet_type_id().unwrap_or_default())>
                 "->"
@@ -169,7 +169,7 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
                 class="centered-input"
                 placeholder=move || {
                     format!(
-                        "{} ({})", "اسم الشيت", sheet_type_name_resource.read(cx)
+                        "{} ({})", "اسم الشيت", sheet_type_name_resource.read()
                         .unwrap_or_default()
                     )
                 }
@@ -185,7 +185,7 @@ pub fn AddSheet(cx: Scope) -> impl IntoView {
                         calc_headers=calc_headers
                         rows=rows
                         set_rows=set_rows
-	                priorities=move || sheet_priorities_resource.read(cx).unwrap_or_default()
+	                priorities=move || sheet_priorities_resource.read().unwrap_or_default()
                     />
                     <InputRow
                         basic_headers=basic_headers

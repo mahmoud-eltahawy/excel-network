@@ -22,8 +22,6 @@ anyhow = "^1"
 bigdecimal = "0.3.1"
 bcrypt = "^0.13"
 dirs = "5.0.1"
-# strum = "^0.24"
-# strum_macros = "^0.24"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
@@ -33,12 +31,11 @@ chrono = {workspace = true , features = ["serde"]}
 serde_json = {workspace = true}
 bigdecimal = {workspace = true , features = ["serde"]}
 serde = { workspace = true, features = ["derive"] }
-leptos = { version = "0.4.8" , features = ["csr"] }
-leptos_router = { version = "0.4.8" , features = ["csr"]}
+leptos = { version = "0.5.0-beta" , features = ["csr"] }
+leptos_router = { version = "0.5.0-beta" , features = ["csr"]}
 serde-wasm-bindgen = "0.5"
 wasm-bindgen = { version = "0.2", features = ["serde-serialize"] }
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
 tauri-sys = { git = "https://github.com/JonasKruckenberg/tauri-sys",features = ["tauri","event","dialog","path"] }
 futures = "0.3.28"
-
