@@ -37,12 +37,20 @@ struct RowsAddArg {
     rows: Vec<Row>,
 }
 
+#[derive(Debug,Clone)]
+struct ColumnIdentity{
+    row_id : Uuid,
+    header: String,
+    value : ColumnValue,
+}
+
 #[component]
 pub fn ShowSheet() -> impl IntoView {
     let (edit_mode, set_edit_mode) = create_signal( false);
     let (sheet_name, set_sheet_name) = create_signal( String::from(""));
     let (deleted_rows, set_deleted_rows) = create_signal( Vec::<Uuid>::new());
     let (added_rows, set_added_rows) = create_signal( Vec::<Row>::new());
+    let (modified_columns,set_modified_columns) = create_signal(Vec::<ColumnIdentity>::new());
     let params = use_params_map();
     let sheet_type_id = move || {
         params.with(|params| match params.get("sheet_type_id") {
@@ -235,8 +243,43 @@ pub fn ShowSheet() -> impl IntoView {
 	    return;
 	};
         let sheet_name = sheet_name.get();
-        let deleted_rows = deleted_rows.get();
-        let added_rows = added_rows.get();
+        let mut deleted_rows = deleted_rows.get();
+        let mut added_rows = added_rows.get();
+	let current_rows = sheet.rows;
+	for c in modified_columns.get() {
+	    let ColumnIdentity { row_id, header, value } = c;
+	    if let [current_row] = current_rows
+		.iter()
+		.filter(|x| x.id == row_id)
+		.collect::<Vec<_>>()[..] {
+		if !deleted_rows.contains(&row_id) {
+		    deleted_rows.push(row_id);
+		}
+			
+		let mut columns = current_row.columns.clone();
+		if let Some(column) = columns.get(&header)
+		    .and_then(|c| Some(Column{value,..c.clone()})) {
+			match added_rows
+			.iter()
+			.filter(|x| x.id == row_id)
+			.collect::<Vec<_>>()
+			.first() {
+			    Some(row) => {
+				let mut columns = row.columns.clone();
+				columns.insert(header,column);
+				let row = Row{id : row_id,columns};
+				added_rows.retain(|x| x.id != row_id);
+				added_rows.push(row);
+			    },
+			    None => {
+				columns.insert(header, column);
+				let row = Row{id : row_id,columns};
+				added_rows.push(row);
+			    },
+			}
+		    };
+	    }
+	}
         spawn_local(async move {
             if !sheet_name.is_empty() && sheet_name != sheet.sheet_name {
                 match invoke::<_, ()>(
@@ -348,6 +391,8 @@ pub fn ShowSheet() -> impl IntoView {
                         rows=sheet_rows
                         edit_mode=edit_mode
                         is_deleted=is_deleted
+	                modified_columns=modified_columns
+	                set_modified_columns=set_modified_columns
 		    />
 		    <Show
 		    when=move || !added_rows.get().is_empty()
@@ -408,6 +453,8 @@ fn ShowRows<BH, CH, FD, ID>(
     is_deleted: ID,
     rows: Memo<Vec<Row>>,
     edit_mode: ReadSignal<bool>,
+    modified_columns: ReadSignal<Vec<ColumnIdentity>>,
+    set_modified_columns: WriteSignal<Vec<ColumnIdentity>>,
 ) -> impl IntoView
 where
     BH: Fn() -> Vec<String> + 'static + Clone + Copy,
@@ -429,9 +476,20 @@ where
                                 <For
                                     each=basic_headers
                                     key=|key| key.clone()
-                                    view=move | column| {
+                                    view=move |column| {
                                         let columns = columns.clone();
-                                        view! {  <td>{move || columns.get(&column).map(|x| x.value.to_string())}</td> }
+                                        view! { <td>{
+					    move || columns
+						.get(&column)
+						.map(|x| x.value.to_string())
+					    } {
+					    move || modified_columns.get()
+						.into_iter().filter(|x| x.row_id == id)
+						.collect::<Vec<_>>()
+						.first()
+						.map(|x| format!(" => {}",x.value.to_string()))
+					    }</td>
+					}
                                     }
                                 />
                             }
@@ -455,7 +513,16 @@ where
                             }
                         >
                             <td>
-                                <button on:click=move |_| delete_row(id)>
+				<button on:click=move |_| {
+				    if modified_columns
+					.get()
+					.iter()
+					.any(|x| x.row_id == id) {
+					set_modified_columns.update(|xs| xs.retain(|x| x.row_id != id))
+				    } else {
+					delete_row(id)
+				    }
+				}>
                                     {move || if is_deleted(id) { "P" } else { "X" }}
                                 </button>
                             </td>
