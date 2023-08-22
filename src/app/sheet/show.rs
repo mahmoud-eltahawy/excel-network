@@ -45,12 +45,79 @@ struct ColumnIdentity{
 }
 
 #[component]
+fn ColumnEdit<F1,F2,F3>(
+    mode : F1,
+    cancel : F2,
+    push_to_modified: F3,
+) -> impl IntoView
+    where
+	F1 : Fn() -> ColumnIdentity + 'static,
+        F2 : Fn() + 'static + Clone + Copy,
+        F3 : Fn(ColumnIdentity) + 'static,
+{
+    let (column_value,set_column_value) = create_signal(mode().value);
+    // let (top,set_top) = create_signal( None::<usize>);
+    // let (down,set_down) = create_signal( None::<usize>);
+    let on_input = move |ev| {
+	let value = event_target_value(&ev);
+	let value = match column_value.get() {
+	    ColumnValue::Float(_) => ColumnValue::Float(value.parse().unwrap_or_default()),
+	    ColumnValue::Date(_) => ColumnValue::Date(Some(value.parse().unwrap_or_default())),
+	    _ => ColumnValue::String(Some(value)),
+	};
+	set_column_value.set(value);
+    };
+
+    let save = move |_| {
+	let ColumnIdentity{row_id,header,value:_} = mode();
+	push_to_modified(ColumnIdentity { row_id, header, value:column_value.get()});
+	cancel();
+    };
+    view! { 
+        <div class="popup">
+            <input
+                type=move || match column_value.get() {
+                    ColumnValue::Float(_) => "number",
+                    ColumnValue::Date(_) => "date",
+                    _ => "text",
+                }
+                placeholder=move || {
+                    format!(
+                        "{} ({})", "القيمة الحالية", column_value.get().to_string()
+                    )
+                }
+                on:input=on_input
+            />
+            // <input
+	    // 	type="number"
+	    //     placeholder="لاعلي"
+	    //     on:input=move |ev| set_top.set(Some(event_target_value(&ev).parse().unwrap_or_default()))
+	    // />
+            // <input
+	    // 	type="number"
+	    //     placeholder="لاسفل"
+	    //     on:input=move |ev| set_down.set(Some(event_target_value(&ev).parse().unwrap_or_default()))
+	    // />
+            <button on:click=move|_| cancel() class="centered-button">
+                "الغاء"
+            </button>
+            <button on:click=save class="centered-button">
+                "تاكيد"
+            </button>
+        </div>
+    }
+}
+
+#[component]
 pub fn ShowSheet() -> impl IntoView {
     let (edit_mode, set_edit_mode) = create_signal( false);
     let (sheet_name, set_sheet_name) = create_signal( String::from(""));
     let (deleted_rows, set_deleted_rows) = create_signal( Vec::<Uuid>::new());
     let (added_rows, set_added_rows) = create_signal( Vec::<Row>::new());
     let (modified_columns,set_modified_columns) = create_signal(Vec::<ColumnIdentity>::new());
+    create_effect(move |_| {
+	log!{"{:#?}",modified_columns.get()}
+    });
     let params = use_params_map();
     let sheet_type_id = move || {
         params.with(|params| match params.get("sheet_type_id") {
@@ -462,7 +529,21 @@ where
     ID: Fn(Uuid) -> bool + 'static + Clone + Copy,
     FD: Fn(Uuid) + 'static + Clone + Copy,
 {
+    let (edit_column,set_edit_column) = create_signal( None::<ColumnIdentity>);
     view! { 
+	<>
+            <Show
+                when=move || edit_column.get().is_some()
+                fallback=|| {
+                    view! {  <></> }
+                }
+            >
+                <ColumnEdit
+                    mode=move || edit_column.get().unwrap()
+                    cancel=move || set_edit_column.set(None)
+	            push_to_modified=move |col| set_modified_columns.update(|xs| xs.push(col))
+                />
+            </Show>
         <For
             each=move || rows.get()
             key=|row| row.id
@@ -477,14 +558,27 @@ where
                                     each=basic_headers
                                     key=|key| key.clone()
                                     view=move |column| {
-                                        let columns = columns.clone();
-                                        view! { <td>{
-					    move || columns
+					let header1 = column.clone();
+					let header2 = header1.clone();
+					let header3 = header2.clone();
+					let columns1 = columns.clone();
+					let columns2 = columns1.clone();
+                                        view! { <td
+                                                    style="cursor: pointer"
+                                                 on:dblclick=move |_| set_edit_column.set(Some(ColumnIdentity{
+						     row_id:id,
+						     header:header1.clone(),
+						     value :columns1
+							 .get(&header2).clone()
+							 .unwrap().value.clone()
+						 }))
+						 >{
+					    move || columns2
 						.get(&column)
 						.map(|x| x.value.to_string())
 					    } {
 					    move || modified_columns.get()
-						.into_iter().filter(|x| x.row_id == id)
+						.into_iter().filter(|x| x.row_id == id && x.header ==header3)
 						.collect::<Vec<_>>()
 						.first()
 						.map(|x| format!(" => {}",x.value.to_string()))
@@ -531,5 +625,6 @@ where
                 }
             }
         />
+	</>
     }
 }
