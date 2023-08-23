@@ -182,10 +182,25 @@ pub struct ImportConfig {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub enum IdentityDiffsOps{
+    Sum,
+    Prod,
+    Max,
+    Min,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RowIdentity {
+    pub id : Vec::<String>,
+    pub diff_ops: Vec::<(String,IdentityDiffsOps)>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SheetConfig {
     pub sheet_type_name: String,
     pub importing: ImportConfig,
     pub row: Vec<ConfigValue>,
+    pub row_identity : RowIdentity,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -223,6 +238,17 @@ pub fn get_config_example() {
         ]),
         sheets: vec![
             SheetConfig {
+		row_identity : RowIdentity{
+		    id : vec![
+			"رقم الفاتورة".to_string(),
+			"التاريخ".to_string(),
+                        "رقم التسجيل الضريبي".to_string(),
+                        "اسم العميل".to_string(),
+		    ],
+		    diff_ops : vec![
+                        ("القيمة".to_string(),IdentityDiffsOps::Sum),
+		    ],
+		},
                 sheet_type_name: String::from("مبيعات"),
                 importing: ImportConfig {
                     main_entry: vec![String::from("document")],
@@ -275,6 +301,10 @@ pub fn get_config_example() {
                 ],
             },
             SheetConfig {
+		row_identity : RowIdentity{
+		    id : vec![],
+		    diff_ops : vec![],
+		},
                 sheet_type_name: String::from("مشتريات"),
                 importing: ImportConfig {
                     main_entry: vec![String::from("document")],
@@ -309,6 +339,10 @@ pub fn get_config_example() {
                 ],
             },
             SheetConfig {
+		row_identity : RowIdentity{
+		    id : vec![],
+		    diff_ops : vec![],
+		},
                 sheet_type_name: String::from("كارت صنف"),
                 importing: ImportConfig {
                     main_entry: vec![String::from("document")],

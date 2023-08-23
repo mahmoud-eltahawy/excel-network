@@ -110,10 +110,10 @@ fn ColumnEdit<F1,F2,F3>(
 
 #[component]
 pub fn ShowSheet() -> impl IntoView {
-    let (edit_mode, set_edit_mode) = create_signal( false);
-    let (sheet_name, set_sheet_name) = create_signal( String::from(""));
-    let (deleted_rows, set_deleted_rows) = create_signal( Vec::<Uuid>::new());
-    let (added_rows, set_added_rows) = create_signal( Vec::<Row>::new());
+    let (edit_mode, set_edit_mode) = create_signal(false);
+    let (sheet_name, set_sheet_name) = create_signal(String::from(""));
+    let (deleted_rows, set_deleted_rows) = create_signal(Vec::<Uuid>::new());
+    let (added_rows, set_added_rows) = create_signal(Vec::<Row>::new());
     let (modified_columns,set_modified_columns) = create_signal(Vec::<ColumnIdentity>::new());
     create_effect(move |_| {
 	log!{"{:#?}",modified_columns.get()}
@@ -284,7 +284,11 @@ pub fn ShowSheet() -> impl IntoView {
     let toggle_edit_mode = move |_| {
         if edit_mode.get() {
             spawn_local(async move {
-                let reset = if !deleted_rows.get().is_empty() || !added_rows.get().is_empty() {
+                let reset = if
+		    !deleted_rows.get().is_empty()
+		    || !added_rows.get().is_empty()
+		    || !modified_columns.get().is_empty()
+		{
                     confirm("سيتم تجاهل كل التعديلات").await
                 } else {
                     true
@@ -293,6 +297,7 @@ pub fn ShowSheet() -> impl IntoView {
                     set_edit_mode.set(false);
                     set_deleted_rows.set(Vec::new());
                     set_added_rows.set(Vec::new());
+		    set_modified_columns.set(Vec::new());
                 }
             })
         } else {
@@ -403,6 +408,7 @@ pub fn ShowSheet() -> impl IntoView {
             }
         });
         set_edit_mode.set(false);
+	set_modified_columns.set(Vec::new());
         sheet_resource.refetch();
     };
 
@@ -565,13 +571,15 @@ where
 					let columns2 = columns1.clone();
                                         view! { <td
                                                     style="cursor: pointer"
-                                                 on:dblclick=move |_| set_edit_column.set(Some(ColumnIdentity{
-						     row_id:id,
-						     header:header1.clone(),
-						     value :columns1
-							 .get(&header2).clone()
-							 .unwrap().value.clone()
-						 }))
+                                                 on:dblclick=move |_| if edit_mode.get() {
+						    set_edit_column.set(Some(ColumnIdentity{
+							row_id:id,
+							header:header1.clone(),
+							value :columns1
+							    .get(&header2).clone()
+							    .unwrap().value.clone()
+						    }))
+						 }
 						 >{
 					    move || columns2
 						.get(&column)
