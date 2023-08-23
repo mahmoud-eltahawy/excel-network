@@ -181,7 +181,7 @@ pub struct ImportConfig {
     pub repeated: HashMap<String, Vec<String>>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize,Clone)]
 pub enum IdentityDiffsOps{
     Sum,
     Prod,
@@ -189,7 +189,7 @@ pub enum IdentityDiffsOps{
     Min,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize,Clone)]
 pub struct RowIdentity {
     pub id : Vec::<String>,
     pub diff_ops: Vec::<(String,IdentityDiffsOps)>,
@@ -225,7 +225,10 @@ pub fn get_config_example() {
         priorities: HashMap::from([
             (
                 String::from("مبيعات"),
-                vec!["التاريخ".to_string()],
+                vec![
+		    "التاريخ".to_string(),
+		    "رقم الفاتورة".to_string(),
+		],
             ),
             (
                 String::from("مشتريات"),
@@ -233,7 +236,9 @@ pub fn get_config_example() {
             ),
             (
                 String::from("كارت صنف"),
-                vec!["التاريخ".to_string()],
+                vec![
+		    "التاريخ".to_string()
+		],
             ),
         ]),
         sheets: vec![

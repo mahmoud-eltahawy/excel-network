@@ -7,7 +7,7 @@ use chrono::{Local, NaiveDate};
 use dotenv::dotenv;
 use models::{
     Column, ColumnValue, Config, ConfigValue, ImportConfig, Name, Row, RowsSort, SearchSheetParams,
-    Sheet, SheetConfig,
+    Sheet, SheetConfig, RowIdentity,
 };
 use std::{
     collections::HashMap,
@@ -115,6 +115,21 @@ async fn get_sheet(
             Err(err) => Err(err.to_string()),
         },
         None => Err("id is none".to_string()),
+    }
+}
+
+
+#[tauri::command]
+async fn get_rows_ids(
+    app_state: tauri::State<'_, AppState>,
+    name: Option<String>,
+) -> Result<RowIdentity, String> {
+    let Some(name) = name else {
+        return Err("id does not exist".to_string());
+    };
+    match app_state.sheet_rows_ids.get(&name) {
+        Some(result) => Ok(result.clone()),
+        None => Err("id does not exist".to_string()),
     }
 }
 
@@ -307,6 +322,7 @@ fn main() {
             delete_rows_from_sheet,
             import_sheet,
             get_priorities,
+	    get_rows_ids,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -318,6 +334,7 @@ pub struct AppState {
     pub priorities: HashMap<String, Vec<String>>,
     pub sheet_map: HashMap<String, Vec<ConfigValue>>,
     pub sheet_import: HashMap<String, ImportConfig>,
+    pub sheet_rows_ids: HashMap<String, RowIdentity>,
 }
 
 impl Default for AppState {
@@ -339,14 +356,17 @@ impl Default for AppState {
             .collect::<Vec<_>>();
         let mut sheet_map = HashMap::new();
         let mut sheet_import = HashMap::new();
+        let mut sheet_rows_ids = HashMap::new();
         for SheetConfig {
             sheet_type_name,
             row,
             importing,
+	    row_identity,
         } in sheets.into_iter()
         {
             sheet_map.insert(sheet_type_name.clone(), row);
-            sheet_import.insert(sheet_type_name, importing);
+            sheet_import.insert(sheet_type_name.clone(), importing);
+            sheet_rows_ids.insert(sheet_type_name,row_identity);
         }
 
         AppState {
@@ -355,6 +375,7 @@ impl Default for AppState {
             sheet_map,
             sheet_import,
             priorities,
+	    sheet_rows_ids,
         }
     }
 }
