@@ -537,8 +537,11 @@ fn mul(v1: f64, v2: f64) -> f64 {
 fn sub(v1: f64, v2: f64) -> f64 {
     v1 - v2
 }
+fn sub_rev(v1: f64, v2: f64) -> f64 {
+    v2 - v1
+}
 fn basic_calc<F>(
-    basic_signals_map: HashMap<String, ColumnValue>,
+    columns_map: HashMap<String, ColumnValue>,
     vt1: &ValueType,
     vt2: &ValueType,
     calc: F,
@@ -548,16 +551,16 @@ where
 {
     match (vt1, vt2) {
         (ValueType::Const(val1), ValueType::Const(val2)) => calc(*val1, *val2),
-        (ValueType::Variable(var), ValueType::Const(val2)) => match basic_signals_map.get(var) {
+        (ValueType::Variable(val1), ValueType::Const(val2)) => match columns_map.get(val1) {
             Some(ColumnValue::Float(val1)) => calc(*val1, *val2),
             _ => 0.0,
         },
-        (ValueType::Const(val1), ValueType::Variable(var)) => match basic_signals_map.get(var) {
+        (ValueType::Const(val1), ValueType::Variable(val2)) => match columns_map.get(val2) {
             Some(ColumnValue::Float(val2)) => calc(*val1, *val2),
             _ => 0.0,
         },
-        (ValueType::Variable(var1), ValueType::Variable(var2)) => {
-            match (basic_signals_map.get(var1), basic_signals_map.get(var2)) {
+        (ValueType::Variable(val1), ValueType::Variable(val2)) => {
+            match (columns_map.get(val1), columns_map.get(val2)) {
                 (Some(ColumnValue::Float(val1)), Some(ColumnValue::Float(val2))) => {
                     calc(*val1, *val2)
                 }
@@ -567,7 +570,7 @@ where
     }
 }
 fn calc_o<F>(
-    basic_signals_map: HashMap<String, ColumnValue>,
+    columns_map: HashMap<String, ColumnValue>,
     v: &ValueType,
     bop: &Operation,
     calc: F,
@@ -576,32 +579,48 @@ where
     F: Fn(f64, f64) -> f64 + 'static,
 {
     match (v, bop) {
-        (ValueType::Const(val), bop) => calc(*val, calculate_operation(bop, basic_signals_map)),
-        (ValueType::Variable(var), bop) => match basic_signals_map.get(var) {
+        (ValueType::Const(val), bop) => calc(*val, calculate_operation(bop, columns_map)),
+        (ValueType::Variable(var), bop) => match columns_map.get(var) {
             Some(ColumnValue::Float(val)) => {
-                calc(*val, calculate_operation(bop, basic_signals_map))
+                calc(*val, calculate_operation(bop, columns_map))
             }
             _ => 0.0,
         },
     }
 }
 
+fn o_calc_o<F>(
+    columns_map: HashMap<String, ColumnValue>,
+    bop1: &Operation,
+    bop2: &Operation,
+    calc: F,
+) -> f64
+where
+    F: Fn(f64, f64) -> f64 + 'static,
+{
+    calc(calculate_operation(bop1, columns_map.clone()),calculate_operation(bop2, columns_map))
+}
+
 pub fn calculate_operation(
     value: &Operation,
-    basic_signals_map: HashMap<String, ColumnValue>,
+    columns_map: HashMap<String, ColumnValue>,
 ) -> f64 {
     match value {
-        Operation::Multiply((v1, v2)) => basic_calc(basic_signals_map, v1, v2, mul),
-        Operation::Add((v1, v2)) => basic_calc(basic_signals_map, v1, v2, sum),
-        Operation::Divide((v1, v2)) => basic_calc(basic_signals_map, v1, v2, div),
-        Operation::Minus((v1, v2)) => basic_calc(basic_signals_map, v1, v2, sub),
-        Operation::MultiplyO((v, bop)) => calc_o(basic_signals_map, v, bop, mul),
-        Operation::AddO((v, bop)) => calc_o(basic_signals_map, v, bop, sum),
-        Operation::DivideO((v, bop)) => calc_o(basic_signals_map, v, bop, div),
-        Operation::MinusO((v, bop)) => calc_o(basic_signals_map, v, bop, sub),
-        Operation::OMultiply((bop, v)) => calc_o(basic_signals_map, v, bop, mul),
-        Operation::OAdd((bop, v)) => calc_o(basic_signals_map, v, bop, sum),
-        Operation::ODivide((bop, v)) => calc_o(basic_signals_map, v, bop, div),
-        Operation::OMinus((bop, v)) => calc_o(basic_signals_map, v, bop, sub),
+        Operation::Multiply((v1, v2)) => basic_calc(columns_map, v1, v2, mul),
+        Operation::Add((v1, v2)) => basic_calc(columns_map, v1, v2, sum),
+        Operation::Divide((v1, v2)) => basic_calc(columns_map, v1, v2, div),
+        Operation::Minus((v1, v2)) => basic_calc(columns_map, v1, v2, sub),
+        Operation::MultiplyO((v, bop)) => calc_o(columns_map, v, bop, mul),
+        Operation::AddO((v, bop)) => calc_o(columns_map, v, bop, sum),
+        Operation::DivideO((v, bop)) => calc_o(columns_map, v, bop, div),
+        Operation::MinusO((v, bop)) => calc_o(columns_map, v, bop, sub),
+        Operation::OMultiply((bop, v)) => calc_o(columns_map, v, bop, mul),
+        Operation::OAdd((bop, v)) => calc_o(columns_map, v, bop, sum),
+        Operation::ODivide((bop, v)) => calc_o(columns_map, v, bop, div),
+        Operation::OMinus((bop, v)) => calc_o(columns_map, v, bop, sub_rev),
+        Operation::OMultiplyO((bop1, bop2)) => o_calc_o(columns_map, bop1, bop2, mul),
+        Operation::OAddO((bop1, bop2)) => o_calc_o(columns_map, bop1, bop2, sum),
+        Operation::ODivideO((bop1, bop2)) => o_calc_o(columns_map, bop1, bop2, div),
+        Operation::OMinusO((bop1, bop2)) => o_calc_o(columns_map, bop1, bop2, sub),
     }
 }

@@ -1,7 +1,7 @@
 use crate::Id;
 use leptos::*;
 use leptos_router::*;
-use models::{Column, ColumnValue, ConfigValue, HeaderGetter, Name, RowsSort};
+use models::{Column, ColumnValue, ConfigValue, HeaderGetter, Name, RowsSort, RowIdentity};
 use models::{Row, Sheet};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -115,9 +115,6 @@ pub fn ShowSheet() -> impl IntoView {
     let (deleted_rows, set_deleted_rows) = create_signal(Vec::<Uuid>::new());
     let (added_rows, set_added_rows) = create_signal(Vec::<Row>::new());
     let (modified_columns,set_modified_columns) = create_signal(Vec::<ColumnIdentity>::new());
-    create_effect(move |_| {
-	log!{"{:#?}",modified_columns.get()}
-    });
     let params = use_params_map();
     let sheet_type_id = move || {
         params.with(|params| match params.get("sheet_type_id") {
@@ -141,7 +138,6 @@ pub fn ShowSheet() -> impl IntoView {
     );
 
     let sheet_priorities_resource = create_resource(
-        
         move || sheet_type_name_resource.read(),
         move |name| async move {
             invoke::<NameArg, Vec<String>>("get_priorities", &NameArg { name })
@@ -149,6 +145,17 @@ pub fn ShowSheet() -> impl IntoView {
                 .unwrap_or_default()
         },
     );
+
+    let rows_ids_resource = create_resource(
+        move || sheet_type_name_resource.read(),
+        move |name| async move {
+            invoke::<NameArg, RowIdentity>("get_rows_ids", &NameArg { name })
+                .await
+                .unwrap_or_default()
+        },
+    );
+
+    create_effect(move |_| log!("{:#?}",rows_ids_resource.read()));
 
     let sheet_id = move || {
         params.with(|params| match params.get("sheet_id") {
@@ -304,12 +311,12 @@ pub fn ShowSheet() -> impl IntoView {
             set_edit_mode.set(true);
         }
     };
-    let append = move |row| {
-        set_added_rows.update(|xs| {
-            xs.push(row);
-            xs.sort_rows(sheet_priorities_resource.read().unwrap_or_default());
-        })
-    };
+    let append = move |row| set_added_rows.update(|xs| {
+	let mut list = xs.clone();
+	list.push(row);
+	list.sort_rows(sheet_priorities_resource.read().unwrap_or_default());
+	*xs = list;
+    });
     let save_edits = move |_| {
         let Some(sheet) = sheet_resource.read() else {
 	    return;

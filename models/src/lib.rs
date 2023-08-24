@@ -135,6 +135,7 @@ pub enum ValueType {
 type OperationValue = (ValueType, ValueType);
 type OperationOValue = (Box<Operation>, ValueType);
 type OperationValueO = (ValueType, Box<Operation>);
+type OperationOValueO = (Box<Operation>, Box<Operation>);
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub enum Operation {
@@ -150,6 +151,10 @@ pub enum Operation {
     AddO(OperationValueO),
     MinusO(OperationValueO),
     DivideO(OperationValueO),
+    OMultiplyO(OperationOValueO),
+    OAddO(OperationOValueO),
+    OMinusO(OperationOValueO),
+    ODivideO(OperationOValueO),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -189,7 +194,7 @@ pub enum IdentityDiffsOps{
     Min,
 }
 
-#[derive(Debug, Serialize, Deserialize,Clone)]
+#[derive(Debug, Serialize, Deserialize,Clone,Default)]
 pub struct RowIdentity {
     pub id : Vec::<String>,
     pub diff_ops: Vec::<(String,IdentityDiffsOps)>,
