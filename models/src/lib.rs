@@ -130,31 +130,22 @@ impl HeaderGetter for ColumnConfig {
 pub enum ValueType {
     Const(f64),
     Variable(String),
+    Operation(Box<Operation>),
 }
 
-type OperationValue = (ValueType, ValueType);
-type OperationOValue = (Box<Operation>, ValueType);
-type OperationValueO = (ValueType, Box<Operation>);
-type OperationOValueO = (Box<Operation>, Box<Operation>);
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct Operation {
+    pub op: OperationKind,
+    pub lhs: ValueType,
+    pub rhs: ValueType,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub enum Operation {
-    Multiply(OperationValue),
-    Add(OperationValue),
-    Minus(OperationValue),
-    Divide(OperationValue),
-    OMultiply(OperationOValue),
-    OAdd(OperationOValue),
-    OMinus(OperationOValue),
-    ODivide(OperationOValue),
-    MultiplyO(OperationValueO),
-    AddO(OperationValueO),
-    MinusO(OperationValueO),
-    DivideO(OperationValueO),
-    OMultiplyO(OperationOValueO),
-    OAddO(OperationOValueO),
-    OMinusO(OperationOValueO),
-    ODivideO(OperationOValueO),
+pub enum OperationKind {
+    Multiply,
+    Add,
+    Minus,
+    Divide,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -290,23 +281,27 @@ pub fn get_config_example() {
                     ConfigValue::Basic(ColumnConfig::Float(fcp("الخصم".to_string()))),
                     ConfigValue::Calculated(OperationConfig {
                         header: "ض.ق.م".to_string(),
-                        value: Operation::Multiply((
-                            ValueType::Variable("القيمة".to_string()),
-                            ValueType::Const(0.14),
-                        )),
+			value : Operation {
+			    op: OperationKind::Multiply,
+			    lhs: ValueType::Variable("القيمة".to_string()),
+			    rhs: ValueType::Const(0.14),
+			}
                     }),
                     ConfigValue::Calculated(OperationConfig {
                         header: "الاجمالي".to_string(),
-                        value: Operation::AddO((
-                            ValueType::Variable("القيمة".to_string()),
-                            Box::new(Operation::OMinus((
-                                Box::new(Operation::Multiply((
-                                    ValueType::Variable("القيمة".to_string()),
-                                    ValueType::Const(0.14),
-                                ))),
-                                ValueType::Variable("الخصم".to_string()),
-                            ))),
-                        )),
+			value : Operation {
+			    op: OperationKind::Add,
+			    lhs: ValueType::Variable("القيمة".to_string()),
+			    rhs: ValueType::Operation(Box::new(Operation {
+				op: OperationKind::Minus,
+				lhs: ValueType::Operation(Box::new(Operation{
+				    op : OperationKind::Multiply,
+                                    lhs : ValueType::Variable("القيمة".to_string()),
+                                    rhs : ValueType::Const(0.14),
+				})),
+				rhs: ValueType::Variable("الخصم".to_string())
+			    }))
+			}
                     }),
                 ],
             },
@@ -341,10 +336,11 @@ pub fn get_config_example() {
                     ConfigValue::Basic(ColumnConfig::Float(fcp("العدد".to_string()))),
                     ConfigValue::Calculated(OperationConfig {
                         header: "الاجمالي".to_string(),
-                        value: Operation::Multiply((
-                            ValueType::Variable("السعر".to_string()),
-                            ValueType::Variable("العدد".to_string()),
-                        )),
+			value : Operation {
+			    op: OperationKind::Multiply,
+                            lhs : ValueType::Variable("السعر".to_string()),
+                            rhs : ValueType::Variable("العدد".to_string()),
+			}
                     }),
                 ],
             },
@@ -380,10 +376,11 @@ pub fn get_config_example() {
                     ConfigValue::Basic(ColumnConfig::Float(fcp("السعر".to_string()))),
                     ConfigValue::Calculated(OperationConfig {
                         header: "القيمة".to_string(),
-                        value: Operation::Multiply((
-                            ValueType::Variable("السعر".to_string()),
-                            ValueType::Variable("الكمية".to_string()),
-                        )),
+                        value: Operation {
+			    op : OperationKind::Multiply,
+                            lhs : ValueType::Variable("السعر".to_string()),
+                            rhs : ValueType::Variable("الكمية".to_string()),
+			},
                     }),
                 ],
             },

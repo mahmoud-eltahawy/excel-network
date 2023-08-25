@@ -10,7 +10,7 @@ use tauri_sys::tauri::invoke;
 use uuid::Uuid;
 
 use super::shared::{
-    alert, calculate_operation, confirm, import_sheet_rows, message, open_file, InputRow, NameArg,
+    alert, resolve_operation, confirm, import_sheet_rows, message, open_file, InputRow, NameArg,
     SheetHead, ShowNewRows,
 };
 
@@ -249,7 +249,7 @@ pub fn ShowSheet() -> impl IntoView {
                             header,
                             Column {
                                 is_basic: false,
-                                value: ColumnValue::Float(calculate_operation(&value.value, map)),
+                                value: ColumnValue::Float(resolve_operation(&value.value, map).unwrap_or_default()),
                             },
                         );
                     }

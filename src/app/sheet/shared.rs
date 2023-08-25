@@ -1,8 +1,8 @@
 use leptos::*;
-use models::RowsSort;
 
 use crate::Non;
 use chrono::Local;
+
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -15,6 +15,7 @@ use uuid::Uuid;
 
 use models::{
     Column, ColumnConfig, ColumnProps, ColumnValue, Operation, OperationConfig, Row, ValueType,
+    OperationKind,RowsSort
 };
 
 use std::rc::Rc;
@@ -210,8 +211,9 @@ fn ColumnEdit<F1,F2,F3>(
 		columns.insert(header.to_string(), Column { is_basic: true, value : value.clone() });
 		Row{columns,..row}
 	    }).collect::<Vec<_>>();
-	    let mut rows = xs.to_owned()
-		.into_iter()
+	    let mut rows = xs
+		.iter()
+		.cloned()
 		.chain(rows)
 		.collect::<Vec<_>>();
 	    rows.sort_rows(priorities());
@@ -413,7 +415,7 @@ where
                 };
                 basic_map.insert(header, column_value);
             }
-            map.insert(header, calculate_operation(&value, basic_map));
+            map.insert(header, resolve_operation(&value, basic_map).unwrap_or_default());
         }
         map
     });
@@ -525,102 +527,42 @@ fn MyInput(
     }
 }
 
-fn sum(v1: f64, v2: f64) -> f64 {
-    v1 + v2
-}
-fn div(v1: f64, v2: f64) -> f64 {
-    v1 / v2
-}
-fn mul(v1: f64, v2: f64) -> f64 {
-    v1 * v2
-}
-fn sub(v1: f64, v2: f64) -> f64 {
-    v1 - v2
-}
-fn sub_rev(v1: f64, v2: f64) -> f64 {
-    v2 - v1
-}
-fn basic_calc<F>(
-    columns_map: HashMap<String, ColumnValue>,
-    vt1: &ValueType,
-    vt2: &ValueType,
-    calc: F,
-) -> f64
-where
-    F: Fn(f64, f64) -> f64 + 'static,
-{
-    match (vt1, vt2) {
-        (ValueType::Const(val1), ValueType::Const(val2)) => calc(*val1, *val2),
-        (ValueType::Variable(val1), ValueType::Const(val2)) => match columns_map.get(val1) {
-            Some(ColumnValue::Float(val1)) => calc(*val1, *val2),
-            _ => 0.0,
-        },
-        (ValueType::Const(val1), ValueType::Variable(val2)) => match columns_map.get(val2) {
-            Some(ColumnValue::Float(val2)) => calc(*val1, *val2),
-            _ => 0.0,
-        },
-        (ValueType::Variable(val1), ValueType::Variable(val2)) => {
-            match (columns_map.get(val1), columns_map.get(val2)) {
-                (Some(ColumnValue::Float(val1)), Some(ColumnValue::Float(val2))) => {
-                    calc(*val1, *val2)
-                }
-                _ => 0.0,
-            }
-        }
-    }
-}
-fn calc_o<F>(
-    columns_map: HashMap<String, ColumnValue>,
-    v: &ValueType,
-    bop: &Operation,
-    calc: F,
-) -> f64
-where
-    F: Fn(f64, f64) -> f64 + 'static,
-{
-    match (v, bop) {
-        (ValueType::Const(val), bop) => calc(*val, calculate_operation(bop, columns_map)),
-        (ValueType::Variable(var), bop) => match columns_map.get(var) {
-            Some(ColumnValue::Float(val)) => {
-                calc(*val, calculate_operation(bop, columns_map))
-            }
-            _ => 0.0,
-        },
+fn get_op(op : &OperationKind) -> impl Fn(f64,f64) -> f64 {
+    match op {
+	OperationKind::Multiply => |v1,v2| v1 * v2,
+	OperationKind::Add => |v1,v2| v1 + v2,
+	OperationKind::Divide => |v1,v2| v1 / v2,
+	OperationKind::Minus => |v1,v2| v1 - v2,
     }
 }
 
-fn o_calc_o<F>(
+fn resolve_hs(
+    hs : &ValueType,
     columns_map: HashMap<String, ColumnValue>,
-    bop1: &Operation,
-    bop2: &Operation,
-    calc: F,
-) -> f64
-where
-    F: Fn(f64, f64) -> f64 + 'static,
-{
-    calc(calculate_operation(bop1, columns_map.clone()),calculate_operation(bop2, columns_map))
+) -> Option<f64> {
+    match hs {
+	ValueType::Const(hs) => Some(*hs),
+	ValueType::Variable(hs) => match columns_map.get(hs) {
+            Some(ColumnValue::Float(hs)) => Some(*hs),
+            _ => None,
+        },
+	ValueType::Operation(lhs) =>{
+	    let lhs = lhs;
+	    resolve_operation(lhs,columns_map)
+	}
+    }
 }
 
-pub fn calculate_operation(
-    value: &Operation,
+pub fn resolve_operation(
+    operation: &Operation,
     columns_map: HashMap<String, ColumnValue>,
-) -> f64 {
-    match value {
-        Operation::Multiply((v1, v2)) => basic_calc(columns_map, v1, v2, mul),
-        Operation::Add((v1, v2)) => basic_calc(columns_map, v1, v2, sum),
-        Operation::Divide((v1, v2)) => basic_calc(columns_map, v1, v2, div),
-        Operation::Minus((v1, v2)) => basic_calc(columns_map, v1, v2, sub),
-        Operation::MultiplyO((v, bop)) => calc_o(columns_map, v, bop, mul),
-        Operation::AddO((v, bop)) => calc_o(columns_map, v, bop, sum),
-        Operation::DivideO((v, bop)) => calc_o(columns_map, v, bop, div),
-        Operation::MinusO((v, bop)) => calc_o(columns_map, v, bop, sub),
-        Operation::OMultiply((bop, v)) => calc_o(columns_map, v, bop, mul),
-        Operation::OAdd((bop, v)) => calc_o(columns_map, v, bop, sum),
-        Operation::ODivide((bop, v)) => calc_o(columns_map, v, bop, div),
-        Operation::OMinus((bop, v)) => calc_o(columns_map, v, bop, sub_rev),
-        Operation::OMultiplyO((bop1, bop2)) => o_calc_o(columns_map, bop1, bop2, mul),
-        Operation::OAddO((bop1, bop2)) => o_calc_o(columns_map, bop1, bop2, sum),
-        Operation::ODivideO((bop1, bop2)) => o_calc_o(columns_map, bop1, bop2, div),
-        Operation::OMinusO((bop1, bop2)) => o_calc_o(columns_map, bop1, bop2, sub),
+) -> Option<f64> {
+    let Operation { op, lhs, rhs } = operation;
+    let op = get_op(op);
+    let lhs = resolve_hs(lhs,columns_map.clone());
+    let rhs = resolve_hs(rhs,columns_map);
+    match (lhs,rhs) {
+	(Some(lhs),Some(rhs)) => Some(op(lhs,rhs)),
+	_ => None
     }
 }
