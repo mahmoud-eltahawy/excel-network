@@ -32,15 +32,17 @@ pub struct NameArg {
 #[derive(Debug, Serialize, Deserialize)]
 struct ImportSheetArgs {
     sheettype: String,
+    sheetid: Uuid,
     filepath: String,
 }
 
-pub async fn import_sheet_rows(sheettype: String, filepath: String) -> Vec<Row> {
+pub async fn import_sheet_rows(sheetid: Uuid,sheettype: String, filepath: String) -> Vec<Row> {
     invoke::<ImportSheetArgs, Vec<Row>>(
         "import_sheet",
         &ImportSheetArgs {
             sheettype,
             filepath,
+	    sheetid,
         },
     )
     .await
@@ -260,11 +262,12 @@ fn ColumnEdit<F1,F2,F3>(
 }
 
 #[component]
-pub fn ShowNewRows<BH, CH, FD,FP>(
+pub fn ShowNewRows<BH, CH, FD,FP,FI>(
     basic_headers: BH,
     calc_headers: CH,
     delete_row: FD,
     priorities: FP,
+    sheet_id: FI,
     rows: ReadSignal<Vec<Row>>,
     set_rows: WriteSignal<Vec<Row>>,
 ) -> impl IntoView
@@ -273,8 +276,15 @@ where
     CH: Fn() -> Vec<String> + 'static + Clone + Copy,
     FP: Fn() -> Vec<String> + 'static + Clone + Copy,
     FD: Fn(Uuid) + 'static + Clone + Copy,
+    FI: Fn() -> Uuid + 'static + Clone + Copy,
 {
     let (edit_column,set_edit_column) = create_signal( None::<(String,Uuid,Rc<HashMap<String,Column>>)>);
+    let new_rows = create_memo(move |_| rows
+	    .get()
+	    .into_iter()
+	    .filter(|x| x.id != sheet_id())
+	    .collect::<Vec<_>>()
+    );
     view! { 
         <>
             <Show
@@ -291,7 +301,7 @@ where
                 />
             </Show>
             <For
-                each=move || rows.get()
+                each=move || new_rows.get()
                 key=|row| row.id
                 view=move | Row { columns, id }| {
                     let columns = Rc::new(columns);
@@ -524,6 +534,19 @@ fn MyInput(
                 }
             />
         </td>
+    }
+}
+
+#[component]
+pub fn PrimaryRow(
+    columns : Memo<HashMap<String,Column>>,
+) -> impl IntoView {
+    view! {
+	<For
+	    each=move || columns.get()
+	    key=|x| x.0.clone()
+	    view=|(header,column)| view!{<h1>{header} " => " {column.value.to_string()}</h1>}
+	/>
     }
 }
 

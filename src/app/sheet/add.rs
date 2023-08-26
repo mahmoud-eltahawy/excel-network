@@ -6,6 +6,7 @@ use std::str::FromStr;
 
 use super::shared::{
     alert, import_sheet_rows, message, open_file, InputRow, NameArg, SheetHead, ShowNewRows,
+    new_id,
 };
 
 use crate::Id;
@@ -14,6 +15,7 @@ use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct SaveSheetArgs {
+    sheetid: Uuid,
     sheetname: String,
     typename: String,
     rows: Vec<Row>,
@@ -31,7 +33,6 @@ pub fn AddSheet() -> impl IntoView {
         })
     };
     let sheet_type_name_resource = create_resource(
-        
         || (),
         move |_| async move {
             invoke::<Id, String>(
@@ -46,7 +47,6 @@ pub fn AddSheet() -> impl IntoView {
     );
 
     let sheet_priorities_resource = create_resource(
-        
         move || sheet_type_name_resource.read(),
         move |name| async move {
             invoke::<NameArg, Vec<String>>("get_priorities", &NameArg { name })
@@ -56,12 +56,17 @@ pub fn AddSheet() -> impl IntoView {
     );
 
     let sheet_headers_resource = create_resource(
-        
         move || sheet_type_name_resource.read(),
         move |name| async move {
             invoke::<NameArg, Vec<ConfigValue>>("sheet_headers", &NameArg { name })
                 .await
                 .unwrap_or_default()
+        },
+    );
+    let sheet_id_resource = create_resource(
+        || (),
+        move |_| async move {
+	    new_id().await
         },
     );
     let basic_columns = create_memo( move |_| {
@@ -118,6 +123,7 @@ pub fn AddSheet() -> impl IntoView {
             match invoke::<_, ()>(
                 "save_sheet",
                 &SaveSheetArgs {
+		    sheetid: sheet_id_resource.read().unwrap_or_default(),
                     sheetname: sheet_name.get(),
                     typename: sheet_type_name_resource.read().unwrap_or_default(),
                     rows: rows
@@ -136,6 +142,7 @@ pub fn AddSheet() -> impl IntoView {
             .await
             {
                 Ok(_) => {
+		    sheet_id_resource.refetch();
                     set_rows.set(Vec::new());
                     message("نجح الحفظ").await
                 }
@@ -150,7 +157,11 @@ pub fn AddSheet() -> impl IntoView {
             let Some(filepath) = open_file().await else {
 		return;
 	    };
-            let rows = import_sheet_rows(sheettype, filepath).await;
+            let rows = import_sheet_rows(
+		sheet_id_resource.read().unwrap_or_default(),
+		sheettype,
+		filepath
+	    ).await;
             set_rows.update(|xs| {
                 xs.extend(rows);
                 xs.sort_rows(sheet_priorities_resource.read().unwrap_or_default());
@@ -185,6 +196,7 @@ pub fn AddSheet() -> impl IntoView {
                         calc_headers=calc_headers
                         rows=rows
                         set_rows=set_rows
+	                sheet_id=move || sheet_id_resource.read().unwrap_or_default()
 	                priorities=move || sheet_priorities_resource.read().unwrap_or_default()
                     />
                     <InputRow

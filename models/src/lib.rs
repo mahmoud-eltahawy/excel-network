@@ -175,6 +175,7 @@ pub struct ImportConfig {
     pub repeated_entry: Vec<String>,
     pub unique: HashMap<String, Vec<String>>,
     pub repeated: HashMap<String, Vec<String>>,
+    pub primary: HashMap<String, Vec<String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize,Clone)]
@@ -195,6 +196,7 @@ pub struct RowIdentity {
 pub struct SheetConfig {
     pub sheet_type_name: String,
     pub importing: ImportConfig,
+    pub primary_row: Vec<ConfigValue>,
     pub row: Vec<ConfigValue>,
     pub row_identity : RowIdentity,
 }
@@ -270,7 +272,16 @@ pub fn get_config_example() {
                         "القيمة".to_string(),
                         vec!["unitValue".to_string(), "amountEGP".to_string()],
                     )]),
+                    primary: HashMap::from([
+			(
+			    "اسم الشركة".to_string(),
+			    vec!["issuer".to_string(),"name".to_string()],
+			),
+		    ]),
                 },
+		primary_row : vec![
+                    ConfigValue::Basic(ColumnConfig::Float(fcp("اسم الشركة".to_string()))),
+		],
                 row: vec![
                     ConfigValue::Basic(ColumnConfig::Float(fcp("رقم الفاتورة".to_string()))),
                     ConfigValue::Basic(ColumnConfig::Date(fcp("التاريخ".to_string()))),
@@ -326,7 +337,16 @@ pub fn get_config_example() {
                             vec!["unitValue".to_string(), "amountEGP".to_string()],
                         ),
                     ]),
+                    primary: HashMap::from([
+			(
+			    "اسم الشركة".to_string(),
+			    vec!["issuer".to_string(),"name".to_string()],
+			),
+		    ]),
                 },
+		primary_row : vec![
+                    ConfigValue::Basic(ColumnConfig::Float(fcp("اسم الشركة".to_string()))),
+		],
                 row: vec![
                     ConfigValue::Basic(ColumnConfig::Float(fcp("رقم الفاتورة".to_string()))),
                     ConfigValue::Basic(ColumnConfig::Date(fcp("التاريخ".to_string()))),
@@ -366,7 +386,16 @@ pub fn get_config_example() {
                         ),
                         ("الكمية".to_string(), vec!["quantity".to_string()]),
                     ]),
+                    primary: HashMap::from([
+			(
+			    "اسم الشركة".to_string(),
+			    vec!["issuer".to_string(),"name".to_string()],
+			),
+		    ]),
                 },
+		primary_row : vec![
+                    ConfigValue::Basic(ColumnConfig::Float(fcp("اسم الشركة".to_string()))),
+		],
                 row: vec![
                     ConfigValue::Basic(ColumnConfig::Float(fcp("رقم الفاتورة".to_string()))),
                     ConfigValue::Basic(ColumnConfig::Date(fcp("التاريخ".to_string()))),

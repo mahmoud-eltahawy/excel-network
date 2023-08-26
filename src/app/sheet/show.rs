@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use super::shared::{
     alert, resolve_operation, confirm, import_sheet_rows, message, open_file, InputRow, NameArg,
-    SheetHead, ShowNewRows,
+    SheetHead, ShowNewRows,PrimaryRow,
 };
 
 #[derive(Serialize, Deserialize)]
@@ -73,6 +73,7 @@ fn ColumnEdit<F1,F2,F3>(
 	push_to_modified(ColumnIdentity { row_id, header, value:column_value.get()});
 	cancel();
     };
+
     view! { 
         <div class="popup">
             <input
@@ -223,12 +224,13 @@ pub fn ShowSheet() -> impl IntoView {
             .collect::<Vec<_>>()
     };
 
-    let sheet = create_memo( move |_| {
+    let sheet_without_primary_row_with_calc_values = create_memo( move |_| {
         let c_cols = calc_columns.get();
         let mut sheet = sheet_resource.read().unwrap_or_default();
         sheet.rows = sheet
             .rows
             .into_iter()
+            .filter(|x| x.id != sheet_resource.read().map(|x| x.id).unwrap_or_default())
             .map(|Row { id, columns }| Row {
                 id,
                 columns: {
@@ -260,14 +262,14 @@ pub fn ShowSheet() -> impl IntoView {
         sheet
     });
 
-    let sheet_rows = create_memo( move |_| sheet.get().rows);
+    let sheet_rows = create_memo( move |_| sheet_without_primary_row_with_calc_values.get().rows);
 
     let export = move |_| {
         spawn_local(async move {
             match invoke::<_, ()>(
                 "export_sheet",
                 &ExportSheetArg {
-                    sheet: sheet.get(),
+                    sheet: sheet_without_primary_row_with_calc_values.get(),
                     headers: basic_headers().into_iter().chain(calc_headers()).collect(),
                 },
             )
@@ -425,13 +427,29 @@ pub fn ShowSheet() -> impl IntoView {
             let Some(filepath) = open_file().await else {
 		return;
 	    };
-            let rows = import_sheet_rows(sheettype, filepath).await;
+            let rows = import_sheet_rows(
+		sheet_resource.read().map(|x| x.id).unwrap_or_default(),
+		sheettype,
+		filepath
+	    ).await;
             set_added_rows.update(|xs| {
                 xs.extend(rows);
                 xs.sort_rows(sheet_priorities_resource.read().unwrap_or_default());
             });
         });
     };
+
+    let primary_row_columns = create_memo(move |_| sheet_resource
+	.read()
+	.map(|x| x.rows)
+	.unwrap_or_default()
+	.into_iter().filter(|x| x.id == sheet_resource.read().unwrap_or_default().id)
+	.collect::<Vec<_>>()
+	.first()
+	.map(|x| x.columns.clone())
+	.unwrap_or_default()
+
+    );
 
     view! { 
         <section>
@@ -461,6 +479,7 @@ pub fn ShowSheet() -> impl IntoView {
                     on:input=move |ev| set_sheet_name.set(event_target_value(&ev))
                 />
             </Show>
+	    <PrimaryRow columns=primary_row_columns/>
             <table>
                 <SheetHead basic_headers=basic_headers calc_headers=calc_headers/>
                 <tbody>
@@ -473,6 +492,7 @@ pub fn ShowSheet() -> impl IntoView {
                         is_deleted=is_deleted
 	                modified_columns=modified_columns
 	                set_modified_columns=set_modified_columns
+	                sheet_id=move || sheet_resource.read().map(|x| x.id).unwrap_or_default()
 		    />
 		    <Show
 		    when=move || !added_rows.get().is_empty()
@@ -486,6 +506,7 @@ pub fn ShowSheet() -> impl IntoView {
                         calc_headers=calc_headers
                         rows=added_rows
                         set_rows=set_added_rows
+	                sheet_id=move ||sheet_resource.read().map(|x| x.id).unwrap_or_default()
 	                priorities=move || sheet_priorities_resource.read().unwrap_or_default()
                     />
                     <Show
@@ -526,11 +547,12 @@ pub fn ShowSheet() -> impl IntoView {
 }
 
 #[component]
-fn ShowRows<BH, CH, FD, ID>(
+fn ShowRows<BH, CH, FD, ID,FI>(
     basic_headers: BH,
     calc_headers: CH,
     delete_row: FD,
     is_deleted: ID,
+    sheet_id: FI,
     rows: Memo<Vec<Row>>,
     edit_mode: ReadSignal<bool>,
     modified_columns: ReadSignal<Vec<ColumnIdentity>>,
@@ -541,8 +563,15 @@ where
     CH: Fn() -> Vec<String> + 'static + Clone + Copy,
     ID: Fn(Uuid) -> bool + 'static + Clone + Copy,
     FD: Fn(Uuid) + 'static + Clone + Copy,
+    FI: Fn() -> Uuid + 'static + Clone + Copy,
 {
     let (edit_column,set_edit_column) = create_signal( None::<ColumnIdentity>);
+    let new_rows = create_memo(move |_| rows
+	    .get()
+	    .into_iter()
+	    .filter(|x| x.id != sheet_id())
+	    .collect::<Vec<_>>()
+    );
     view! { 
 	<>
             <Show
@@ -558,7 +587,7 @@ where
                 />
             </Show>
         <For
-            each=move || rows.get()
+            each=move || new_rows.get()
             key=|row| row.id
             view=move | Row { columns, id }| {
                 let columns = std::rc::Rc::new(columns);

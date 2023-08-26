@@ -63,6 +63,7 @@ fn sheet_headers(app_state: tauri::State<'_, AppState>, name: Option<String>) ->
 #[tauri::command]
 async fn save_sheet(
     app_state: tauri::State<'_, AppState>,
+    sheetid: Uuid,
     sheetname: String,
     typename: String,
     rows: Vec<Row>,
@@ -71,7 +72,7 @@ async fn save_sheet(
         return Err("اسم الشيت مطلوب".to_string());
     }
     let sheet = Sheet {
-        id: Uuid::new_v4(),
+        id: sheetid,
         sheet_name: sheetname,
         type_name: typename,
         insert_date: Local::now().date_naive(),
@@ -226,7 +227,7 @@ fn column_from_value(value: &Value) -> Column {
                     Err(_) => ColumnValue::String(Some(v.to_owned())),
                 },
             },
-            _ => ColumnValue::Float(0.404),
+            _ => ColumnValue::String(Some("".to_string())),
         },
     }
 }
@@ -235,6 +236,7 @@ fn column_from_value(value: &Value) -> Column {
 async fn import_sheet(
     app_state: tauri::State<'_, AppState>,
     sheettype: String,
+    sheetid: Uuid,
     filepath: String,
 ) -> Result<Vec<Row>, String> {
     let ImportConfig {
@@ -242,6 +244,7 @@ async fn import_sheet(
         repeated_entry,
         unique,
         repeated,
+	primary,
     } = match app_state.sheet_import.get(&sheettype) {
         Some(v) => v,
         None => return Ok(vec![]),
@@ -281,6 +284,14 @@ async fn import_sheet(
             columns,
         });
     }
+
+    let mut primary_row = HashMap::new();
+    for (header, entry) in primary.into_iter() {
+        let value = get_main_json_entry(&main_json, entry);
+        let column = column_from_value(value);
+        primary_row.insert(header.to_owned(), column);
+    }
+    result.push(Row { id: sheetid, columns: primary_row });
 
     let old_path = Path::new(&filepath);
     let download_dir = dirs::home_dir().unwrap_or_default().join("Downloads");
@@ -333,6 +344,7 @@ pub struct AppState {
     pub sheets_types_names: Vec<Name>,
     pub priorities: HashMap<String, Vec<String>>,
     pub sheet_map: HashMap<String, Vec<ConfigValue>>,
+    pub sheets_primary_rows: HashMap<String, Vec<ConfigValue>>,
     pub sheet_import: HashMap<String, ImportConfig>,
     pub sheet_rows_ids: HashMap<String, RowIdentity>,
 }
@@ -355,6 +367,7 @@ impl Default for AppState {
             })
             .collect::<Vec<_>>();
         let mut sheet_map = HashMap::new();
+        let mut sheets_primary_rows = HashMap::new();
         let mut sheet_import = HashMap::new();
         let mut sheet_rows_ids = HashMap::new();
         for SheetConfig {
@@ -362,8 +375,10 @@ impl Default for AppState {
             row,
             importing,
 	    row_identity,
+	    primary_row,
         } in sheets.into_iter()
         {
+	    sheets_primary_rows.insert(sheet_type_name.clone(), primary_row);
             sheet_map.insert(sheet_type_name.clone(), row);
             sheet_import.insert(sheet_type_name.clone(), importing);
             sheet_rows_ids.insert(sheet_type_name,row_identity);
@@ -376,6 +391,7 @@ impl Default for AppState {
             sheet_import,
             priorities,
 	    sheet_rows_ids,
+	    sheets_primary_rows,
         }
     }
 }
