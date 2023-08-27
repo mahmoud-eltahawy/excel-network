@@ -542,10 +542,15 @@ pub fn PrimaryRow<FP>(
     primary_headers : FP,
     columns : Memo<HashMap<String,Column>>,
     new_columns: ReadSignal<HashMap<String,Column>>,
+    set_new_columns: WriteSignal<HashMap<String,Column>>,
     edit_mode: ReadSignal<bool>,
 ) -> impl IntoView
     where FP : Fn() -> Vec<String> + 'static
 {
+    let (add_what,set_add_what) = create_signal(None::<&str>);
+    let (header,set_header) = create_signal(String::from(""));
+    let (column_value,set_column_value) = create_signal(ColumnValue::Float(0.0));
+
     let headers = move ||{
 	let mut primary_headers = primary_headers();
 
@@ -570,11 +575,30 @@ pub fn PrimaryRow<FP>(
 	primary_headers.into_iter().zip(non_primary_headers).collect::<Vec<_>>()
     };
 
+    let on_value_input = move |ev| set_column_value.update(|x| match x {
+	ColumnValue::String(_) => *x = ColumnValue::String(Some(event_target_value(&ev))), 
+	ColumnValue::Date(_) => *x = ColumnValue::Date(Some(event_target_value(&ev).parse().unwrap_or_default())), 
+	ColumnValue::Float(_) => *x = ColumnValue::Float(event_target_value(&ev).parse().unwrap_or_default()), 
+    });
+
+    let append = move |_| {
+	set_new_columns.update(|map| {
+	    map.insert(
+	    header.get(),
+	    Column {
+		is_basic: true,
+		value: column_value.get()
+	    });
+	});
+	set_add_what.set(None);
+    };
+
     view! {
+	<>
 	<table>
 	    <For
 		each=move || headers()
-		key=|x| x.0.clone()
+		key=|x| x.0.clone() + &x.1
 		view=move |(primary,non_primary)| view!{
 		    <tr>
 			<td>{primary.clone()}</td>
@@ -597,8 +621,7 @@ pub fn PrimaryRow<FP>(
 			}
 			</td>
 			<td class="shapeless">" "</td>
-			<td class="shapeless">" "</td>
-			<td class="shapeless">" "</td>
+			<td class="shapeless">" | "</td>
 			<td class="shapeless">" "</td>
 			<td>{non_primary.clone()}</td>
 			<td class="shapeless">" "</td>
@@ -607,6 +630,64 @@ pub fn PrimaryRow<FP>(
 		}
 	    />
 	</table>
+	<Show
+	    when=move || edit_mode.get()
+	    fallback=move|| view!{<></>}
+	>
+	    <Show
+		when=move || add_what.get().is_some()
+		fallback=move|| view!{
+		<>
+		    <button
+		    class="centered-button"
+		    on:click=move |_| {
+			set_add_what.set(Some("date"));
+			set_column_value.set(ColumnValue::Date(Some(Local::now().date_naive())))
+		    }
+		    >"+ تاريخ"</button>
+		    <button
+		    class="centered-button"
+		    on:click=move |_| {
+			set_add_what.set(Some("number"));
+			set_column_value.set(ColumnValue::Float(0.0));
+		    }
+		    >"+ رقم"</button>
+		    <button
+		    class="centered-button"
+		    on:click=move |_| {
+			set_add_what.set(Some("text"));
+			set_column_value.set(ColumnValue::String(Some("".to_string())));
+		    }
+		    >"+ نص"</button>
+		</>
+	    }
+	    >
+	        <div>
+		    <input
+		    style="width:40%; height:30px;"
+		    type="text"
+		    placeholder="العنوان"
+	            on:input=move |ev| set_header.set(event_target_value(&ev))
+		    />
+		    <input
+		    style="width:40%; height:30px;"
+		    type=add_what.get().unwrap_or_default()
+		    placeholder="القيمة"
+	            on:input=on_value_input
+		    />
+	        </div>
+	        <br/>
+		<button
+	        on:click=append
+		class="centered-button"
+		>"تاكيد"</button>
+		<button
+		class="centered-button"
+		   on:click=move |_| set_add_what.set(None)
+		>"الغاء"</button>
+	    </Show>
+	</Show>
+	</>
     }
 }
 

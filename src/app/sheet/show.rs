@@ -512,6 +512,7 @@ pub fn ShowSheet() -> impl IntoView {
 	    <PrimaryRow
 	      columns=primary_row_columns
 	      new_columns=modified_primary_columns
+	      set_new_columns=set_modified_primary_columns
 	      primary_headers=move || sheet_primary_headers_resource.read().unwrap_or_default()
 	      edit_mode=edit_mode
 	    /><br/>
