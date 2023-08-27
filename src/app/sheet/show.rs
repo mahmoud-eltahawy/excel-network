@@ -116,6 +116,7 @@ pub fn ShowSheet() -> impl IntoView {
     let (deleted_rows, set_deleted_rows) = create_signal(Vec::<Uuid>::new());
     let (added_rows, set_added_rows) = create_signal(Vec::<Row>::new());
     let (modified_columns,set_modified_columns) = create_signal(Vec::<ColumnIdentity>::new());
+    let (modified_primary_columns,set_modified_primary_columns) = create_signal(HashMap::<String,Column>::new());
     let params = use_params_map();
     let sheet_type_id = move || {
         params.with(|params| match params.get("sheet_type_id") {
@@ -428,24 +429,6 @@ pub fn ShowSheet() -> impl IntoView {
         sheet_resource.refetch();
     };
 
-    let load_file = move |_| {
-        let sheettype = sheet_type_name_resource.read().unwrap_or_default();
-        spawn_local(async move {
-            let Some(filepath) = open_file().await else {
-		return;
-	    };
-            let rows = import_sheet_rows(
-		sheet_resource.read().map(|x| x.id).unwrap_or_default(),
-		sheettype,
-		filepath
-	    ).await;
-            set_added_rows.update(|xs| {
-                xs.extend(rows);
-                xs.sort_rows(sheet_priorities_resource.read().unwrap_or_default());
-            });
-        });
-    };
-
     let primary_row_columns = create_memo(move |_| sheet_resource
 	.read()
 	.map(|x| x.rows)
@@ -457,6 +440,37 @@ pub fn ShowSheet() -> impl IntoView {
 	.unwrap_or_default()
 
     );
+
+    let load_file = move |_| {
+        let sheettype = sheet_type_name_resource.read().unwrap_or_default();
+        spawn_local(async move {
+            let Some(filepath) = open_file().await else {
+		return;
+	    };
+	    let sheet_id = sheet_resource.read().map(|x| x.id).unwrap_or_default();
+            let rows = import_sheet_rows(
+		sheet_id,
+		sheettype,
+		filepath,
+	    ).await;
+
+	    let primary_row = rows
+		.iter()
+		.filter(|x| x.id == sheet_id)
+		.collect::<Vec<_>>();
+	    let primary_row = primary_row.first().map(|x| x.columns.clone()).unwrap_or_default();
+	    let old_primary_row = primary_row_columns.get();
+	    for (header,column) in primary_row {
+		if old_primary_row.get(&header).is_some_and(|x| x.value != column.value) {
+		    set_modified_primary_columns.update(|map| {map.insert(header, column);})
+		}
+	    } 
+            set_added_rows.update(|xs| {
+                xs.extend(rows.into_iter().filter(|x| x.id != sheet_id).collect::<Vec<_>>());
+                xs.sort_rows(sheet_priorities_resource.read().unwrap_or_default());
+            });
+        });
+    };
 
     view! { 
         <section>
@@ -488,7 +502,9 @@ pub fn ShowSheet() -> impl IntoView {
             </Show>
 	    <PrimaryRow
 	      columns=primary_row_columns
+	      new_columns=modified_primary_columns
 	      primary_headers=move || sheet_primary_headers_resource.read().unwrap_or_default()
+	      edit_mode=edit_mode
 	    /><br/>
             <table>
                 <SheetHead basic_headers=basic_headers calc_headers=calc_headers/>

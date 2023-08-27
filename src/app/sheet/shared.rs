@@ -541,6 +541,8 @@ fn MyInput(
 pub fn PrimaryRow<FP>(
     primary_headers : FP,
     columns : Memo<HashMap<String,Column>>,
+    new_columns: ReadSignal<HashMap<String,Column>>,
+    edit_mode: ReadSignal<bool>,
 ) -> impl IntoView
     where FP : Fn() -> Vec<String> + 'static
 {
@@ -580,8 +582,20 @@ pub fn PrimaryRow<FP>(
 			<td>{move ||columns
 			     .get()
 			     .get(&primary)
-			     .map(|x| x.value.to_string())
-			}</td>
+			     .map(|x| x.value.to_string()
+				  + &new_columns
+				  .get()
+				  .get(&primary)
+				  .map(|x| if edit_mode.get() {
+					" => ".to_string() + &x.value.to_string()  
+				    } else {
+					"".to_string()
+				    }
+				  )
+				  .unwrap_or_default()
+			     )
+			}
+			</td>
 			<td class="shapeless">" "</td>
 			<td class="shapeless">" "</td>
 			<td class="shapeless">" "</td>
