@@ -327,6 +327,18 @@ pub fn ShowSheet() -> impl IntoView {
 	list.sort_rows(sheet_priorities_resource.read().unwrap_or_default());
 	*xs = list;
     });
+
+    let primary_row_columns = create_memo(move |_| sheet_resource
+	.read()
+	.map(|x| x.rows)
+	.unwrap_or_default()
+	.into_iter().filter(|x| x.id == sheet_resource.read().unwrap_or_default().id)
+	.collect::<Vec<_>>()
+	.first()
+	.map(|x| x.columns.clone())
+	.unwrap_or_default()
+    );
+
     let save_edits = move |_| {
         let Some(sheet) = sheet_resource.read() else {
 	    return;
@@ -335,6 +347,15 @@ pub fn ShowSheet() -> impl IntoView {
         let mut deleted_rows = deleted_rows.get();
         let mut added_rows = added_rows.get();
 	let current_rows = sheet.rows;
+	let modified_primary_columns = modified_primary_columns.get();
+	if !modified_primary_columns.is_empty() {
+	    deleted_rows.push(sheet.id);
+	    let mut columns = primary_row_columns.get();
+	    for (header,column) in modified_primary_columns {
+		columns.insert(header, column);
+	    }
+	    added_rows.push(Row { id: sheet.id, columns});
+	}
 	for c in modified_columns.get() {
 	    let ColumnIdentity { row_id, header, value } = c;
 	    if let [current_row] = current_rows
@@ -428,18 +449,6 @@ pub fn ShowSheet() -> impl IntoView {
 	set_modified_columns.set(Vec::new());
         sheet_resource.refetch();
     };
-
-    let primary_row_columns = create_memo(move |_| sheet_resource
-	.read()
-	.map(|x| x.rows)
-	.unwrap_or_default()
-	.into_iter().filter(|x| x.id == sheet_resource.read().unwrap_or_default().id)
-	.collect::<Vec<_>>()
-	.first()
-	.map(|x| x.columns.clone())
-	.unwrap_or_default()
-
-    );
 
     let load_file = move |_| {
         let sheettype = sheet_type_name_resource.read().unwrap_or_default();
