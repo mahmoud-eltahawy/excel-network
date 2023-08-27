@@ -538,15 +538,61 @@ fn MyInput(
 }
 
 #[component]
-pub fn PrimaryRow(
+pub fn PrimaryRow<FP>(
+    primary_headers : FP,
     columns : Memo<HashMap<String,Column>>,
-) -> impl IntoView {
+) -> impl IntoView
+    where FP : Fn() -> Vec<String> + 'static
+{
+    let headers = move ||{
+	let mut primary_headers = primary_headers();
+
+	let mut non_primary_headers = columns
+	    .get()
+	    .keys()
+	    .map(|x| x.to_string())
+	    .filter(|x| !primary_headers.contains(&x))
+	    .collect::<Vec<_>>();
+
+	let space = non_primary_headers.len() as i32 - primary_headers.len() as i32;
+
+	if space > 0 {
+	    primary_headers
+		.extend((0..space).map(|_| "".to_string()));
+	} else if space < 0 {
+	    let space = space * -1;
+	    non_primary_headers
+		.extend((0..space).map(|_| "".to_string()));
+	}
+
+	primary_headers.into_iter().zip(non_primary_headers).collect::<Vec<_>>()
+    };
+
     view! {
-	<For
-	    each=move || columns.get()
-	    key=|x| x.0.clone()
-	    view=|(header,column)| view!{<h1>{header} " => " {column.value.to_string()}</h1>}
-	/>
+	<table>
+	    <For
+		each=move || headers()
+		key=|x| x.0.clone()
+		view=move |(primary,non_primary)| view!{
+		    <tr>
+			<td>{primary.clone()}</td>
+			<td class="shapeless">" "</td>
+			<td>{move ||columns
+			     .get()
+			     .get(&primary)
+			     .map(|x| x.value.to_string())
+			}</td>
+			<td class="shapeless">" "</td>
+			<td class="shapeless">" "</td>
+			<td class="shapeless">" "</td>
+			<td class="shapeless">" "</td>
+			<td>{non_primary.clone()}</td>
+			<td class="shapeless">" "</td>
+			<td>{move ||columns.get().get(&non_primary).map(|x| x.value.to_string())}</td>
+		    </tr>
+		}
+	    />
+	</table>
     }
 }
 

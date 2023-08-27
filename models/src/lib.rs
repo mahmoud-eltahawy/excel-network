@@ -196,7 +196,6 @@ pub struct RowIdentity {
 pub struct SheetConfig {
     pub sheet_type_name: String,
     pub importing: ImportConfig,
-    pub primary_row: Vec<ConfigValue>,
     pub row: Vec<ConfigValue>,
     pub row_identity : RowIdentity,
 }
@@ -279,9 +278,6 @@ pub fn get_config_example() {
 			),
 		    ]),
                 },
-		primary_row : vec![
-                    ConfigValue::Basic(ColumnConfig::Float(fcp("اسم الشركة".to_string()))),
-		],
                 row: vec![
                     ConfigValue::Basic(ColumnConfig::Float(fcp("رقم الفاتورة".to_string()))),
                     ConfigValue::Basic(ColumnConfig::Date(fcp("التاريخ".to_string()))),
@@ -344,9 +340,6 @@ pub fn get_config_example() {
 			),
 		    ]),
                 },
-		primary_row : vec![
-                    ConfigValue::Basic(ColumnConfig::Float(fcp("اسم الشركة".to_string()))),
-		],
                 row: vec![
                     ConfigValue::Basic(ColumnConfig::Float(fcp("رقم الفاتورة".to_string()))),
                     ConfigValue::Basic(ColumnConfig::Date(fcp("التاريخ".to_string()))),
@@ -393,9 +386,6 @@ pub fn get_config_example() {
 			),
 		    ]),
                 },
-		primary_row : vec![
-                    ConfigValue::Basic(ColumnConfig::Float(fcp("اسم الشركة".to_string()))),
-		],
                 row: vec![
                     ConfigValue::Basic(ColumnConfig::Float(fcp("رقم الفاتورة".to_string()))),
                     ConfigValue::Basic(ColumnConfig::Date(fcp("التاريخ".to_string()))),

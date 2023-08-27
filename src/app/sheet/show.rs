@@ -166,7 +166,6 @@ pub fn ShowSheet() -> impl IntoView {
     };
 
     let sheet_resource = create_resource(
-        
         || (),
         move |_| async move {
             invoke::<Id, Sheet>("get_sheet", &Id { id: sheet_id() })
@@ -176,7 +175,6 @@ pub fn ShowSheet() -> impl IntoView {
     );
 
     let sheet_headers_resource = create_resource(
-        
         move || sheet_type_name_resource.read(),
         move |name| async move {
             invoke::<NameArg, Vec<ConfigValue>>("sheet_headers", &NameArg { name })
@@ -184,6 +182,15 @@ pub fn ShowSheet() -> impl IntoView {
                 .unwrap_or_default()
         },
     );
+    let sheet_primary_headers_resource = create_resource(
+        move || sheet_type_name_resource.read(),
+        move |name| async move {
+            invoke::<NameArg, Vec<String>>("sheet_primary_headers", &NameArg { name })
+                .await
+                .unwrap_or_default()
+        },
+    );
+
     let basic_columns = create_memo( move |_| {
         sheet_headers_resource
             .read()
@@ -479,7 +486,10 @@ pub fn ShowSheet() -> impl IntoView {
                     on:input=move |ev| set_sheet_name.set(event_target_value(&ev))
                 />
             </Show>
-	    <PrimaryRow columns=primary_row_columns/>
+	    <PrimaryRow
+	      columns=primary_row_columns
+	      primary_headers=move || sheet_primary_headers_resource.read().unwrap_or_default()
+	    /><br/>
             <table>
                 <SheetHead basic_headers=basic_headers calc_headers=calc_headers/>
                 <tbody>

@@ -49,10 +49,25 @@ fn sheet_type_name(app_state: tauri::State<'_, AppState>, id: Option<Uuid>) -> S
 }
 
 #[tauri::command]
+fn sheet_primary_headers(app_state: tauri::State<'_, AppState>, name: Option<String>) -> Vec<String> {
+    match name {
+        Some(name) => app_state
+            .sheet_import
+            .get(&name)
+            .expect(&format!("expected name ({}) to exist", name))
+	    .primary
+	    .keys()
+	    .map(|x| x.clone())
+	    .collect::<Vec<_>>(),
+        None => vec![],
+    }
+}
+
+#[tauri::command]
 fn sheet_headers(app_state: tauri::State<'_, AppState>, name: Option<String>) -> Vec<ConfigValue> {
     match name {
         Some(name) => app_state
-            .sheet_map
+            .sheets_rows
             .get(&name)
             .expect(&format!("expected name ({}) to exist", name))
             .to_vec(),
@@ -321,6 +336,7 @@ fn main() {
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             sheets_types_names,
+	    sheet_primary_headers,
             sheet_headers,
             sheet_type_name,
             new_id,
@@ -343,8 +359,7 @@ pub struct AppState {
     pub origin: String,
     pub sheets_types_names: Vec<Name>,
     pub priorities: HashMap<String, Vec<String>>,
-    pub sheet_map: HashMap<String, Vec<ConfigValue>>,
-    pub sheets_primary_rows: HashMap<String, Vec<ConfigValue>>,
+    pub sheets_rows: HashMap<String, Vec<ConfigValue>>,
     pub sheet_import: HashMap<String, ImportConfig>,
     pub sheet_rows_ids: HashMap<String, RowIdentity>,
 }
@@ -367,7 +382,6 @@ impl Default for AppState {
             })
             .collect::<Vec<_>>();
         let mut sheet_map = HashMap::new();
-        let mut sheets_primary_rows = HashMap::new();
         let mut sheet_import = HashMap::new();
         let mut sheet_rows_ids = HashMap::new();
         for SheetConfig {
@@ -375,10 +389,8 @@ impl Default for AppState {
             row,
             importing,
 	    row_identity,
-	    primary_row,
         } in sheets.into_iter()
         {
-	    sheets_primary_rows.insert(sheet_type_name.clone(), primary_row);
             sheet_map.insert(sheet_type_name.clone(), row);
             sheet_import.insert(sheet_type_name.clone(), importing);
             sheet_rows_ids.insert(sheet_type_name,row_identity);
@@ -387,11 +399,10 @@ impl Default for AppState {
         AppState {
             origin: format!("http://{host}:{port}"),
             sheets_types_names,
-            sheet_map,
+            sheets_rows: sheet_map,
             sheet_import,
             priorities,
 	    sheet_rows_ids,
-	    sheets_primary_rows,
         }
     }
 }
