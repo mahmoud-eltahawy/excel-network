@@ -481,6 +481,20 @@ pub fn ShowSheet() -> impl IntoView {
         });
     };
 
+    let primary_non_primary_headers = move || {
+	let primary_headers = sheet_primary_headers_resource.read().unwrap_or_default();
+
+	modified_primary_columns
+	    .get()
+	    .into_iter()
+	    .chain(primary_row_columns.get())
+	    .collect::<HashMap<_,_>>()
+	    .keys()
+	    .map(|x| x.to_string())
+	    .filter(|x| !primary_headers.contains(&x))
+	    .collect::<Vec<_>>()
+    };
+
     view! { 
         <section>
             <A class="left-corner" href=format!("/sheet/{}", sheet_type_id().unwrap_or_default())>
@@ -514,6 +528,7 @@ pub fn ShowSheet() -> impl IntoView {
 	      new_columns=modified_primary_columns
 	      set_new_columns=set_modified_primary_columns
 	      primary_headers=move || sheet_primary_headers_resource.read().unwrap_or_default()
+	      non_primary_headers=primary_non_primary_headers
 	      edit_mode=edit_mode
 	    /><br/>
             <table>

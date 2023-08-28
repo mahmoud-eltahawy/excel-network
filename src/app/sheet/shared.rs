@@ -538,14 +538,16 @@ fn MyInput(
 }
 
 #[component]
-pub fn PrimaryRow<FP>(
+pub fn PrimaryRow<FP,FN>(
     primary_headers : FP,
+    non_primary_headers : FN,
     columns : Memo<HashMap<String,Column>>,
     new_columns: ReadSignal<HashMap<String,Column>>,
     set_new_columns: WriteSignal<HashMap<String,Column>>,
     edit_mode: ReadSignal<bool>,
 ) -> impl IntoView
-    where FP : Fn() -> Vec<String> + 'static
+    where FP : Fn() -> Vec<String> + 'static + Clone + Copy,
+	  FN : Fn() -> Vec<String> + 'static + Clone + Copy
 {
     let (add_what,set_add_what) = create_signal(None::<&str>);
     let (header,set_header) = create_signal(String::from(""));
@@ -554,12 +556,7 @@ pub fn PrimaryRow<FP>(
     let headers = move ||{
 	let mut primary_headers = primary_headers();
 
-	let mut non_primary_headers = columns
-	    .get()
-	    .keys()
-	    .map(|x| x.to_string())
-	    .filter(|x| !primary_headers.contains(&x))
-	    .collect::<Vec<_>>();
+	let mut non_primary_headers = non_primary_headers();
 
 	let space = non_primary_headers.len() as i32 - primary_headers.len() as i32;
 
@@ -574,6 +571,14 @@ pub fn PrimaryRow<FP>(
 
 	primary_headers.into_iter().zip(non_primary_headers).collect::<Vec<_>>()
     };
+
+    let all_columns = create_memo(move |_| columns
+	.get()
+	.into_iter()
+	.chain(new_columns.get())
+	.collect::<HashMap<_,_>>()
+    );
+
 
     let on_value_input = move |ev| set_column_value.update(|x| match x {
 	ColumnValue::String(_) => *x = ColumnValue::String(Some(event_target_value(&ev))), 
@@ -625,7 +630,7 @@ pub fn PrimaryRow<FP>(
 			<td class="shapeless">" "</td>
 			<td>{non_primary.clone()}</td>
 			<td class="shapeless">" "</td>
-			<td>{move ||columns.get().get(&non_primary).map(|x| x.value.to_string())}</td>
+			<td>{move ||all_columns.get().get(&non_primary).map(|x| x.value.to_string())}</td>
 		    </tr>
 		}
 	    />
@@ -659,6 +664,12 @@ pub fn PrimaryRow<FP>(
 			set_column_value.set(ColumnValue::String(Some("".to_string())));
 		    }
 		    >"+ نص"</button>
+		    <button
+		    class="centered-button"
+		    on:click=move |_| {
+			set_new_columns.set(HashMap::new());
+		    }
+		    >"الغاء التعديلات"</button>
 		</>
 	    }
 	    >
