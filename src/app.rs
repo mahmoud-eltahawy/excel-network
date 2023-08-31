@@ -18,7 +18,7 @@ pub struct Id {
 
 #[component]
 pub fn App() -> impl IntoView {
-    view! { 
+    view! {
         <main>
             <Router>
                 <section>
@@ -59,7 +59,6 @@ use uuid::Uuid;
 #[component]
 pub fn Home() -> impl IntoView {
     let sheets_types_names = create_resource(
-        
         || (),
         |_| async move {
             invoke::<Non, Vec<Name>>("sheets_types_names", &Non {})
@@ -68,15 +67,15 @@ pub fn Home() -> impl IntoView {
         },
     );
 
-    view! { 
+    view! {
         <section>
             <br/>
             <br/>
             <For
-                each=move || sheets_types_names.read().unwrap_or_default()
+                each=move || sheets_types_names.get().unwrap_or_default()
                 key=|s| s.id
                 view=move | s| {
-                    view! { 
+                    view! {
                         <A class="button" href=format!("sheet/{}", s.id)>
                             <h1>{s.the_name}</h1>
                         </A>

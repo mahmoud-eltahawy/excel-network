@@ -5,8 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 use super::shared::{
-    alert, import_sheet_rows, message, open_file, InputRow, NameArg, SheetHead, ShowNewRows,
-    new_id,
+    alert, import_sheet_rows, message, new_id, open_file, InputRow, NameArg, SheetHead, ShowNewRows,
 };
 
 use crate::Id;
@@ -23,8 +22,8 @@ struct SaveSheetArgs {
 
 #[component]
 pub fn AddSheet() -> impl IntoView {
-    let (sheet_name, set_sheet_name) = create_signal( String::from(""));
-    let (rows, set_rows) = create_signal( Vec::new());
+    let (sheet_name, set_sheet_name) = create_signal(String::from(""));
+    let (rows, set_rows) = create_signal(Vec::new());
     let params = use_params_map();
     let sheet_type_id = move || {
         params.with(|params| match params.get("sheet_type_id") {
@@ -47,7 +46,7 @@ pub fn AddSheet() -> impl IntoView {
     );
 
     let sheet_priorities_resource = create_resource(
-        move || sheet_type_name_resource.read(),
+        move || sheet_type_name_resource.get(),
         move |name| async move {
             invoke::<NameArg, Vec<String>>("get_priorities", &NameArg { name })
                 .await
@@ -56,22 +55,17 @@ pub fn AddSheet() -> impl IntoView {
     );
 
     let sheet_headers_resource = create_resource(
-        move || sheet_type_name_resource.read(),
+        move || sheet_type_name_resource.get(),
         move |name| async move {
             invoke::<NameArg, Vec<ConfigValue>>("sheet_headers", &NameArg { name })
                 .await
                 .unwrap_or_default()
         },
     );
-    let sheet_id_resource = create_resource(
-        || (),
-        move |_| async move {
-	    new_id().await
-        },
-    );
-    let basic_columns = create_memo( move |_| {
+    let sheet_id_resource = create_resource(|| (), move |_| async move { new_id().await });
+    let basic_columns = create_memo(move |_| {
         sheet_headers_resource
-            .read()
+            .get()
             .unwrap_or_default()
             .into_iter()
             .flat_map(|x| match x {
@@ -81,9 +75,9 @@ pub fn AddSheet() -> impl IntoView {
             .collect::<Vec<_>>()
     });
 
-    let calc_columns = create_memo( move |_| {
+    let calc_columns = create_memo(move |_| {
         sheet_headers_resource
-            .read()
+            .get()
             .unwrap_or_default()
             .into_iter()
             .flat_map(|x| match x {
@@ -112,7 +106,7 @@ pub fn AddSheet() -> impl IntoView {
     let append = move |row: Row| {
         set_rows.update(|xs| {
             xs.push(row);
-            xs.sort_rows(sheet_priorities_resource.read().unwrap_or_default());
+            xs.sort_rows(sheet_priorities_resource.get().unwrap_or_default());
         })
     };
 
@@ -123,9 +117,9 @@ pub fn AddSheet() -> impl IntoView {
             match invoke::<_, ()>(
                 "save_sheet",
                 &SaveSheetArgs {
-		    sheetid: sheet_id_resource.read().unwrap_or_default(),
+                    sheetid: sheet_id_resource.get().unwrap_or_default(),
                     sheetname: sheet_name.get(),
-                    typename: sheet_type_name_resource.read().unwrap_or_default(),
+                    typename: sheet_type_name_resource.get().unwrap_or_default(),
                     rows: rows
                         .get()
                         .into_iter()
@@ -142,7 +136,7 @@ pub fn AddSheet() -> impl IntoView {
             .await
             {
                 Ok(_) => {
-		    sheet_id_resource.refetch();
+                    sheet_id_resource.refetch();
                     set_rows.set(Vec::new());
                     message("نجح الحفظ").await
                 }
@@ -152,24 +146,25 @@ pub fn AddSheet() -> impl IntoView {
     };
 
     let load_file = move |_| {
-        let sheettype = sheet_type_name_resource.read().unwrap_or_default();
+        let sheettype = sheet_type_name_resource.get().unwrap_or_default();
         spawn_local(async move {
             let Some(filepath) = open_file().await else {
-		return;
-	    };
+                return;
+            };
             let rows = import_sheet_rows(
-		sheet_id_resource.read().unwrap_or_default(),
-		sheettype,
-		filepath
-	    ).await;
+                sheet_id_resource.get().unwrap_or_default(),
+                sheettype,
+                filepath,
+            )
+            .await;
             set_rows.update(|xs| {
                 xs.extend(rows);
-                xs.sort_rows(sheet_priorities_resource.read().unwrap_or_default());
+                xs.sort_rows(sheet_priorities_resource.get().unwrap_or_default());
             });
         });
     };
 
-    view! { 
+    view! {
         <section>
             <A class="left-corner" href=format!("/sheet/{}", sheet_type_id().unwrap_or_default())>
                 "->"
@@ -180,7 +175,7 @@ pub fn AddSheet() -> impl IntoView {
                 class="centered-input"
                 placeholder=move || {
                     format!(
-                        "{} ({})", "اسم الشيت", sheet_type_name_resource.read()
+                        "{} ({})", "اسم الشيت", sheet_type_name_resource.get()
                         .unwrap_or_default()
                     )
                 }
@@ -196,8 +191,8 @@ pub fn AddSheet() -> impl IntoView {
                         calc_headers=calc_headers
                         rows=rows
                         set_rows=set_rows
-	                sheet_id=move || sheet_id_resource.read().unwrap_or_default()
-	                priorities=move || sheet_priorities_resource.read().unwrap_or_default()
+                    sheet_id=move || sheet_id_resource.get().unwrap_or_default()
+                    priorities=move || sheet_priorities_resource.get().unwrap_or_default()
                     />
                     <InputRow
                         basic_headers=basic_headers
