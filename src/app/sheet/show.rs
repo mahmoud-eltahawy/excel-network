@@ -556,10 +556,10 @@ pub fn ShowSheet() -> impl IntoView {
             </Show>
         <PrimaryRow
           columns=primary_row_columns
+          non_primary_headers=primary_non_primary_headers
           new_columns=modified_primary_columns
           set_new_columns=set_modified_primary_columns
           primary_headers=move || sheet_primary_headers_resource.get().unwrap_or_default()
-          non_primary_headers=primary_non_primary_headers
           edit_mode=edit_mode
         /><br/>
             <table>
