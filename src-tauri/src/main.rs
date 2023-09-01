@@ -417,7 +417,7 @@ pub async fn write_sheet(
     sheet: Sheet,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let Sheet {
-        id: _,
+        id,
         sheet_name,
         type_name,
         insert_date,
@@ -425,16 +425,46 @@ pub async fn write_sheet(
     } = sheet;
     let mut workbook = Workbook::new();
 
+    let primary_row = rows
+        .iter()
+        .filter(|x| x.id == id)
+        .collect::<Vec<_>>()
+        .first()
+        .map(|x| x.columns.clone())
+        .unwrap_or_default();
+
+    let second_row_index = primary_row.len() + 1;
+
     let worksheet = workbook.add_worksheet();
+
+    for (row, (header, value)) in primary_row.into_iter().enumerate() {
+        let row = row as u32;
+        match value.value {
+            ColumnValue::String(v) => {
+                worksheet.write_string(row, 1, header)?;
+                worksheet.write_string(row, 2, v.unwrap_or_default())?;
+            }
+            ColumnValue::Float(v) => {
+                worksheet.write_string(row, 1, header)?;
+                worksheet.write_number(row, 2, v)?;
+            }
+            ColumnValue::Date(v) => {
+                let v = v.map(|x| x.to_string()).unwrap_or_default();
+                worksheet.write_string(row, 1, header)?;
+                worksheet.write_string(row, 2, v)?;
+            }
+        }
+    }
 
     for (col, header) in headers.iter().enumerate() {
         let col = col as u16;
-        worksheet.write_string(0, col, header)?;
+        worksheet.write_string(second_row_index as u32, col, header)?;
     }
 
     for (row, columns) in rows.into_iter().map(|x| x.columns).enumerate() {
+        let row = row + second_row_index + 1;
         for (col, header) in headers.iter().enumerate() {
-            let (row, col) = (row as u32 + 1, col as u16);
+            let (row, col) = (row as u32, col as u16);
             worksheet.set_row_height(row, 30)?;
             match &columns.get(header) {
                 Some(column) => match &column.value {
@@ -455,9 +485,9 @@ pub async fn write_sheet(
         }
     }
 
-    worksheet.set_row_height(0, 45)?;
+    worksheet.set_row_height(second_row_index as u32, 45)?;
     worksheet.set_row_format(
-        0,
+        second_row_index as u32,
         &Format::new()
             .set_background_color(Color::Orange)
             .set_font_size(14)

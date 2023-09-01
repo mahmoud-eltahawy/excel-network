@@ -236,13 +236,12 @@ pub fn ShowSheet() -> impl IntoView {
             .collect::<Vec<_>>()
     };
 
-    let sheet_without_primary_row_with_calc_values = create_memo(move |_| {
+    let sheet_with_primary_row_with_calc_values = create_memo(move |_| {
         let c_cols = calc_columns.get();
         let mut sheet = sheet_resource.get().unwrap_or_default();
         sheet.rows = sheet
             .rows
             .into_iter()
-            .filter(|x| x.id != sheet_resource.get().map(|x| x.id).unwrap_or_default())
             .map(|Row { id, columns }| Row {
                 id,
                 columns: {
@@ -259,15 +258,17 @@ pub fn ShowSheet() -> impl IntoView {
                             .collect::<Vec<_>>();
                         let value = value.first().unwrap();
 
-                        columns.insert(
-                            header,
-                            Column {
-                                is_basic: false,
-                                value: ColumnValue::Float(
-                                    resolve_operation(&value.value, map).unwrap_or_default(),
-                                ),
-                            },
-                        );
+                        if id != sheet.id {
+                            columns.insert(
+                                header,
+                                Column {
+                                    is_basic: false,
+                                    value: ColumnValue::Float(
+                                        resolve_operation(&value.value, map).unwrap_or_default(),
+                                    ),
+                                },
+                            );
+                        }
                     }
                     columns
                 },
@@ -276,14 +277,22 @@ pub fn ShowSheet() -> impl IntoView {
         sheet
     });
 
-    let sheet_rows = create_memo(move |_| sheet_without_primary_row_with_calc_values.get().rows);
+    let sheet_without_primary_row_with_calc_values = create_memo(move |_| {
+        let mut sheet = sheet_with_primary_row_with_calc_values.get();
+        sheet.rows = sheet
+            .rows
+            .into_iter()
+            .filter(|x| x.id != sheet_resource.get().map(|x| x.id).unwrap_or_default())
+            .collect::<Vec<_>>();
+        sheet
+    });
 
     let export = move |_| {
         spawn_local(async move {
             match invoke::<_, ()>(
                 "export_sheet",
                 &ExportSheetArg {
-                    sheet: sheet_without_primary_row_with_calc_values.get(),
+                    sheet: sheet_with_primary_row_with_calc_values.get(),
                     headers: basic_headers().into_iter().chain(calc_headers()).collect(),
                 },
             )
@@ -569,7 +578,7 @@ pub fn ShowSheet() -> impl IntoView {
                         delete_row=delete_row
                         basic_headers=basic_headers
                         calc_headers=calc_headers
-                        rows=sheet_rows
+                        rows=move || sheet_without_primary_row_with_calc_values.get().rows
                         edit_mode=edit_mode
                         is_deleted=is_deleted
                     modified_columns=modified_columns
@@ -629,13 +638,13 @@ pub fn ShowSheet() -> impl IntoView {
 }
 
 #[component]
-fn ShowRows<BH, CH, FD, ID, FI>(
+fn ShowRows<BH, CH, FD, ID, FI, FR>(
     basic_headers: BH,
     calc_headers: CH,
     delete_row: FD,
     is_deleted: ID,
     sheet_id: FI,
-    rows: Memo<Vec<Row>>,
+    rows: FR,
     edit_mode: ReadSignal<bool>,
     modified_columns: ReadSignal<Vec<ColumnIdentity>>,
     set_modified_columns: WriteSignal<Vec<ColumnIdentity>>,
@@ -643,13 +652,14 @@ fn ShowRows<BH, CH, FD, ID, FI>(
 where
     BH: Fn() -> Vec<String> + 'static + Clone + Copy,
     CH: Fn() -> Vec<String> + 'static + Clone + Copy,
+    FR: Fn() -> Vec<Row> + 'static + Clone + Copy,
     ID: Fn(Uuid) -> bool + 'static + Clone + Copy,
     FD: Fn(Uuid) + 'static + Clone + Copy,
     FI: Fn() -> Uuid + 'static + Clone + Copy,
 {
     let (edit_column, set_edit_column) = create_signal(None::<ColumnIdentity>);
     let new_rows = create_memo(move |_| {
-        rows.get()
+        rows()
             .into_iter()
             .filter(|x| x.id != sheet_id())
             .collect::<Vec<_>>()
