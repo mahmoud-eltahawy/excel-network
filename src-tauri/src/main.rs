@@ -439,19 +439,31 @@ pub async fn write_sheet(
 
     for (row, (header, value)) in primary_row.into_iter().enumerate() {
         let row = row as u32;
+        worksheet.set_row_height(row, 35)?;
+
+        worksheet.set_row_format(
+            row,
+            &Format::new()
+                .set_background_color(Color::Cyan)
+                .set_font_size(17)
+                .set_reading_direction(2)
+                .set_bold()
+                .set_border(FormatBorder::Thin),
+        )?;
+
         match value.value {
             ColumnValue::String(v) => {
                 worksheet.write_string(row, 1, header)?;
-                worksheet.write_string(row, 2, v.unwrap_or_default())?;
+                worksheet.write_string(row, 3, v.unwrap_or_default())?;
             }
             ColumnValue::Float(v) => {
                 worksheet.write_string(row, 1, header)?;
-                worksheet.write_number(row, 2, v)?;
+                worksheet.write_number(row, 3, v)?;
             }
             ColumnValue::Date(v) => {
                 let v = v.map(|x| x.to_string()).unwrap_or_default();
                 worksheet.write_string(row, 1, header)?;
-                worksheet.write_string(row, 2, v)?;
+                worksheet.write_string(row, 3, v)?;
             }
         }
     }
