@@ -6,8 +6,8 @@ mod api;
 use chrono::{Local, NaiveDate};
 use dotenv::dotenv;
 use models::{
-    Column, ColumnValue, Config, ConfigValue, ImportConfig, Name, Row, RowsSort, SearchSheetParams,
-    Sheet, SheetConfig, RowIdentity,
+    Column, ColumnValue, Config, ConfigValue, ImportConfig, Name, Row, RowIdentity, RowsSort,
+    SearchSheetParams, Sheet, SheetConfig,
 };
 use std::{
     collections::HashMap,
@@ -49,16 +49,19 @@ fn sheet_type_name(app_state: tauri::State<'_, AppState>, id: Option<Uuid>) -> S
 }
 
 #[tauri::command]
-fn sheet_primary_headers(app_state: tauri::State<'_, AppState>, name: Option<String>) -> Vec<String> {
+fn sheet_primary_headers(
+    app_state: tauri::State<'_, AppState>,
+    name: Option<String>,
+) -> Vec<String> {
     match name {
         Some(name) => app_state
             .sheet_import
             .get(&name)
             .expect(&format!("expected name ({}) to exist", name))
-	    .primary
-	    .keys()
-	    .map(|x| x.clone())
-	    .collect::<Vec<_>>(),
+            .primary
+            .keys()
+            .map(|x| x.clone())
+            .collect::<Vec<_>>(),
         None => vec![],
     }
 }
@@ -134,7 +137,6 @@ async fn get_sheet(
     }
 }
 
-
 #[tauri::command]
 async fn get_rows_ids(
     app_state: tauri::State<'_, AppState>,
@@ -155,7 +157,7 @@ async fn get_priorities(
     name: Option<String>,
 ) -> Result<Vec<String>, String> {
     let Some(name) = name else {
-	return Ok(vec![]);
+        return Ok(vec![]);
     };
     match app_state.priorities.get(&name) {
         Some(list) => Ok(list.to_vec()),
@@ -259,17 +261,17 @@ async fn import_sheet(
         repeated_entry,
         unique,
         repeated,
-	primary,
+        primary,
     } = match app_state.sheet_import.get(&sheettype) {
         Some(v) => v,
         None => return Ok(vec![]),
     };
     let Ok(file) = File::open(&filepath) else {
-	return Ok(vec![]);
+        return Ok(vec![]);
     };
     let reader = Deserializer::from_reader(file);
     let Some(Ok(main_json)) = reader.into_iter::<Value>().next() else {
-	return Ok(vec![]);
+        return Ok(vec![]);
     };
     let main_json = get_main_json_entry(&main_json, main_entry);
     let main_json = match main_json {
@@ -284,7 +286,7 @@ async fn import_sheet(
     }
     let repeated_json = get_main_json_entry(&main_json, repeated_entry);
     let Value::Array(list) = repeated_json else {
-	return Ok(vec![]);
+        return Ok(vec![]);
     };
     let mut result = Vec::new();
     for value in list.into_iter() {
@@ -306,7 +308,10 @@ async fn import_sheet(
         let column = column_from_value(value);
         primary_row.insert(header.to_owned(), column);
     }
-    result.push(Row { id: sheetid, columns: primary_row });
+    result.push(Row {
+        id: sheetid,
+        columns: primary_row,
+    });
 
     let old_path = Path::new(&filepath);
     let download_dir = dirs::home_dir().unwrap_or_default().join("Downloads");
@@ -336,7 +341,7 @@ fn main() {
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             sheets_types_names,
-	    sheet_primary_headers,
+            sheet_primary_headers,
             sheet_headers,
             sheet_type_name,
             new_id,
@@ -349,7 +354,7 @@ fn main() {
             delete_rows_from_sheet,
             import_sheet,
             get_priorities,
-	    get_rows_ids,
+            get_rows_ids,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -388,12 +393,12 @@ impl Default for AppState {
             sheet_type_name,
             row,
             importing,
-	    row_identity,
+            row_identity,
         } in sheets.into_iter()
         {
             sheet_map.insert(sheet_type_name.clone(), row);
             sheet_import.insert(sheet_type_name.clone(), importing);
-            sheet_rows_ids.insert(sheet_type_name,row_identity);
+            sheet_rows_ids.insert(sheet_type_name, row_identity);
         }
 
         AppState {
@@ -402,7 +407,7 @@ impl Default for AppState {
             sheets_rows: sheet_map,
             sheet_import,
             priorities,
-	    sheet_rows_ids,
+            sheet_rows_ids,
         }
     }
 }

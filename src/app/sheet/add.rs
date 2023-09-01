@@ -118,20 +118,31 @@ pub fn AddSheet() -> impl IntoView {
     let delete_row = move |id: Uuid| set_rows.update(|xs| xs.retain(|x| x.id != id));
 
     let save_sheet = move |_| {
+        let id = sheet_id_resource.get().unwrap_or_default();
         spawn_local(async move {
+            let mut rows = rows.get();
+            let index = rows.iter().position(|x| x.id == id);
+            if let Some(index) = index {
+                if let Some(primary_row) = rows.get_mut(index) {
+                    *primary_row = Row {
+                        id: primary_row.id,
+                        columns: primary_row
+                            .clone()
+                            .columns
+                            .into_iter()
+                            .chain(modified_primary_columns.get())
+                            .collect(),
+                    };
+                };
+            }
             match invoke::<_, ()>(
                 "save_sheet",
                 &SaveSheetArgs {
-                    sheetid: sheet_id_resource.get().unwrap_or_default(),
+                    sheetid: id,
                     sheetname: sheet_name.get(),
                     typename: sheet_type_name_resource.get().unwrap_or_default(),
                     rows: rows
-                        .get()
                         .into_iter()
-                        .chain(vec![Row {
-                            id: sheet_id_resource.get().unwrap_or_default(),
-                            columns: modified_primary_columns.get(),
-                        }])
                         .map(|Row { id, columns }| Row {
                             id,
                             columns: columns
