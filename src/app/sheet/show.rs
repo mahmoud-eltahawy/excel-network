@@ -664,6 +664,7 @@ where
             .filter(|x| x.id != sheet_id())
             .collect::<Vec<_>>()
     });
+
     view! {
     <>
             <Show
@@ -704,8 +705,9 @@ where
                             row_id:id,
                             header:header1.clone(),
                             value :columns1
-                                .get(&header2).clone()
-                                .unwrap().value.clone()
+                                .get(&header2)
+                                        .map(|x| x.value.clone())
+                                        .unwrap_or(ColumnValue::String(Some("Empty".to_string())))
                             }))
                          }
                          >{
