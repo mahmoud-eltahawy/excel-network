@@ -28,6 +28,7 @@ async fn main() -> std::io::Result<()> {
             }))
             .wrap(Logger::default())
             .service(sheet::scope())
+            .service(column::scope())
     })
     .bind(get_configs_server())?
     .run()

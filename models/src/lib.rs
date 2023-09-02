@@ -4,6 +4,13 @@ use std::{cmp::Ordering, collections::HashMap};
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct ColumnId {
+    pub sheet_id: Uuid,
+    pub row_id: Uuid,
+    pub header: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct SearchSheetParams {
     pub offset: i64,
     pub begin: Option<NaiveDate>,
@@ -178,18 +185,18 @@ pub struct ImportConfig {
     pub primary: HashMap<String, Vec<String>>,
 }
 
-#[derive(Debug, Serialize, Deserialize,Clone)]
-pub enum IdentityDiffsOps{
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum IdentityDiffsOps {
     Sum,
     Prod,
     Max,
     Min,
 }
 
-#[derive(Debug, Serialize, Deserialize,Clone,Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct RowIdentity {
-    pub id : Vec::<String>,
-    pub diff_ops: Vec::<(String,IdentityDiffsOps)>,
+    pub id: Vec<String>,
+    pub diff_ops: Vec<(String, IdentityDiffsOps)>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -197,7 +204,7 @@ pub struct SheetConfig {
     pub sheet_type_name: String,
     pub importing: ImportConfig,
     pub row: Vec<ConfigValue>,
-    pub row_identity : RowIdentity,
+    pub row_identity: RowIdentity,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -222,35 +229,22 @@ pub fn get_config_example() {
         priorities: HashMap::from([
             (
                 String::from("مبيعات"),
-                vec![
-		    "التاريخ".to_string(),
-		    "رقم الفاتورة".to_string(),
-		],
+                vec!["التاريخ".to_string(), "رقم الفاتورة".to_string()],
             ),
-            (
-                String::from("مشتريات"),
-                vec!["التاريخ".to_string()],
-            ),
-            (
-                String::from("كارت صنف"),
-                vec![
-		    "التاريخ".to_string()
-		],
-            ),
+            (String::from("مشتريات"), vec!["التاريخ".to_string()]),
+            (String::from("كارت صنف"), vec!["التاريخ".to_string()]),
         ]),
         sheets: vec![
             SheetConfig {
-		row_identity : RowIdentity{
-		    id : vec![
-			"رقم الفاتورة".to_string(),
-			"التاريخ".to_string(),
+                row_identity: RowIdentity {
+                    id: vec![
+                        "رقم الفاتورة".to_string(),
+                        "التاريخ".to_string(),
                         "رقم التسجيل الضريبي".to_string(),
                         "اسم العميل".to_string(),
-		    ],
-		    diff_ops : vec![
-                        ("القيمة".to_string(),IdentityDiffsOps::Sum),
-		    ],
-		},
+                    ],
+                    diff_ops: vec![("القيمة".to_string(), IdentityDiffsOps::Sum)],
+                },
                 sheet_type_name: String::from("مبيعات"),
                 importing: ImportConfig {
                     main_entry: vec![String::from("document")],
@@ -271,12 +265,10 @@ pub fn get_config_example() {
                         "القيمة".to_string(),
                         vec!["unitValue".to_string(), "amountEGP".to_string()],
                     )]),
-                    primary: HashMap::from([
-			(
-			    "اسم الشركة".to_string(),
-			    vec!["issuer".to_string(),"name".to_string()],
-			),
-		    ]),
+                    primary: HashMap::from([(
+                        "اسم الشركة".to_string(),
+                        vec!["issuer".to_string(), "name".to_string()],
+                    )]),
                 },
                 row: vec![
                     ConfigValue::Basic(ColumnConfig::Float(fcp("رقم الفاتورة".to_string()))),
@@ -288,35 +280,35 @@ pub fn get_config_example() {
                     ConfigValue::Basic(ColumnConfig::Float(fcp("الخصم".to_string()))),
                     ConfigValue::Calculated(OperationConfig {
                         header: "ض.ق.م".to_string(),
-			value : Operation {
-			    op: OperationKind::Multiply,
-			    lhs: ValueType::Variable("القيمة".to_string()),
-			    rhs: ValueType::Const(0.14),
-			}
+                        value: Operation {
+                            op: OperationKind::Multiply,
+                            lhs: ValueType::Variable("القيمة".to_string()),
+                            rhs: ValueType::Const(0.14),
+                        },
                     }),
                     ConfigValue::Calculated(OperationConfig {
                         header: "الاجمالي".to_string(),
-			value : Operation {
-			    op: OperationKind::Add,
-			    lhs: ValueType::Variable("القيمة".to_string()),
-			    rhs: ValueType::Operation(Box::new(Operation {
-				op: OperationKind::Minus,
-				lhs: ValueType::Operation(Box::new(Operation{
-				    op : OperationKind::Multiply,
-                                    lhs : ValueType::Variable("القيمة".to_string()),
-                                    rhs : ValueType::Const(0.14),
-				})),
-				rhs: ValueType::Variable("الخصم".to_string())
-			    }))
-			}
+                        value: Operation {
+                            op: OperationKind::Add,
+                            lhs: ValueType::Variable("القيمة".to_string()),
+                            rhs: ValueType::Operation(Box::new(Operation {
+                                op: OperationKind::Minus,
+                                lhs: ValueType::Operation(Box::new(Operation {
+                                    op: OperationKind::Multiply,
+                                    lhs: ValueType::Variable("القيمة".to_string()),
+                                    rhs: ValueType::Const(0.14),
+                                })),
+                                rhs: ValueType::Variable("الخصم".to_string()),
+                            })),
+                        },
                     }),
                 ],
             },
             SheetConfig {
-		row_identity : RowIdentity{
-		    id : vec![],
-		    diff_ops : vec![],
-		},
+                row_identity: RowIdentity {
+                    id: vec![],
+                    diff_ops: vec![],
+                },
                 sheet_type_name: String::from("مشتريات"),
                 importing: ImportConfig {
                     main_entry: vec![String::from("document")],
@@ -333,12 +325,10 @@ pub fn get_config_example() {
                             vec!["unitValue".to_string(), "amountEGP".to_string()],
                         ),
                     ]),
-                    primary: HashMap::from([
-			(
-			    "اسم الشركة".to_string(),
-			    vec!["issuer".to_string(),"name".to_string()],
-			),
-		    ]),
+                    primary: HashMap::from([(
+                        "اسم الشركة".to_string(),
+                        vec!["issuer".to_string(), "name".to_string()],
+                    )]),
                 },
                 row: vec![
                     ConfigValue::Basic(ColumnConfig::Float(fcp("رقم الفاتورة".to_string()))),
@@ -349,19 +339,19 @@ pub fn get_config_example() {
                     ConfigValue::Basic(ColumnConfig::Float(fcp("العدد".to_string()))),
                     ConfigValue::Calculated(OperationConfig {
                         header: "الاجمالي".to_string(),
-			value : Operation {
-			    op: OperationKind::Multiply,
-                            lhs : ValueType::Variable("السعر".to_string()),
-                            rhs : ValueType::Variable("العدد".to_string()),
-			}
+                        value: Operation {
+                            op: OperationKind::Multiply,
+                            lhs: ValueType::Variable("السعر".to_string()),
+                            rhs: ValueType::Variable("العدد".to_string()),
+                        },
                     }),
                 ],
             },
             SheetConfig {
-		row_identity : RowIdentity{
-		    id : vec![],
-		    diff_ops : vec![],
-		},
+                row_identity: RowIdentity {
+                    id: vec![],
+                    diff_ops: vec![],
+                },
                 sheet_type_name: String::from("كارت صنف"),
                 importing: ImportConfig {
                     main_entry: vec![String::from("document")],
@@ -379,12 +369,10 @@ pub fn get_config_example() {
                         ),
                         ("الكمية".to_string(), vec!["quantity".to_string()]),
                     ]),
-                    primary: HashMap::from([
-			(
-			    "اسم الشركة".to_string(),
-			    vec!["issuer".to_string(),"name".to_string()],
-			),
-		    ]),
+                    primary: HashMap::from([(
+                        "اسم الشركة".to_string(),
+                        vec!["issuer".to_string(), "name".to_string()],
+                    )]),
                 },
                 row: vec![
                     ConfigValue::Basic(ColumnConfig::Float(fcp("رقم الفاتورة".to_string()))),
@@ -396,10 +384,10 @@ pub fn get_config_example() {
                     ConfigValue::Calculated(OperationConfig {
                         header: "القيمة".to_string(),
                         value: Operation {
-			    op : OperationKind::Multiply,
-                            lhs : ValueType::Variable("السعر".to_string()),
-                            rhs : ValueType::Variable("الكمية".to_string()),
-			},
+                            op: OperationKind::Multiply,
+                            lhs: ValueType::Variable("السعر".to_string()),
+                            rhs: ValueType::Variable("الكمية".to_string()),
+                        },
                     }),
                 ],
             },
