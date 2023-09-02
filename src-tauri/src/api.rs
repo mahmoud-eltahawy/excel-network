@@ -18,7 +18,7 @@ pub async fn save_sheet(
     if res.status() == StatusCode::OK {
         Ok(())
     } else {
-        Err("failed".into())
+        Err(res.json::<String>().await?.into())
     }
 }
 
@@ -36,44 +36,45 @@ pub async fn update_sheet_name(
     if res.status() == StatusCode::OK {
         Ok(())
     } else {
-        Err("failed".into())
+        Err(res.json::<String>().await?.into())
     }
 }
 
-pub async fn add_row_to_sheet(
+pub async fn add_rows_to_sheet(
     app_state: &AppState,
-    sheet_id: &Uuid,
-    row: &Row,
+    sheet_id: Uuid,
+    rows: Vec<Row>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let origin = &app_state.origin;
     let res = reqwest::Client::new()
-        .post(format!("{origin}/sheet/{sheet_id}/row"))
-        .json(row)
+        .post(format!("{origin}/sheet/rows"))
+        .json(&(sheet_id, rows))
         .send()
         .await?;
 
     if res.status() == StatusCode::OK {
         Ok(())
     } else {
-        Err("failed".into())
+        Err(res.json::<String>().await?.into())
     }
 }
 
-pub async fn delete_row_from_sheet(
+pub async fn delete_rows_from_sheet(
     app_state: &AppState,
-    sheet_id: &Uuid,
-    row_id: &Uuid,
+    sheet_id: Uuid,
+    rows_ids: Vec<Uuid>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let origin = &app_state.origin;
     let res = reqwest::Client::new()
-        .delete(format!("{origin}/sheet/{sheet_id}/{row_id}/row"))
+        .post(format!("{origin}/sheet/delete/rows"))
+        .json(&(sheet_id, rows_ids))
         .send()
         .await?;
 
     if res.status() == StatusCode::OK {
         Ok(())
     } else {
-        Err("failed".into())
+        Err(res.json::<String>().await?.into())
     }
 }
 

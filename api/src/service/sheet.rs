@@ -1,6 +1,6 @@
 use crate::{column::save_cloumn_value, AppState};
 use actix_web::{
-    delete, get, post, put,
+    get, post, put,
     web::{self, Data},
     HttpResponse, Responder, Scope,
 };
@@ -16,8 +16,8 @@ pub fn scope() -> Scope {
         .service(search)
         .service(save)
         .service(update_name)
-        .service(delete_sheet_row)
-        .service(add_row_to_sheet)
+        .service(delete_sheet_rows)
+        .service(add_rows_to_sheet)
         .service(get_number_of_sheet_rows_by_id)
         .service(get_custom_sheet_by_id)
 }
@@ -87,27 +87,32 @@ async fn get_number_of_sheet_rows_by_id(
     }
 }
 
-#[post("/{sheet_id}/row")]
-async fn add_row_to_sheet(
+#[post("/rows")]
+async fn add_rows_to_sheet(
     state: Data<AppState>,
-    sheet_id: web::Path<Uuid>,
-    row: web::Json<Row>,
+    rows: web::Json<(Uuid, Vec<Row>)>,
 ) -> impl Responder {
-    let sheet_id = sheet_id.into_inner();
-    let row = row.into_inner();
-    match save_row(&state, &sheet_id, row).await {
-        Ok(dep) => HttpResponse::Ok().json(dep),
-        Err(err) => HttpResponse::InternalServerError().json(err.to_string()),
+    let (sheet_id, rows) = rows.into_inner();
+    for row in rows {
+        if let Err(err) = save_row(&state, &sheet_id, row).await {
+            return HttpResponse::InternalServerError().json(err.to_string());
+        }
     }
+    HttpResponse::Ok().into()
 }
 
-#[delete("/{sheet_id}/{row_id}/row")]
-async fn delete_sheet_row(state: Data<AppState>, ids: web::Path<(Uuid, Uuid)>) -> impl Responder {
-    let (sheet_id, row_id) = ids.into_inner();
-    match delete_row_by_id(&state, sheet_id, row_id).await {
-        Ok(_) => HttpResponse::Ok().into(),
-        Err(err) => HttpResponse::InternalServerError().json(err.to_string()),
+#[post("/delete/rows")]
+async fn delete_sheet_rows(
+    state: Data<AppState>,
+    ids: web::Json<(Uuid, Vec<Uuid>)>,
+) -> impl Responder {
+    let (sheet_id, rows_id) = ids.into_inner();
+    for row_id in rows_id {
+        if let Err(err) = delete_row_by_id(&state, &sheet_id, row_id).await {
+            return HttpResponse::InternalServerError().json(err.to_string());
+        }
     }
+    HttpResponse::Ok().into()
 }
 
 pub async fn fetch_columns_by_row_id(
@@ -171,7 +176,7 @@ pub async fn fetch_rows_ids_by_sheet_id(
 
 pub async fn delete_row_by_id(
     state: &AppState,
-    sheet_id: Uuid,
+    sheet_id: &Uuid,
     row_id: Uuid,
 ) -> Result<(), Box<dyn Error>> {
     query!(
