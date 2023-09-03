@@ -26,6 +26,12 @@ struct SheetNameArg {
 }
 
 #[derive(Serialize, Deserialize)]
+struct UpdateColumnsArgs {
+    sheetid: Uuid,
+    columnsidentifiers: Vec<(Uuid, String, ColumnValue)>,
+}
+
+#[derive(Serialize, Deserialize)]
 struct RowsDeleteArg {
     sheetid: Uuid,
     rowsids: Vec<Uuid>,
@@ -343,7 +349,6 @@ pub fn ShowSheet() -> impl IntoView {
             *xs = list;
         })
     };
-
     let primary_row_columns = create_memo(move |_| {
         sheet_resource
             .get()
@@ -361,70 +366,21 @@ pub fn ShowSheet() -> impl IntoView {
         let Some(sheet) = sheet_resource.get() else {
             return;
         };
+        let sheetid = sheet.id;
         let sheet_name = sheet_name.get();
-        let mut deleted_rows = deleted_rows.get();
-        let mut added_rows = added_rows.get();
-        let current_rows = sheet.rows;
-        let modified_primary_columns = modified_primary_columns.get();
-        if !modified_primary_columns.is_empty() {
-            deleted_rows.push(sheet.id);
-            let mut columns = primary_row_columns.get();
-            for (header, column) in modified_primary_columns {
-                columns.insert(header, column);
-            }
-            added_rows.push(Row {
-                id: sheet.id,
-                columns,
-            });
-        }
-        for c in modified_columns.get() {
-            let ColumnIdentity {
-                row_id,
-                header,
-                value,
-            } = c;
-            if let [current_row] = current_rows
-                .iter()
-                .filter(|x| x.id == row_id)
-                .collect::<Vec<_>>()[..]
-            {
-                if !deleted_rows.contains(&row_id) {
-                    deleted_rows.push(row_id);
-                }
-
-                let mut columns = current_row.columns.clone();
-                if let Some(column) = columns
-                    .get(&header)
-                    .and_then(|c| Some(Column { value, ..c.clone() }))
-                {
-                    match added_rows
-                        .iter()
-                        .filter(|x| x.id == row_id)
-                        .collect::<Vec<_>>()
-                        .first()
-                    {
-                        Some(row) => {
-                            let mut columns = row.columns.clone();
-                            columns.insert(header, column);
-                            let row = Row {
-                                id: row_id,
-                                columns,
-                            };
-                            added_rows.retain(|x| x.id != row_id);
-                            added_rows.push(row);
-                        }
-                        None => {
-                            columns.insert(header, column);
-                            let row = Row {
-                                id: row_id,
-                                columns,
-                            };
-                            added_rows.push(row);
-                        }
-                    }
-                };
-            }
-        }
+        let deleted_rows = deleted_rows.get();
+        let added_rows = added_rows.get();
+        let modified_primary_columns = modified_primary_columns
+            .get()
+            .into_iter()
+            .map(|(header, column)| (sheetid, header, column.value));
+        let columnsidentifiers = modified_columns
+            .get()
+            .into_iter()
+            .map(|x| (x.row_id, x.header, x.value))
+            .chain(modified_primary_columns)
+            .collect::<Vec<_>>();
+        let mut success = true;
         spawn_local(async move {
             if !sheet_name.is_empty() && sheet_name != sheet.sheet_name {
                 match invoke::<_, ()>(
@@ -438,11 +394,11 @@ pub fn ShowSheet() -> impl IntoView {
                 )
                 .await
                 {
-                    Ok(_) => {
-                        set_sheet_name.set(String::from(""));
-                        message("نجح تغيير الاسم").await
+                    Ok(_) => set_sheet_name.set(String::from("")),
+                    Err(err) => {
+                        alert(err.to_string().as_str()).await;
+                        success = false;
                     }
-                    Err(err) => alert(err.to_string().as_str()).await,
                 }
             }
             if !deleted_rows.is_empty() {
@@ -457,9 +413,11 @@ pub fn ShowSheet() -> impl IntoView {
                 {
                     Ok(_) => {
                         set_deleted_rows.set(Vec::new());
-                        message("نجح الحذف").await
                     }
-                    Err(err) => alert(err.to_string().as_str()).await,
+                    Err(err) => {
+                        alert(err.to_string().as_str()).await;
+                        success = false;
+                    }
                 }
             }
             if !added_rows.is_empty() {
@@ -474,10 +432,36 @@ pub fn ShowSheet() -> impl IntoView {
                 {
                     Ok(_) => {
                         set_added_rows.set(Vec::new());
-                        message("نجحت الاضافة").await
                     }
-                    Err(err) => alert(err.to_string().as_str()).await,
+                    Err(err) => {
+                        alert(err.to_string().as_str()).await;
+                        success = false;
+                    }
                 }
+            }
+
+            if !columnsidentifiers.is_empty() {
+                match invoke::<_, ()>(
+                    "update_columns",
+                    &UpdateColumnsArgs {
+                        sheetid,
+                        columnsidentifiers,
+                    },
+                )
+                .await
+                {
+                    Ok(_) => {
+                        set_modified_columns.set(Vec::new());
+                        set_modified_primary_columns.set(HashMap::new());
+                    }
+                    Err(err) => {
+                        alert(err.to_string().as_str()).await;
+                        success = false;
+                    }
+                }
+            }
+            if success {
+                message("نجحت الاضافة").await
             }
         });
         set_edit_mode.set(false);

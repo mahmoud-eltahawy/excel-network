@@ -1,0 +1,15 @@
+services:
+  postgres:
+    container_name: postgres
+    environment:
+      PGDATA: /home/mahmoude/postgres
+      POSTGRES_PASSWORD: admin
+      POSTGRES_USER: admin
+    image: postgres
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    volumes:
+      - postgres:/home/mahmoude/postgres
+volumes:
+  postgres:

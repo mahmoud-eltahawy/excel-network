@@ -249,9 +249,9 @@ async fn save_columns(
 async fn update_columns(
     app_state: tauri::State<'_, AppState>,
     sheetid: Uuid,
-    rows_headers: Vec<(Uuid, String, ColumnValue)>,
+    columnsidentifiers: Vec<(Uuid, String, ColumnValue)>,
 ) -> Result<(), String> {
-    let columns_ids = rows_headers
+    let columns_ids = columnsidentifiers
         .into_iter()
         .map(|(row_id, header, value)| {
             (
