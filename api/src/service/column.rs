@@ -9,19 +9,23 @@ use crate::AppState;
 use models::{ColumnId, ColumnValue};
 
 pub fn scope() -> Scope {
-    web::scope("/column")
-        .service(delete_column)
+    web::scope("/columns")
+        .service(delete_columns)
         .service(update_columns)
-        .service(save_column)
+        .service(save_columns)
 }
 
 #[post("/delete")]
-async fn delete_column(state: web::Data<AppState>, ids: web::Json<ColumnId>) -> impl Responder {
-    let ids = ids.into_inner();
-    match delete_column_by_column_id(&state, ids).await {
-        Ok(_) => HttpResponse::Ok().into(),
-        Err(err) => HttpResponse::InternalServerError().json(err.to_string()),
+async fn delete_columns(
+    state: web::Data<AppState>,
+    ids: web::Json<Vec<ColumnId>>,
+) -> impl Responder {
+    for ids in ids.into_inner() {
+        if let Err(err) = delete_column_by_column_id(&state, ids).await {
+            return HttpResponse::InternalServerError().json(err.to_string());
+        }
     }
+    HttpResponse::Ok().into()
 }
 
 #[put("/")]
@@ -39,22 +43,24 @@ async fn update_columns(
 }
 
 #[post("/")]
-async fn save_column(
+async fn save_columns(
     state: web::Data<AppState>,
-    ids_and_value: web::Json<(ColumnId, ColumnValue)>,
+    ids_and_values: web::Json<Vec<(ColumnId, ColumnValue)>>,
 ) -> impl Responder {
-    let (
-        ColumnId {
-            sheet_id,
-            row_id,
-            header,
-        },
-        value,
-    ) = ids_and_value.into_inner();
-    match save_cloumn_value(&state, &sheet_id, &row_id, header, value).await {
-        Ok(_) => HttpResponse::Ok().into(),
-        Err(err) => HttpResponse::InternalServerError().json(err.to_string()),
+    for ids_and_value in ids_and_values.into_inner() {
+        let (
+            ColumnId {
+                sheet_id: _,
+                row_id,
+                header,
+            },
+            value,
+        ) = ids_and_value;
+        if let Err(err) = save_cloumn_value(&state, &row_id, header, value).await {
+            return HttpResponse::InternalServerError().json(err.to_string());
+        }
     }
+    HttpResponse::Ok().into()
 }
 
 pub async fn delete_column_by_column_id(
@@ -115,11 +121,11 @@ pub async fn update_column_by_column_id(
 
 pub async fn save_cloumn_value(
     state: &AppState,
-    column_id: &Uuid,
     row_id: &Uuid,
     header_name: String,
     value: ColumnValue,
 ) -> Result<(), Box<dyn Error>> {
+    let column_id = Uuid::new_v4();
     let value = serde_json::json!(value);
     query!(
         r#"

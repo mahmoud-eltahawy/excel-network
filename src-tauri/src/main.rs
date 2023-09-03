@@ -6,8 +6,8 @@ mod api;
 use chrono::{Local, NaiveDate};
 use dotenv::dotenv;
 use models::{
-    Column, ColumnValue, Config, ConfigValue, ImportConfig, Name, Row, RowIdentity, RowsSort,
-    SearchSheetParams, Sheet, SheetConfig,
+    Column, ColumnId, ColumnValue, Config, ConfigValue, ImportConfig, Name, Row, RowIdentity,
+    RowsSort, SearchSheetParams, Sheet, SheetConfig,
 };
 use std::{
     collections::HashMap,
@@ -199,6 +199,77 @@ async fn delete_rows_from_sheet(
         Err(err) => Err(err.to_string()),
     }
 }
+
+#[tauri::command]
+async fn delete_columns(
+    app_state: tauri::State<'_, AppState>,
+    sheetid: Uuid,
+    rows_headers: Vec<(Uuid, String)>,
+) -> Result<(), String> {
+    let columns_ids = rows_headers
+        .into_iter()
+        .map(|(row_id, header)| ColumnId {
+            sheet_id: sheetid,
+            row_id,
+            header,
+        })
+        .collect::<Vec<_>>();
+    match api::delete_columns(&app_state, columns_ids).await {
+        Ok(_) => Ok(()),
+        Err(err) => Err(err.to_string()),
+    }
+}
+
+#[tauri::command]
+async fn save_columns(
+    app_state: tauri::State<'_, AppState>,
+    sheetid: Uuid,
+    rows_headers: Vec<(Uuid, String, ColumnValue)>,
+) -> Result<(), String> {
+    let columns_ids = rows_headers
+        .into_iter()
+        .map(|(row_id, header, value)| {
+            (
+                ColumnId {
+                    sheet_id: sheetid,
+                    row_id,
+                    header,
+                },
+                value,
+            )
+        })
+        .collect::<Vec<_>>();
+    match api::save_columns(&app_state, columns_ids).await {
+        Ok(_) => Ok(()),
+        Err(err) => Err(err.to_string()),
+    }
+}
+
+#[tauri::command]
+async fn update_columns(
+    app_state: tauri::State<'_, AppState>,
+    sheetid: Uuid,
+    rows_headers: Vec<(Uuid, String, ColumnValue)>,
+) -> Result<(), String> {
+    let columns_ids = rows_headers
+        .into_iter()
+        .map(|(row_id, header, value)| {
+            (
+                ColumnId {
+                    sheet_id: sheetid,
+                    row_id,
+                    header,
+                },
+                value,
+            )
+        })
+        .collect::<Vec<_>>();
+    match api::update_columns(&app_state, columns_ids).await {
+        Ok(_) => Ok(()),
+        Err(err) => Err(err.to_string()),
+    }
+}
+
 #[tauri::command]
 async fn export_sheet(headers: Vec<String>, sheet: Sheet) -> Result<(), String> {
     match write_sheet(headers, sheet).await {
@@ -347,6 +418,9 @@ fn main() {
             import_sheet,
             get_priorities,
             get_rows_ids,
+            delete_columns,
+            save_columns,
+            update_columns,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

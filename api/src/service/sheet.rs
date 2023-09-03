@@ -393,7 +393,7 @@ async fn save_row(state: &AppState, sheet_id: &Uuid, row: Row) -> Result<(), Box
     .await?;
     for (header_name, column) in columns {
         if column.is_basic {
-            save_cloumn_value(state, &Uuid::new_v4(), &id, header_name, column.value).await?;
+            save_cloumn_value(state, &id, header_name, column.value).await?;
         }
     }
     Ok(())

@@ -1,4 +1,4 @@
-use models::{Name, Row, SearchSheetParams, Sheet};
+use models::{ColumnId, ColumnValue, Name, Row, SearchSheetParams, Sheet};
 use reqwest::StatusCode;
 use uuid::Uuid;
 
@@ -30,6 +30,60 @@ pub async fn update_sheet_name(
     let res = reqwest::Client::new()
         .put(format!("{origin}/sheet/name"))
         .json(name)
+        .send()
+        .await?;
+
+    if res.status() == StatusCode::OK {
+        Ok(())
+    } else {
+        Err(res.json::<String>().await?.into())
+    }
+}
+
+pub async fn update_columns(
+    app_state: &AppState,
+    args: Vec<(ColumnId, ColumnValue)>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let origin = &app_state.origin;
+    let res = reqwest::Client::new()
+        .put(format!("{origin}/columns"))
+        .json(&args)
+        .send()
+        .await?;
+
+    if res.status() == StatusCode::OK {
+        Ok(())
+    } else {
+        Err(res.json::<String>().await?.into())
+    }
+}
+
+pub async fn save_columns(
+    app_state: &AppState,
+    args: Vec<(ColumnId, ColumnValue)>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let origin = &app_state.origin;
+    let res = reqwest::Client::new()
+        .post(format!("{origin}/columns"))
+        .json(&args)
+        .send()
+        .await?;
+
+    if res.status() == StatusCode::OK {
+        Ok(())
+    } else {
+        Err(res.json::<String>().await?.into())
+    }
+}
+
+pub async fn delete_columns(
+    app_state: &AppState,
+    ids: Vec<ColumnId>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let origin = &app_state.origin;
+    let res = reqwest::Client::new()
+        .post(format!("{origin}/columns/delete"))
+        .json(&ids)
         .send()
         .await?;
 
