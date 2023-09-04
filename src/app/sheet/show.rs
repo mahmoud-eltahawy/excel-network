@@ -350,12 +350,11 @@ pub fn ShowSheet() -> impl IntoView {
         })
     };
     let primary_row_columns = create_memo(move |_| {
-        sheet_resource
-            .get()
-            .map(|x| x.rows)
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|x| x.id == sheet_resource.get().unwrap_or_default().id)
+        let Some(Sheet { id, rows, .. }) = sheet_resource.get() else {
+            return HashMap::new();
+        };
+        rows.into_iter()
+            .filter(|x| x.id == id)
             .collect::<Vec<_>>()
             .first()
             .map(|x| x.columns.clone())
@@ -370,15 +369,53 @@ pub fn ShowSheet() -> impl IntoView {
         let sheet_name = sheet_name.get();
         let deleted_rows = deleted_rows.get();
         let added_rows = added_rows.get();
-        let modified_primary_columns = modified_primary_columns
+        let new_row_primary_columns = modified_primary_columns
             .get()
             .into_iter()
+            .filter(|(header, _)| {
+                primary_row_columns
+                    .get()
+                    .iter()
+                    .all(|(old_header, _)| header != old_header)
+            })
             .map(|(header, column)| (sheetid, header, column.value));
-        let columnsidentifiers = modified_columns
+        let updated_row_primary_columns = modified_primary_columns
             .get()
             .into_iter()
+            .filter(|(header, _)| {
+                primary_row_columns
+                    .get()
+                    .iter()
+                    .any(|(old_header, _)| header == old_header)
+            })
+            .map(|(header, column)| (sheetid, header, column.value));
+
+        let new_columnsidentifiers = modified_columns
+            .get()
+            .into_iter()
+            .filter(|ColumnIdentity { row_id, header, .. }| {
+                sheet
+                    .rows
+                    .iter()
+                    .filter(|x| x.id.clone() == *row_id)
+                    .any(|x| x.columns.keys().any(|x| x != header))
+            })
             .map(|x| (x.row_id, x.header, x.value))
-            .chain(modified_primary_columns)
+            .chain(new_row_primary_columns)
+            .collect::<Vec<_>>();
+
+        let updated_columnsidentifiers = modified_columns
+            .get()
+            .into_iter()
+            .filter(|ColumnIdentity { row_id, header, .. }| {
+                sheet
+                    .rows
+                    .iter()
+                    .filter(|x| x.id.clone() == *row_id)
+                    .any(|x| x.columns.keys().any(|x| x == header))
+            })
+            .map(|x| (x.row_id, x.header, x.value))
+            .chain(updated_row_primary_columns)
             .collect::<Vec<_>>();
         let mut success = true;
         spawn_local(async move {
@@ -394,7 +431,7 @@ pub fn ShowSheet() -> impl IntoView {
                 )
                 .await
                 {
-                    Ok(_) => set_sheet_name.set(String::from("")),
+                    Ok(_) => (),
                     Err(err) => {
                         alert(err.to_string().as_str()).await;
                         success = false;
@@ -411,9 +448,7 @@ pub fn ShowSheet() -> impl IntoView {
                 )
                 .await
                 {
-                    Ok(_) => {
-                        set_deleted_rows.set(Vec::new());
-                    }
+                    Ok(_) => (),
                     Err(err) => {
                         alert(err.to_string().as_str()).await;
                         success = false;
@@ -430,9 +465,7 @@ pub fn ShowSheet() -> impl IntoView {
                 )
                 .await
                 {
-                    Ok(_) => {
-                        set_added_rows.set(Vec::new());
-                    }
+                    Ok(_) => (),
                     Err(err) => {
                         alert(err.to_string().as_str()).await;
                         success = false;
@@ -440,32 +473,52 @@ pub fn ShowSheet() -> impl IntoView {
                 }
             }
 
-            if !columnsidentifiers.is_empty() {
+            if !updated_columnsidentifiers.is_empty() {
                 match invoke::<_, ()>(
                     "update_columns",
                     &UpdateColumnsArgs {
                         sheetid,
-                        columnsidentifiers,
+                        columnsidentifiers: updated_columnsidentifiers,
                     },
                 )
                 .await
                 {
-                    Ok(_) => {
-                        set_modified_columns.set(Vec::new());
-                        set_modified_primary_columns.set(HashMap::new());
-                    }
+                    Ok(_) => (),
                     Err(err) => {
                         alert(err.to_string().as_str()).await;
                         success = false;
                     }
                 }
             }
+
+            if !new_columnsidentifiers.is_empty() {
+                match invoke::<_, ()>(
+                    "save_columns",
+                    &UpdateColumnsArgs {
+                        sheetid,
+                        columnsidentifiers: new_columnsidentifiers,
+                    },
+                )
+                .await
+                {
+                    Ok(_) => (),
+                    Err(err) => {
+                        alert(err.to_string().as_str()).await;
+                        success = false;
+                    }
+                }
+            }
+
             if success {
                 message("نجحت الاضافة").await
             }
         });
         set_edit_mode.set(false);
+        set_sheet_name.set(String::from(""));
+        set_deleted_rows.set(Vec::new());
+        set_added_rows.set(Vec::new());
         set_modified_columns.set(Vec::new());
+        set_modified_primary_columns.set(HashMap::new());
         sheet_resource.refetch();
     };
 

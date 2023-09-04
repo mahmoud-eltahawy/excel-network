@@ -64,7 +64,7 @@ pub async fn save_columns(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let origin = &app_state.origin;
     let res = reqwest::Client::new()
-        .post(format!("{origin}/columns"))
+        .post(format!("{origin}/columns/"))
         .json(&args)
         .send()
         .await?;
