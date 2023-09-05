@@ -14,8 +14,8 @@ use tauri_sys::{
 use uuid::Uuid;
 
 use models::{
-    Column, ColumnConfig, ColumnProps, ColumnValue, Operation, OperationConfig, Row, ValueType,
-    OperationKind,RowsSort
+    Column, ColumnConfig, ColumnProps, ColumnValue, Operation, OperationConfig, OperationKind, Row,
+    RowsSort, ValueType,
 };
 
 use std::rc::Rc;
@@ -36,13 +36,13 @@ struct ImportSheetArgs {
     filepath: String,
 }
 
-pub async fn import_sheet_rows(sheetid: Uuid,sheettype: String, filepath: String) -> Vec<Row> {
+pub async fn import_sheet_rows(sheetid: Uuid, sheettype: String, filepath: String) -> Vec<Row> {
     invoke::<ImportSheetArgs, Vec<Row>>(
         "import_sheet",
         &ImportSheetArgs {
             sheettype,
             filepath,
-	    sheetid,
+            sheetid,
         },
     )
     .await
@@ -79,17 +79,17 @@ pub async fn open_file() -> Option<String> {
         Ok(v) => Some(v),
         Err(_) => {
             let Ok(home_dir) = home_dir().await else {
-		return None;
-	    };
+                return None;
+            };
             Some(home_dir.join("Downloads"))
         }
     };
     let Some(download_dir) = download_dir else {
-	return None;
+        return None;
     };
     builder.set_default_path(download_dir.as_path());
     let Ok(Some(path)) = builder.pick_file().await else {
-	return None;
+        return None;
     };
     Some(path.display().to_string())
 }
@@ -100,7 +100,7 @@ where
     Fa: Fn() -> Vec<String> + 'static,
     Fb: Fn() -> Vec<String> + 'static,
 {
-    view! { 
+    view! {
         <thead>
             <tr>
                 <For
@@ -123,109 +123,104 @@ where
     }
 }
 
-
 #[component]
-fn ColumnEdit<F1,F2,F3>(
-    mode : F1,
-    cancel : F2,
+fn ColumnEdit<F1, F2, F3>(
+    mode: F1,
+    cancel: F2,
     priorities: F3,
     set_rows: WriteSignal<Vec<Row>>,
 ) -> impl IntoView
-    where
-	F1 : Fn() -> (String,Uuid,Rc<HashMap<String,Column>>) + 'static,
-        F2 : Fn() + 'static + Clone + Copy,
-        F3 : Fn() -> Vec<String> + 'static + Clone + Copy
+where
+    F1: Fn() -> (String, Uuid, Rc<HashMap<String, Column>>) + 'static,
+    F2: Fn() + 'static + Clone + Copy,
+    F3: Fn() -> Vec<String> + 'static + Clone + Copy,
 {
-    let (header,id ,map) = mode();
-    let (column_value,set_column_value) = create_signal( map.clone().get(&header).map(|x| x.value.clone()));
-    let (top,set_top) = create_signal( None::<usize>);
-    let (down,set_down) = create_signal( None::<usize>);
+    let (header, id, map) = mode();
+    let (column_value, set_column_value) =
+        create_signal(map.clone().get(&header).map(|x| x.value.clone()));
+    let (top, set_top) = create_signal(None::<usize>);
+    let (down, set_down) = create_signal(None::<usize>);
     let header = Rc::new(header);
     let on_input = move |ev| {
-	let value = event_target_value(&ev);
-	let value = match column_value.get() {
-	    Some(ColumnValue::Float(_)) => ColumnValue::Float(value.parse().unwrap_or_default()),
-	    Some(ColumnValue::Date(_)) => ColumnValue::Date(Some(value.parse().unwrap_or_default())),
-	    _ => ColumnValue::String(Some(value)),
-	};
-	set_column_value.set(Some(value));
+        let value = event_target_value(&ev);
+        let value = match column_value.get() {
+            Some(ColumnValue::Float(_)) => ColumnValue::Float(value.parse().unwrap_or_default()),
+            Some(ColumnValue::Date(_)) => {
+                ColumnValue::Date(Some(value.parse().unwrap_or_default()))
+            }
+            _ => ColumnValue::String(Some(value)),
+        };
+        set_column_value.set(Some(value));
     };
 
     let save = move |_| {
-	let Some(value) = column_value.get() else {
-	    return;
-	};
-	let mut rows = Vec::new();
-	set_rows.update(|xs| {
-	    let Some(index) = xs.iter().position(|x| x.id == id) else {
-		return;
-	    };
-	    rows = match (top.get(),down.get()) {
-		(None,None) => vec![xs.remove(index)],
-		(Some(up),None) => {
-		    let begin = if up > index {
-			0
-		    } else {
-			index - up
-		    };
-		    let mut rows = Vec::new();
-		    for i in (begin..=index).rev() {
-			rows.push(xs.remove(i));
-		    }
-		    rows
-		},
-		(None,Some(down)) => {
-		    let len = xs.len();
-		    let end = if down >= len {
-			len -1
-		    } else {
-			index + down -1
-		    };
-		    let mut rows = Vec::new();
-		    for i in (index..=end).rev() {
-			rows.push(xs.remove(i));
-		    }
-		    rows
-		},
-		(Some(up),Some(down)) => {
-		    let len = xs.len();
-		    let begin = if up > index {
-			0
-		    } else {
-			index - up
-		    };
-		    let end = if down >= len {
-			len -1
-		    } else {
-			index + down
-		    };
-		    let mut rows = Vec::new();
-		    for i in (begin..=end).rev() {
-			rows.push(xs.remove(i));
-		    }
-		    rows
-		},
-	    };
-	});
-	set_rows.update(|xs| {
-	    let rows = rows.into_iter().map(|row| {
-		let mut columns = row.columns;
-		columns.insert(header.to_string(), Column { is_basic: true, value : value.clone() });
-		Row{columns,..row}
-	    }).collect::<Vec<_>>();
-	    let mut rows = xs
-		.iter()
-		.cloned()
-		.chain(rows)
-		.collect::<Vec<_>>();
-	    rows.sort_rows(priorities());
-	    *xs = rows;
-	});
-	set_down.set(None);
-	set_top.set(None);
-	cancel()
+        let Some(value) = column_value.get() else {
+            return;
+        };
+        let mut rows = Vec::new();
+        set_rows.update(|xs| {
+            let Some(index) = xs.iter().position(|x| x.id == id) else {
+                return;
+            };
+            rows = match (top.get(), down.get()) {
+                (None, None) => vec![xs.remove(index)],
+                (Some(up), None) => {
+                    let begin = if up > index { 0 } else { index - up };
+                    let mut rows = Vec::new();
+                    for i in (begin..=index).rev() {
+                        rows.push(xs.remove(i));
+                    }
+                    rows
+                }
+                (None, Some(down)) => {
+                    let len = xs.len();
+                    let end = if down >= len {
+                        len - 1
+                    } else {
+                        index + down - 1
+                    };
+                    let mut rows = Vec::new();
+                    for i in (index..=end).rev() {
+                        rows.push(xs.remove(i));
+                    }
+                    rows
+                }
+                (Some(up), Some(down)) => {
+                    let len = xs.len();
+                    let begin = if up > index { 0 } else { index - up };
+                    let end = if down >= len { len - 1 } else { index + down };
+                    let mut rows = Vec::new();
+                    for i in (begin..=end).rev() {
+                        rows.push(xs.remove(i));
+                    }
+                    rows
+                }
+            };
+        });
+        set_rows.update(|xs| {
+            let rows = rows
+                .into_iter()
+                .map(|row| {
+                    let mut columns = row.columns;
+                    columns.insert(
+                        header.to_string(),
+                        Column {
+                            is_basic: true,
+                            value: value.clone(),
+                        },
+                    );
+                    Row { columns, ..row }
+                })
+                .collect::<Vec<_>>();
+            let mut rows = xs.iter().cloned().chain(rows).collect::<Vec<_>>();
+            rows.sort_rows(priorities());
+            *xs = rows;
+        });
+        set_down.set(None);
+        set_top.set(None);
+        cancel()
     };
-    view! { 
+    view! {
         <div class="popup">
             <input
                 type=move || match column_value.get() {
@@ -242,15 +237,15 @@ fn ColumnEdit<F1,F2,F3>(
                 on:input=on_input
             />
             <input
-		type="number"
-	        placeholder="لاعلي"
-	        on:input=move |ev| set_top.set(Some(event_target_value(&ev).parse().unwrap_or_default()))
-	    />
+        type="number"
+            placeholder="لاعلي"
+            on:input=move |ev| set_top.set(Some(event_target_value(&ev).parse().unwrap_or_default()))
+        />
             <input
-		type="number"
-	        placeholder="لاسفل"
-	        on:input=move |ev| set_down.set(Some(event_target_value(&ev).parse().unwrap_or_default()))
-	    />
+        type="number"
+            placeholder="لاسفل"
+            on:input=move |ev| set_down.set(Some(event_target_value(&ev).parse().unwrap_or_default()))
+        />
             <button on:click=move|_| cancel() class="centered-button">
                 "الغاء"
             </button>
@@ -262,7 +257,7 @@ fn ColumnEdit<F1,F2,F3>(
 }
 
 #[component]
-pub fn ShowNewRows<BH, CH, FD,FP,FI>(
+pub fn ShowNewRows<BH, CH, FD, FP, FI>(
     basic_headers: BH,
     calc_headers: CH,
     delete_row: FD,
@@ -278,14 +273,15 @@ where
     FD: Fn(Uuid) + 'static + Clone + Copy,
     FI: Fn() -> Uuid + 'static + Clone + Copy,
 {
-    let (edit_column,set_edit_column) = create_signal( None::<(String,Uuid,Rc<HashMap<String,Column>>)>);
-    let new_rows = create_memo(move |_| rows
-	    .get()
-	    .into_iter()
-	    .filter(|x| x.id != sheet_id())
-	    .collect::<Vec<_>>()
-    );
-    view! { 
+    let (edit_column, set_edit_column) =
+        create_signal(None::<(String, Uuid, Rc<HashMap<String, Column>>)>);
+    let new_rows = create_memo(move |_| {
+        rows.get()
+            .into_iter()
+            .filter(|x| x.id != sheet_id())
+            .collect::<Vec<_>>()
+    });
+    view! {
         <>
             <Show
                 when=move || edit_column.get().is_some()
@@ -297,7 +293,7 @@ where
                     mode=move || edit_column.get().unwrap()
                     cancel=move || set_edit_column.set(None)
                     set_rows=set_rows
-		    priorities=priorities
+            priorities=priorities
                 />
             </Show>
             <For
@@ -305,11 +301,11 @@ where
                 key=|row| row.id
                 view=move | Row { columns, id }| {
                     let columns = Rc::new(columns);
-                    view! { 
+                    view! {
                         <tr>
                             {
                                 let columns = columns.clone();
-                                view! { 
+                                view! {
                                     <For
                                         each=basic_headers
                                         key=|key| key.clone()
@@ -318,7 +314,7 @@ where
                                             let columns2 = columns1.clone();
                                             let col_name1 = column;
                                             let col_name2 = col_name1.clone();
-                                            view! { 
+                                            view! {
                                                 <td
                                                     style="cursor: pointer"
                                                     on:dblclick=move |_| set_edit_column.set(Some((col_name1.clone(), id, columns1.clone())))
@@ -331,7 +327,7 @@ where
                                 }
                             } <td class="shapeless">"  "</td> {
                                 let columns = columns.clone();
-                                view! { 
+                                view! {
                                     <For
                                         each=calc_headers
                                         key=|key| key.clone()
@@ -374,7 +370,7 @@ where
     BH: Fn() -> Vec<String> + 'static + Clone,
     CH: Fn() -> Vec<String> + 'static,
 {
-    let basic_signals_map = create_memo( move |_| {
+    let basic_signals_map = create_memo(move |_| {
         let mut map = HashMap::new();
         for x in basic_columns.get().into_iter() {
             match x {
@@ -384,7 +380,7 @@ where
                 }) => {
                     map.insert(
                         header,
-                        ColumnSignal::String(create_signal( (String::from(""), is_completable))),
+                        ColumnSignal::String(create_signal((String::from(""), is_completable))),
                     );
                 }
                 ColumnConfig::Date(ColumnProps {
@@ -393,10 +389,10 @@ where
                 }) => {
                     map.insert(
                         header,
-                        ColumnSignal::Date(create_signal(
-                            
-                            (Local::now().date_naive(), is_completable),
-                        )),
+                        ColumnSignal::Date(create_signal((
+                            Local::now().date_naive(),
+                            is_completable,
+                        ))),
                     );
                 }
                 ColumnConfig::Float(ColumnProps {
@@ -405,7 +401,7 @@ where
                 }) => {
                     map.insert(
                         header,
-                        ColumnSignal::Float(create_signal( (0.0, is_completable))),
+                        ColumnSignal::Float(create_signal((0.0, is_completable))),
                     );
                 }
             }
@@ -413,7 +409,7 @@ where
         map
     });
 
-    let calc_signals_map = create_memo( move |_| {
+    let calc_signals_map = create_memo(move |_| {
         let mut map = HashMap::new();
         for OperationConfig { header, value } in calc_columns.get().into_iter() {
             let mut basic_map = HashMap::new();
@@ -425,7 +421,10 @@ where
                 };
                 basic_map.insert(header, column_value);
             }
-            map.insert(header, resolve_operation(&value, basic_map).unwrap_or_default());
+            map.insert(
+                header,
+                resolve_operation(&value, basic_map).unwrap_or_default(),
+            );
         }
         map
     });
@@ -468,7 +467,7 @@ where
         })
     };
 
-    view! { 
+    view! {
         <>
             <For
                 each=move || basic_headers().clone()
@@ -482,7 +481,7 @@ where
                 each=move || calc_headers().clone()
                 key=|x| x.clone()
                 view=move | header| {
-                    view! { 
+                    view! {
                         <td>
                             {move || match calc_signals_map.get().get(&header) {
                                 Some(x) => format!("{:.2}",* x),
@@ -515,7 +514,7 @@ fn MyInput(
         Some(ColumnSignal::Date((read, _))) => ("date", read.get().0.to_string()),
         None => ("", "".to_string()),
     };
-    view! { 
+    view! {
         <td>
             <input
                 type=i_type
@@ -537,194 +536,203 @@ fn MyInput(
     }
 }
 
+#[derive(Clone)]
+pub enum EditState {
+    Primary,
+    NonePrimary,
+    LoadFile,
+    None,
+}
+
 #[component]
-pub fn PrimaryRow<FP,FN>(
-    primary_headers : FP,
-    non_primary_headers : FN,
-    columns : Memo<HashMap<String,Column>>,
-    new_columns: ReadSignal<HashMap<String,Column>>,
-    set_new_columns: WriteSignal<HashMap<String,Column>>,
-    edit_mode: ReadSignal<bool>,
+pub fn PrimaryRow<FP, FN>(
+    primary_headers: FP,
+    non_primary_headers: FN,
+    columns: Memo<HashMap<String, Column>>,
+    new_columns: ReadSignal<HashMap<String, Column>>,
+    set_new_columns: WriteSignal<HashMap<String, Column>>,
+    edit_mode: ReadSignal<EditState>,
 ) -> impl IntoView
-    where FP : Fn() -> Vec<String> + 'static + Clone + Copy,
-	  FN : Fn() -> Vec<String> + 'static + Clone + Copy
+where
+    FP: Fn() -> Vec<String> + 'static + Clone + Copy,
+    FN: Fn() -> Vec<String> + 'static + Clone + Copy,
 {
-    let (add_what,set_add_what) = create_signal(None::<&str>);
-    let (header,set_header) = create_signal(String::from(""));
-    let (column_value,set_column_value) = create_signal(ColumnValue::Float(0.0));
+    let (add_what, set_add_what) = create_signal(None::<&str>);
+    let (header, set_header) = create_signal(String::from(""));
+    let (column_value, set_column_value) = create_signal(ColumnValue::Float(0.0));
 
-    let headers = move ||{
-	let mut primary_headers = primary_headers();
+    let headers = move || {
+        let mut primary_headers = primary_headers();
 
-	let mut non_primary_headers = non_primary_headers();
+        let mut non_primary_headers = non_primary_headers();
 
-	let space = non_primary_headers.len() as i32 - primary_headers.len() as i32;
+        let space = non_primary_headers.len() as i32 - primary_headers.len() as i32;
 
-	if space > 0 {
-	    primary_headers
-		.extend((0..space).map(|_| "".to_string()));
-	} else if space < 0 {
-	    let space = space * -1;
-	    non_primary_headers
-		.extend((0..space).map(|_| "".to_string()));
-	}
+        if space > 0 {
+            primary_headers.extend((0..space).map(|_| "".to_string()));
+        } else if space < 0 {
+            let space = space * -1;
+            non_primary_headers.extend((0..space).map(|_| "".to_string()));
+        }
 
-	primary_headers.into_iter().zip(non_primary_headers).collect::<Vec<_>>()
+        primary_headers
+            .into_iter()
+            .zip(non_primary_headers)
+            .collect::<Vec<_>>()
     };
 
-    let all_columns = create_memo(move |_| columns
-	.get()
-	.into_iter()
-	.chain(new_columns.get())
-	.collect::<HashMap<_,_>>()
-    );
-
-
-    let on_value_input = move |ev| set_column_value.update(|x| match x {
-	ColumnValue::String(_) => *x = ColumnValue::String(Some(event_target_value(&ev))), 
-	ColumnValue::Date(_) => *x = ColumnValue::Date(Some(event_target_value(&ev).parse().unwrap_or_default())), 
-	ColumnValue::Float(_) => *x = ColumnValue::Float(event_target_value(&ev).parse().unwrap_or_default()), 
+    let all_columns = create_memo(move |_| {
+        columns
+            .get()
+            .into_iter()
+            .chain(new_columns.get())
+            .collect::<HashMap<_, _>>()
     });
 
+    let on_value_input = move |ev| {
+        set_column_value.update(|x| match x {
+            ColumnValue::String(_) => *x = ColumnValue::String(Some(event_target_value(&ev))),
+            ColumnValue::Date(_) => {
+                *x = ColumnValue::Date(Some(event_target_value(&ev).parse().unwrap_or_default()))
+            }
+            ColumnValue::Float(_) => {
+                *x = ColumnValue::Float(event_target_value(&ev).parse().unwrap_or_default())
+            }
+        })
+    };
+
     let append = move |_| {
-	set_new_columns.update(|map| {
-	    map.insert(
-	    header.get(),
-	    Column {
-		is_basic: true,
-		value: column_value.get()
-	    });
-	});
-	set_add_what.set(None);
+        set_new_columns.update(|map| {
+            map.insert(
+                header.get(),
+                Column {
+                    is_basic: true,
+                    value: column_value.get(),
+                },
+            );
+        });
+        set_add_what.set(None);
     };
 
     view! {
-	<>
-	<table>
-	    <For
-		each=move || headers()
-		key=|x| x.0.clone() + &x.1
-		view=move |(primary,non_primary)| view!{
-		    <tr>
-			<td>{primary.clone()}</td>
-			<td class="shapeless">" "</td>
-			<td>{move ||columns
-			     .get()
-			     .get(&primary)
-			     .map(|x| x.value.to_string()
-				  + &new_columns
-				  .get()
-				  .get(&primary)
-				  .map(|x| if edit_mode.get() {
-					" => ".to_string() + &x.value.to_string()  
-				    } else {
-					"".to_string()
-				    }
-				  )
-				  .unwrap_or_default()
-			     )
-			}
-			</td>
-			<td class="shapeless">" "</td>
-			<td class="shapeless">" | "</td>
-			<td class="shapeless">" "</td>
-			<td>{non_primary.clone()}</td>
-			<td class="shapeless">" "</td>
-			<td>{move ||all_columns.get().get(&non_primary).map(|x| x.value.to_string())}</td>
-		    </tr>
-		}
-	    />
-	</table>
-	<Show
-	    when=move || edit_mode.get()
-	    fallback=move|| view!{<></>}
-	>
-	    <Show
-		when=move || add_what.get().is_some()
-		fallback=move|| view!{
-		<>
-		    <button
-		    class="centered-button"
-		    on:click=move |_| {
-			set_add_what.set(Some("date"));
-			set_column_value.set(ColumnValue::Date(Some(Local::now().date_naive())))
-		    }
-		    >"+ تاريخ"</button>
-		    <button
-		    class="centered-button"
-		    on:click=move |_| {
-			set_add_what.set(Some("number"));
-			set_column_value.set(ColumnValue::Float(0.0));
-		    }
-		    >"+ رقم"</button>
-		    <button
-		    class="centered-button"
-		    on:click=move |_| {
-			set_add_what.set(Some("text"));
-			set_column_value.set(ColumnValue::String(Some("".to_string())));
-		    }
-		    >"+ نص"</button>
-		    <button
-		    class="centered-button"
-		    on:click=move |_| {
-			set_new_columns.set(HashMap::new());
-		    }
-		    >"الغاء التعديلات"</button>
-		</>
-	    }
-	    >
-	        <div>
-		    <input
-		    style="width:40%; height:30px;"
-		    type="text"
-		    placeholder="العنوان"
-	            on:input=move |ev| set_header.set(event_target_value(&ev))
-		    />
-		    <input
-		    style="width:40%; height:30px;"
-		    type=add_what.get().unwrap_or_default()
-		    placeholder="القيمة"
-	            on:input=on_value_input
-		    />
-	        </div>
-	        <br/>
-		<button
-	        on:click=append
-		class="centered-button"
-		>"تاكيد"</button>
-		<button
-		class="centered-button"
-		   on:click=move |_| set_add_what.set(None)
-		>"الغاء"</button>
-	    </Show>
-	</Show>
-	</>
+    <>
+    <table>
+        <For
+        each=move || headers()
+        key=|x| x.0.clone() + &x.1
+        view=move |(primary,non_primary)| view!{
+            <tr>
+            <td>{primary.clone()}</td>
+            <td class="shapeless">" "</td>
+            <td>{move ||columns
+                 .get()
+                 .get(&primary)
+                 .map(|x| x.value.to_string()
+                  + &new_columns
+                  .get()
+                  .get(&primary)
+                  .map(|x| " => ".to_string() + &x.value.to_string())
+                  .unwrap_or_default()
+                 )
+            }
+            </td>
+            <td class="shapeless">" "</td>
+            <td class="shapeless">" | "</td>
+            <td class="shapeless">" "</td>
+            <td>{non_primary.clone()}</td>
+            <td class="shapeless">" "</td>
+            <td>{move ||all_columns.get().get(&non_primary).map(|x| x.value.to_string())}</td>
+            </tr>
+        }
+        />
+    </table>
+    <Show
+        when=move || matches!(edit_mode.get(),EditState::Primary)
+        fallback=move|| view!{<></>}
+    >
+        <Show
+        when=move || add_what.get().is_some()
+        fallback=move|| view!{
+        <>
+            <button
+            class="centered-button"
+            on:click=move |_| {
+            set_add_what.set(Some("date"));
+            set_column_value.set(ColumnValue::Date(Some(Local::now().date_naive())))
+            }
+            >"+ تاريخ"</button>
+            <button
+            class="centered-button"
+            on:click=move |_| {
+            set_add_what.set(Some("number"));
+            set_column_value.set(ColumnValue::Float(0.0));
+            }
+            >"+ رقم"</button>
+            <button
+            class="centered-button"
+            on:click=move |_| {
+            set_add_what.set(Some("text"));
+            set_column_value.set(ColumnValue::String(Some("".to_string())));
+            }
+            >"+ نص"</button>
+            <button
+            class="centered-button"
+            on:click=move |_| {
+            set_new_columns.set(HashMap::new());
+            }
+            >"الغاء التعديلات"</button>
+        </>
+        }
+        >
+            <div>
+            <input
+            style="width:40%; height:30px;"
+            type="text"
+            placeholder="العنوان"
+                on:input=move |ev| set_header.set(event_target_value(&ev))
+            />
+            <input
+            style="width:40%; height:30px;"
+            type=add_what.get().unwrap_or_default()
+            placeholder="القيمة"
+                on:input=on_value_input
+            />
+            </div>
+            <br/>
+        <button
+            on:click=append
+        class="centered-button"
+        >"تاكيد"</button>
+        <button
+        class="centered-button"
+           on:click=move |_| set_add_what.set(None)
+        >"الغاء"</button>
+        </Show>
+    </Show>
+    </>
     }
 }
 
-fn get_op(op : &OperationKind) -> impl Fn(f64,f64) -> f64 {
+fn get_op(op: &OperationKind) -> impl Fn(f64, f64) -> f64 {
     match op {
-	OperationKind::Multiply => |v1,v2| v1 * v2,
-	OperationKind::Add => |v1,v2| v1 + v2,
-	OperationKind::Divide => |v1,v2| v1 / v2,
-	OperationKind::Minus => |v1,v2| v1 - v2,
+        OperationKind::Multiply => |v1, v2| v1 * v2,
+        OperationKind::Add => |v1, v2| v1 + v2,
+        OperationKind::Divide => |v1, v2| v1 / v2,
+        OperationKind::Minus => |v1, v2| v1 - v2,
     }
 }
 
-fn resolve_hs(
-    hs : &ValueType,
-    columns_map: HashMap<String, ColumnValue>,
-) -> Option<f64> {
+fn resolve_hs(hs: &ValueType, columns_map: HashMap<String, ColumnValue>) -> Option<f64> {
     match hs {
-	ValueType::Const(hs) => Some(*hs),
-	ValueType::Variable(hs) => match columns_map.get(hs) {
+        ValueType::Const(hs) => Some(*hs),
+        ValueType::Variable(hs) => match columns_map.get(hs) {
             Some(ColumnValue::Float(hs)) => Some(*hs),
             _ => None,
         },
-	ValueType::Operation(lhs) =>{
-	    let lhs = lhs;
-	    resolve_operation(lhs,columns_map)
-	}
+        ValueType::Operation(lhs) => {
+            let lhs = lhs;
+            resolve_operation(lhs, columns_map)
+        }
     }
 }
 
@@ -734,10 +742,10 @@ pub fn resolve_operation(
 ) -> Option<f64> {
     let Operation { op, lhs, rhs } = operation;
     let op = get_op(op);
-    let lhs = resolve_hs(lhs,columns_map.clone());
-    let rhs = resolve_hs(rhs,columns_map);
-    match (lhs,rhs) {
-	(Some(lhs),Some(rhs)) => Some(op(lhs,rhs)),
-	_ => None
+    let lhs = resolve_hs(lhs, columns_map.clone());
+    let rhs = resolve_hs(rhs, columns_map);
+    match (lhs, rhs) {
+        (Some(lhs), Some(rhs)) => Some(op(lhs, rhs)),
+        _ => None,
     }
 }

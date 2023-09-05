@@ -1,8 +1,9 @@
 use crate::Id;
-use leptos::*;
+use leptos::{ev::MouseEvent, *};
 use leptos_router::*;
-use models::{Column, ColumnValue, ConfigValue, HeaderGetter, Name, RowIdentity, RowsSort};
-use models::{Row, Sheet};
+use models::{
+    Column, ColumnValue, ConfigValue, HeaderGetter, Name, Row, RowIdentity, RowsSort, Sheet,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -10,8 +11,8 @@ use tauri_sys::tauri::invoke;
 use uuid::Uuid;
 
 use super::shared::{
-    alert, confirm, import_sheet_rows, message, open_file, resolve_operation, InputRow, NameArg,
-    PrimaryRow, SheetHead, ShowNewRows,
+    alert, confirm, import_sheet_rows, message, open_file, resolve_operation, EditState, InputRow,
+    NameArg, PrimaryRow, SheetHead, ShowNewRows,
 };
 
 #[derive(Serialize, Deserialize)]
@@ -121,13 +122,14 @@ where
 
 #[component]
 pub fn ShowSheet() -> impl IntoView {
-    let (edit_mode, set_edit_mode) = create_signal(false);
+    let (edit_mode, set_edit_mode) = create_signal(EditState::None);
     let (sheet_name, set_sheet_name) = create_signal(String::from(""));
     let (deleted_rows, set_deleted_rows) = create_signal(Vec::<Uuid>::new());
     let (added_rows, set_added_rows) = create_signal(Vec::<Row>::new());
     let (modified_columns, set_modified_columns) = create_signal(Vec::<ColumnIdentity>::new());
     let (modified_primary_columns, set_modified_primary_columns) =
         create_signal(HashMap::<String, Column>::new());
+    let on_edit = RwSignal::from(false);
     let params = use_params_map();
     let sheet_type_id = move || {
         params.with(|params| match params.get("sheet_type_id") {
@@ -319,27 +321,24 @@ pub fn ShowSheet() -> impl IntoView {
         }
     };
     let delete_new_row = move |id| set_added_rows.update(|xs| xs.retain(|x| x.id != id));
-    let toggle_edit_mode = move |_| {
-        if edit_mode.get() {
-            spawn_local(async move {
-                let reset = if !deleted_rows.get().is_empty()
-                    || !added_rows.get().is_empty()
-                    || !modified_columns.get().is_empty()
-                {
-                    confirm("سيتم تجاهل كل التعديلات").await
-                } else {
-                    true
-                };
-                if reset {
-                    set_edit_mode.set(false);
-                    set_deleted_rows.set(Vec::new());
-                    set_added_rows.set(Vec::new());
-                    set_modified_columns.set(Vec::new());
-                }
-            })
-        } else {
-            set_edit_mode.set(true);
-        }
+    let cancel_edit = move || {
+        spawn_local(async move {
+            let reset = if !deleted_rows.get().is_empty()
+                || !added_rows.get().is_empty()
+                || !modified_columns.get().is_empty()
+            {
+                confirm("سيتم تجاهل كل التعديلات").await
+            } else {
+                true
+            };
+            if reset {
+                set_edit_mode.set(EditState::None);
+                set_deleted_rows.set(Vec::new());
+                set_added_rows.set(Vec::new());
+                set_modified_columns.set(Vec::new());
+                set_modified_primary_columns.set(HashMap::new());
+            }
+        })
     };
     let append = move |row| {
         set_added_rows.update(|xs| {
@@ -513,17 +512,19 @@ pub fn ShowSheet() -> impl IntoView {
                 message("نجحت الاضافة").await
             }
         });
-        set_edit_mode.set(false);
+        set_edit_mode.set(EditState::None);
         set_sheet_name.set(String::from(""));
         set_deleted_rows.set(Vec::new());
         set_added_rows.set(Vec::new());
         set_modified_columns.set(Vec::new());
         set_modified_primary_columns.set(HashMap::new());
+        on_edit.set(false);
         sheet_resource.refetch();
     };
 
     let load_file = move |_| {
         let sheettype = sheet_type_name_resource.get().unwrap_or_default();
+        set_edit_mode.set(EditState::LoadFile);
         spawn_local(async move {
             let Some(filepath) = open_file().await else {
                 return;
@@ -558,7 +559,7 @@ pub fn ShowSheet() -> impl IntoView {
         });
     };
 
-    let primary_non_primary_headers = move || {
+    let primary_row_non_primary_headers = move || {
         let primary_headers = sheet_primary_headers_resource.get().unwrap_or_default();
 
         modified_primary_columns
@@ -582,7 +583,7 @@ pub fn ShowSheet() -> impl IntoView {
             </button>
             <br/>
             <Show
-                when=move || edit_mode.get()
+                when=move || matches!(edit_mode.get(),EditState::Primary)
                 fallback=move || {
                     view! {  <h1>{move || sheet_resource.get().unwrap_or_default().sheet_name}</h1> }
                 }
@@ -602,7 +603,7 @@ pub fn ShowSheet() -> impl IntoView {
             </Show>
         <PrimaryRow
           columns=primary_row_columns
-          non_primary_headers=primary_non_primary_headers
+          non_primary_headers=primary_row_non_primary_headers
           new_columns=modified_primary_columns
           set_new_columns=set_modified_primary_columns
           primary_headers=move || sheet_primary_headers_resource.get().unwrap_or_default()
@@ -638,7 +639,7 @@ pub fn ShowSheet() -> impl IntoView {
                     priorities=move || sheet_priorities_resource.get().unwrap_or_default()
                     />
                     <Show
-                        when=move || edit_mode.get()
+                        when=move || matches!(edit_mode.get(),EditState::NonePrimary)
                         fallback=|| {
                             view! {  <></> }
                         }
@@ -653,11 +654,15 @@ pub fn ShowSheet() -> impl IntoView {
                     </Show>
                 </tbody>
             </table>
-            <button on:click=toggle_edit_mode class="centered-button">
-                {move || if edit_mode.get() { "الغاء" } else { "تعديل" }}
-            </button>
+            <EditButtons
+                edit_mode=edit_mode
+                edit_mode_setter=set_edit_mode
+                cancel=cancel_edit
+                load_file=load_file
+                on_edit=on_edit
+            />
             <Show
-                when=move || edit_mode.get()
+                when=move || !matches!(edit_mode.get(),EditState::None)
                 fallback=|| {
                     view! {  <></> }
                 }
@@ -665,12 +670,61 @@ pub fn ShowSheet() -> impl IntoView {
                 <button on:click=save_edits class="centered-button">
                     "تاكيد"
                 </button>
-                <button on:click=load_file class="centered-button">
-                    "تحميل ملف"
-                </button>
             </Show>
             <Outlet/>
         </section>
+    }
+}
+
+#[component]
+fn EditButtons<FA, FL>(
+    edit_mode: ReadSignal<EditState>,
+    edit_mode_setter: WriteSignal<EditState>,
+    cancel: FA,
+    load_file: FL,
+    on_edit: RwSignal<bool>,
+) -> impl IntoView
+where
+    FA: Fn() -> () + 'static,
+    FL: Fn(MouseEvent) + 'static + Clone + Copy,
+{
+    let toggle = move |_| {
+        if on_edit.get() {
+            on_edit.set(false);
+            cancel()
+        } else {
+            on_edit.set(true);
+        }
+    };
+
+    view! {
+        <>
+        <button on:click=toggle class="centered-button">
+            {
+                move || if on_edit.get() {
+                     "الغاء"
+                } else {
+                     "تعديل"
+                }
+            }
+        </button>
+        <Show
+        when=move || on_edit.get() && matches!(edit_mode.get(),EditState::None)
+        fallback=|| view! {<></>}
+        >
+            <button
+                on:click=move |_| edit_mode_setter.set(EditState::Primary)
+                class="centered-button"
+            >"تعديل العناوين"</button>
+            <button
+                on:click=move |_| edit_mode_setter.set(EditState::NonePrimary)
+                class="centered-button"
+            >"تعديل الصفوف"</button>
+            <button on:click=load_file class="centered-button">
+                "تحميل ملف"
+            </button>
+        </Show>
+        </>
     }
 }
 
@@ -682,7 +736,7 @@ fn ShowRows<BH, CH, FD, ID, FI, FR>(
     is_deleted: ID,
     sheet_id: FI,
     rows: FR,
-    edit_mode: ReadSignal<bool>,
+    edit_mode: ReadSignal<EditState>,
     modified_columns: ReadSignal<Vec<ColumnIdentity>>,
     set_modified_columns: WriteSignal<Vec<ColumnIdentity>>,
 ) -> impl IntoView
@@ -735,9 +789,9 @@ where
                     let header3 = header2.clone();
                     let columns1 = columns.clone();
                     let columns2 = columns1.clone();
-                                        view! { <td
-                                                    style="cursor: pointer"
-                                                 on:dblclick=move |_| if edit_mode.get() {
+                        view! { <td
+                                style="cursor: pointer"
+                                 on:dblclick=move |_| if matches!(edit_mode.get(),EditState::NonePrimary) {
                             set_edit_column.set(Some(ColumnIdentity{
                             row_id:id,
                             header:header1.clone(),
@@ -776,7 +830,7 @@ where
                             }
                         }
                         <Show
-                            when=move || edit_mode.get()
+                            when=move || matches!(edit_mode.get(),EditState::NonePrimary)
                             fallback=|| {
                                 view! {  <></> }
                             }
