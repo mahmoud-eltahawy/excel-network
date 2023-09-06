@@ -420,7 +420,7 @@ where
             }
             map.insert(
                 header,
-                resolve_operation(&value, basic_map).unwrap_or_default(),
+                resolve_operation(&value, &basic_map).unwrap_or_default(),
             );
         }
         map
@@ -718,7 +718,7 @@ fn get_op(op: &OperationKind) -> impl Fn(f64, f64) -> f64 {
     }
 }
 
-fn resolve_hs(hs: &ValueType, columns_map: HashMap<String, ColumnValue>) -> Option<f64> {
+fn resolve_hs(hs: &ValueType, columns_map: &HashMap<String, ColumnValue>) -> Option<f64> {
     match hs {
         ValueType::Const(hs) => Some(*hs),
         ValueType::Variable(hs) => match columns_map.get(hs) {
@@ -734,11 +734,11 @@ fn resolve_hs(hs: &ValueType, columns_map: HashMap<String, ColumnValue>) -> Opti
 
 pub fn resolve_operation(
     operation: &Operation,
-    columns_map: HashMap<String, ColumnValue>,
+    columns_map: &HashMap<String, ColumnValue>,
 ) -> Option<f64> {
     let Operation { op, lhs, rhs } = operation;
     let op = get_op(op);
-    let lhs = resolve_hs(lhs, columns_map.clone());
+    let lhs = resolve_hs(lhs, columns_map);
     let rhs = resolve_hs(rhs, columns_map);
     match (lhs, rhs) {
         (Some(lhs), Some(rhs)) => Some(op(lhs, rhs)),

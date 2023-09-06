@@ -231,6 +231,15 @@ pub fn ShowSheet() -> impl IntoView {
             .collect::<Vec<_>>()
     };
 
+    // let basic_rows_columns =
+    //     create_memo(move |_| sheet_resource.get().map(|x| x.rows).unwrap_or_default());
+
+    // let calc_rows_columns = create_memo(move |_| {
+    //     basic_rows_columns.get().into_iter().map(|x| {
+    //         let columns = x.columns;
+    //     })
+    // });
+
     let sheet_with_primary_row_with_calc_values = create_memo(move |_| {
         let c_cols = calc_columns.get();
         let mut sheet = sheet_resource.get().unwrap_or_default();
@@ -259,7 +268,7 @@ pub fn ShowSheet() -> impl IntoView {
                                 Column {
                                     is_basic: false,
                                     value: ColumnValue::Float(
-                                        resolve_operation(&value.value, map).unwrap_or_default(),
+                                        resolve_operation(&value.value, &map).unwrap_or_default(),
                                     ),
                                 },
                             );
@@ -328,12 +337,8 @@ pub fn ShowSheet() -> impl IntoView {
         })
     };
     let append = move |row| {
-        added_rows.update(|xs| {
-            let mut list = xs.clone();
-            list.push(row);
-            list.sort_rows(sheet_priorities_resource.get().unwrap_or_default());
-            *xs = list;
-        })
+        added_rows.update_untracked(|xs| xs.push(row));
+        added_rows.update(|xs| xs.sort_rows(sheet_priorities_resource.get().unwrap_or_default()));
     };
     let primary_row_columns = create_memo(move |_| {
         let Some(Sheet { id, rows, .. }) = sheet_resource.get() else {
@@ -535,14 +540,15 @@ pub fn ShowSheet() -> impl IntoView {
                     })
                 }
             }
-            added_rows.update(|xs| {
+            added_rows.update_untracked(|xs| {
                 xs.extend(
                     rows.into_iter()
                         .filter(|x| x.id != sheet_id)
                         .collect::<Vec<_>>(),
-                );
-                xs.sort_rows(sheet_priorities_resource.get().unwrap_or_default());
+                )
             });
+            added_rows
+                .update(|xs| xs.sort_rows(sheet_priorities_resource.get().unwrap_or_default()));
         });
     };
 

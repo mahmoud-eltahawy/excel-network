@@ -108,10 +108,8 @@ pub fn AddSheet() -> impl IntoView {
     };
 
     let append = move |row: Row| {
-        rows.update(|xs| {
-            xs.push(row);
-            xs.sort_rows(sheet_priorities_resource.get().unwrap_or_default());
-        })
+        rows.update_untracked(|xs| xs.push(row));
+        rows.update(|xs| xs.sort_rows(sheet_priorities_resource.get().unwrap_or_default()));
     };
 
     let delete_row = move |id: Uuid| rows.update(|xs| xs.retain(|x| x.id != id));
@@ -209,10 +207,8 @@ pub fn AddSheet() -> impl IntoView {
                     map.insert(header, column);
                 })
             }
-            rows.update(|xs| {
-                xs.extend(the_rows);
-                xs.sort_rows(sheet_priorities_resource.get().unwrap_or_default());
-            });
+            rows.update_untracked(|xs| xs.extend(the_rows));
+            rows.update(|xs| xs.sort_rows(sheet_priorities_resource.get().unwrap_or_default()));
         });
     };
 
