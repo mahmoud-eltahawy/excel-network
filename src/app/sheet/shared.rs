@@ -742,6 +742,8 @@ pub fn resolve_operation(
     let rhs = resolve_hs(rhs, columns_map);
     match (lhs, rhs) {
         (Some(lhs), Some(rhs)) => Some(op(lhs, rhs)),
-        _ => None,
+        (Some(lhs), None) => Some(lhs),
+        (None, Some(rhs)) => Some(rhs),
+        (None, None) => None,
     }
 }
