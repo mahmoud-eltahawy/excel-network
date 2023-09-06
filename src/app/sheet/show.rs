@@ -58,9 +58,7 @@ where
     F2: Fn() + 'static + Clone + Copy,
     F3: Fn(ColumnIdentity) + 'static,
 {
-    let (column_value, set_column_value) = create_signal(mode().value);
-    // let (top,set_top) = create_signal( None::<usize>);
-    // let (down,set_down) = create_signal( None::<usize>);
+    let column_value = RwSignal::from(mode().value);
     let on_input = move |ev| {
         let value = event_target_value(&ev);
         let value = match column_value.get() {
@@ -68,7 +66,7 @@ where
             ColumnValue::Date(_) => ColumnValue::Date(Some(value.parse().unwrap_or_default())),
             _ => ColumnValue::String(Some(value)),
         };
-        set_column_value.set(value);
+        column_value.set(value);
     };
 
     let save = move |_| {
@@ -100,16 +98,6 @@ where
                 }
                 on:input=on_input
             />
-            // <input
-        // 	type="number"
-        //     placeholder="لاعلي"
-        //     on:input=move |ev| set_top.set(Some(event_target_value(&ev).parse().unwrap_or_default()))
-        // />
-            // <input
-        // 	type="number"
-        //     placeholder="لاسفل"
-        //     on:input=move |ev| set_down.set(Some(event_target_value(&ev).parse().unwrap_or_default()))
-        // />
             <button on:click=move|_| cancel() class="centered-button">
                 "الغاء"
             </button>
@@ -122,13 +110,12 @@ where
 
 #[component]
 pub fn ShowSheet() -> impl IntoView {
-    let (edit_mode, set_edit_mode) = create_signal(EditState::None);
-    let (sheet_name, set_sheet_name) = create_signal(String::from(""));
-    let (deleted_rows, set_deleted_rows) = create_signal(Vec::<Uuid>::new());
-    let (added_rows, set_added_rows) = create_signal(Vec::<Row>::new());
-    let (modified_columns, set_modified_columns) = create_signal(Vec::<ColumnIdentity>::new());
-    let (modified_primary_columns, set_modified_primary_columns) =
-        create_signal(HashMap::<String, Column>::new());
+    let edit_mode = RwSignal::from(EditState::None);
+    let sheet_name = RwSignal::from(String::from(""));
+    let deleted_rows = RwSignal::from(Vec::<Uuid>::new());
+    let added_rows = RwSignal::from(Vec::<Row>::new());
+    let modified_columns = RwSignal::from(Vec::<ColumnIdentity>::new());
+    let modified_primary_columns = RwSignal::from(HashMap::<String, Column>::new());
     let on_edit = RwSignal::from(false);
     let params = use_params_map();
     let sheet_type_id = move || {
@@ -315,12 +302,12 @@ pub fn ShowSheet() -> impl IntoView {
     let is_deleted = move |id| deleted_rows.get().contains(&id);
     let delete_row = move |id| {
         if deleted_rows.get().contains(&id) {
-            set_deleted_rows.update(|xs| xs.retain(|x| *x != id));
+            deleted_rows.update(|xs| xs.retain(|x| *x != id));
         } else {
-            set_deleted_rows.update(|xs| xs.push(id));
+            deleted_rows.update(|xs| xs.push(id));
         }
     };
-    let delete_new_row = move |id| set_added_rows.update(|xs| xs.retain(|x| x.id != id));
+    let delete_new_row = move |id| added_rows.update(|xs| xs.retain(|x| x.id != id));
     let cancel_edit = move || {
         spawn_local(async move {
             let reset = if !deleted_rows.get().is_empty()
@@ -332,16 +319,16 @@ pub fn ShowSheet() -> impl IntoView {
                 true
             };
             if reset {
-                set_edit_mode.set(EditState::None);
-                set_deleted_rows.set(Vec::new());
-                set_added_rows.set(Vec::new());
-                set_modified_columns.set(Vec::new());
-                set_modified_primary_columns.set(HashMap::new());
+                edit_mode.set(EditState::None);
+                deleted_rows.set(Vec::new());
+                added_rows.set(Vec::new());
+                modified_columns.set(Vec::new());
+                modified_primary_columns.set(HashMap::new());
             }
         })
     };
     let append = move |row| {
-        set_added_rows.update(|xs| {
+        added_rows.update(|xs| {
             let mut list = xs.clone();
             list.push(row);
             list.sort_rows(sheet_priorities_resource.get().unwrap_or_default());
@@ -365,9 +352,9 @@ pub fn ShowSheet() -> impl IntoView {
             return;
         };
         let sheetid = sheet.id;
-        let sheet_name = sheet_name.get();
-        let deleted_rows = deleted_rows.get();
-        let added_rows = added_rows.get();
+        let the_sheet_name = sheet_name.get();
+        let the_deleted_rows = deleted_rows.get();
+        let the_added_rows = added_rows.get();
         let new_row_primary_columns = modified_primary_columns
             .get()
             .into_iter()
@@ -418,13 +405,13 @@ pub fn ShowSheet() -> impl IntoView {
             .collect::<Vec<_>>();
         let mut success = true;
         spawn_local(async move {
-            if !sheet_name.is_empty() && sheet_name != sheet.sheet_name {
+            if !the_sheet_name.is_empty() && the_sheet_name != sheet.sheet_name {
                 match invoke::<_, ()>(
                     "update_sheet_name",
                     &SheetNameArg {
                         name: Name {
                             id: sheet.id,
-                            the_name: sheet_name,
+                            the_name: the_sheet_name,
                         },
                     },
                 )
@@ -437,12 +424,12 @@ pub fn ShowSheet() -> impl IntoView {
                     }
                 }
             }
-            if !deleted_rows.is_empty() {
+            if !the_deleted_rows.is_empty() {
                 match invoke::<_, ()>(
                     "delete_rows_from_sheet",
                     &RowsDeleteArg {
                         sheetid: sheet.id,
-                        rowsids: deleted_rows,
+                        rowsids: the_deleted_rows,
                     },
                 )
                 .await
@@ -454,12 +441,12 @@ pub fn ShowSheet() -> impl IntoView {
                     }
                 }
             }
-            if !added_rows.is_empty() {
+            if !the_added_rows.is_empty() {
                 match invoke::<_, ()>(
                     "add_rows_to_sheet",
                     &RowsAddArg {
                         sheetid: sheet.id,
-                        rows: added_rows,
+                        rows: the_added_rows,
                     },
                 )
                 .await
@@ -512,19 +499,19 @@ pub fn ShowSheet() -> impl IntoView {
                 message("نجحت الاضافة").await
             }
         });
-        set_edit_mode.set(EditState::None);
-        set_sheet_name.set(String::from(""));
-        set_deleted_rows.set(Vec::new());
-        set_added_rows.set(Vec::new());
-        set_modified_columns.set(Vec::new());
-        set_modified_primary_columns.set(HashMap::new());
+        edit_mode.set(EditState::None);
+        sheet_name.set(String::from(""));
+        deleted_rows.set(Vec::new());
+        added_rows.set(Vec::new());
+        modified_columns.set(Vec::new());
+        modified_primary_columns.set(HashMap::new());
         on_edit.set(false);
         sheet_resource.refetch();
     };
 
     let load_file = move |_| {
         let sheettype = sheet_type_name_resource.get().unwrap_or_default();
-        set_edit_mode.set(EditState::LoadFile);
+        edit_mode.set(EditState::LoadFile);
         spawn_local(async move {
             let Some(filepath) = open_file().await else {
                 return;
@@ -543,12 +530,12 @@ pub fn ShowSheet() -> impl IntoView {
                     .get(&header)
                     .is_some_and(|x| x.value != column.value)
                 {
-                    set_modified_primary_columns.update(|map| {
+                    modified_primary_columns.update(|map| {
                         map.insert(header, column);
                     })
                 }
             }
-            set_added_rows.update(|xs| {
+            added_rows.update(|xs| {
                 xs.extend(
                     rows.into_iter()
                         .filter(|x| x.id != sheet_id)
@@ -598,14 +585,13 @@ pub fn ShowSheet() -> impl IntoView {
                         )
                     }
                     value=move || sheet_name.get()
-                    on:input=move |ev| set_sheet_name.set(event_target_value(&ev))
+                    on:input=move |ev| sheet_name.set(event_target_value(&ev))
                 />
             </Show>
         <PrimaryRow
           columns=primary_row_columns
           non_primary_headers=primary_row_non_primary_headers
           new_columns=modified_primary_columns
-          set_new_columns=set_modified_primary_columns
           primary_headers=move || sheet_primary_headers_resource.get().unwrap_or_default()
           edit_mode=edit_mode
         /><br/>
@@ -619,9 +605,8 @@ pub fn ShowSheet() -> impl IntoView {
                         rows=move || sheet_without_primary_row_with_calc_values.get().rows
                         edit_mode=edit_mode
                         is_deleted=is_deleted
-                    modified_columns=modified_columns
-                    set_modified_columns=set_modified_columns
-                    sheet_id=move || sheet_resource.get().map(|x| x.id).unwrap_or_default()
+                        modified_columns=modified_columns
+                        sheet_id=move || sheet_resource.get().map(|x| x.id).unwrap_or_default()
             />
             <Show
             when=move || !added_rows.get().is_empty()
@@ -634,7 +619,6 @@ pub fn ShowSheet() -> impl IntoView {
                         basic_headers=basic_headers
                         calc_headers=calc_headers
                         rows=added_rows
-                        set_rows=set_added_rows
                     sheet_id=move ||sheet_resource.get().map(|x| x.id).unwrap_or_default()
                     priorities=move || sheet_priorities_resource.get().unwrap_or_default()
                     />
@@ -656,7 +640,6 @@ pub fn ShowSheet() -> impl IntoView {
             </table>
             <EditButtons
                 edit_mode=edit_mode
-                edit_mode_setter=set_edit_mode
                 cancel=cancel_edit
                 load_file=load_file
                 on_edit=on_edit
@@ -678,8 +661,7 @@ pub fn ShowSheet() -> impl IntoView {
 
 #[component]
 fn EditButtons<FA, FL>(
-    edit_mode: ReadSignal<EditState>,
-    edit_mode_setter: WriteSignal<EditState>,
+    edit_mode: RwSignal<EditState>,
     cancel: FA,
     load_file: FL,
     on_edit: RwSignal<bool>,
@@ -713,11 +695,11 @@ where
         fallback=|| view! {<></>}
         >
             <button
-                on:click=move |_| edit_mode_setter.set(EditState::Primary)
+                on:click=move |_| edit_mode.set(EditState::Primary)
                 class="centered-button"
             >"تعديل العناوين"</button>
             <button
-                on:click=move |_| edit_mode_setter.set(EditState::NonePrimary)
+                on:click=move |_| edit_mode.set(EditState::NonePrimary)
                 class="centered-button"
             >"تعديل الصفوف"</button>
             <button on:click=load_file class="centered-button">
@@ -736,9 +718,8 @@ fn ShowRows<BH, CH, FD, ID, FI, FR>(
     is_deleted: ID,
     sheet_id: FI,
     rows: FR,
-    edit_mode: ReadSignal<EditState>,
-    modified_columns: ReadSignal<Vec<ColumnIdentity>>,
-    set_modified_columns: WriteSignal<Vec<ColumnIdentity>>,
+    edit_mode: RwSignal<EditState>,
+    modified_columns: RwSignal<Vec<ColumnIdentity>>,
 ) -> impl IntoView
 where
     BH: Fn() -> Vec<String> + 'static + Clone + Copy,
@@ -748,7 +729,7 @@ where
     FD: Fn(Uuid) + 'static + Clone + Copy,
     FI: Fn() -> Uuid + 'static + Clone + Copy,
 {
-    let (edit_column, set_edit_column) = create_signal(None::<ColumnIdentity>);
+    let edit_column = RwSignal::from(None::<ColumnIdentity>);
     let new_rows = create_memo(move |_| {
         rows()
             .into_iter()
@@ -766,8 +747,8 @@ where
             >
                 <ColumnEdit
                     mode=move || edit_column.get().unwrap()
-                    cancel=move || set_edit_column.set(None)
-                push_to_modified=move |col| set_modified_columns.update(|xs| xs.push(col))
+                    cancel=move || edit_column.set(None)
+                push_to_modified=move |col| modified_columns.update(|xs| xs.push(col))
                 />
             </Show>
         <For
@@ -792,7 +773,7 @@ where
                         view! { <td
                                 style="cursor: pointer"
                                  on:dblclick=move |_| if matches!(edit_mode.get(),EditState::NonePrimary) {
-                            set_edit_column.set(Some(ColumnIdentity{
+                            edit_column.set(Some(ColumnIdentity{
                             row_id:id,
                             header:header1.clone(),
                             value :columns1
@@ -841,7 +822,7 @@ where
                     .get()
                     .iter()
                     .any(|x| x.row_id == id) {
-                    set_modified_columns.update(|xs| xs.retain(|x| x.row_id != id))
+                    modified_columns.update(|xs| xs.retain(|x| x.row_id != id))
                     } else {
                     delete_row(id)
                     }

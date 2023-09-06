@@ -25,10 +25,9 @@ struct SaveSheetArgs {
 
 #[component]
 pub fn AddSheet() -> impl IntoView {
-    let (sheet_name, set_sheet_name) = create_signal(String::from(""));
-    let (rows, set_rows) = create_signal(Vec::new());
-    let (modified_primary_columns, set_modified_primary_columns) =
-        create_signal(HashMap::<String, Column>::new());
+    let sheet_name = RwSignal::from(String::from(""));
+    let rows = RwSignal::from(Vec::new());
+    let modified_primary_columns = RwSignal::from(HashMap::<String, Column>::new());
     let params = use_params_map();
     let sheet_type_id = move || {
         params.with(|params| match params.get("sheet_type_id") {
@@ -109,21 +108,21 @@ pub fn AddSheet() -> impl IntoView {
     };
 
     let append = move |row: Row| {
-        set_rows.update(|xs| {
+        rows.update(|xs| {
             xs.push(row);
             xs.sort_rows(sheet_priorities_resource.get().unwrap_or_default());
         })
     };
 
-    let delete_row = move |id: Uuid| set_rows.update(|xs| xs.retain(|x| x.id != id));
+    let delete_row = move |id: Uuid| rows.update(|xs| xs.retain(|x| x.id != id));
 
     let save_sheet = move |_| {
         let id = sheet_id_resource.get().unwrap_or_default();
         spawn_local(async move {
-            let mut rows = rows.get();
-            let index = rows.iter().position(|x| x.id == id);
+            let mut the_rows = rows.get();
+            let index = the_rows.iter().position(|x| x.id == id);
             if let Some(index) = index {
-                if let Some(primary_row) = rows.get_mut(index) {
+                if let Some(primary_row) = the_rows.get_mut(index) {
                     *primary_row = Row {
                         id: primary_row.id,
                         columns: primary_row
@@ -141,7 +140,7 @@ pub fn AddSheet() -> impl IntoView {
                     sheetid: id,
                     sheetname: sheet_name.get(),
                     typename: sheet_type_name_resource.get().unwrap_or_default(),
-                    rows: rows
+                    rows: the_rows
                         .into_iter()
                         .map(|Row { id, columns }| Row {
                             id,
@@ -157,7 +156,7 @@ pub fn AddSheet() -> impl IntoView {
             {
                 Ok(_) => {
                     sheet_id_resource.refetch();
-                    set_rows.set(Vec::new());
+                    rows.set(Vec::new());
                     message("نجح الحفظ").await
                 }
                 Err(err) => alert(err.to_string().as_str()).await,
@@ -191,13 +190,13 @@ pub fn AddSheet() -> impl IntoView {
             let Some(filepath) = open_file().await else {
                 return;
             };
-            let rows = import_sheet_rows(
+            let the_rows = import_sheet_rows(
                 sheet_id_resource.get().unwrap_or_default(),
                 sheettype,
                 filepath,
             )
             .await;
-            let primary_row = rows
+            let primary_row = the_rows
                 .iter()
                 .filter(|x| x.id == sheet_id_resource.get().unwrap_or_default())
                 .collect::<Vec<_>>();
@@ -206,12 +205,12 @@ pub fn AddSheet() -> impl IntoView {
                 .map(|x| x.columns.clone())
                 .unwrap_or_default();
             for (header, column) in primary_row {
-                set_modified_primary_columns.update(|map| {
+                modified_primary_columns.update(|map| {
                     map.insert(header, column);
                 })
             }
-            set_rows.update(|xs| {
-                xs.extend(rows);
+            rows.update(|xs| {
+                xs.extend(the_rows);
                 xs.sort_rows(sheet_priorities_resource.get().unwrap_or_default());
             });
         });
@@ -233,13 +232,12 @@ pub fn AddSheet() -> impl IntoView {
                     )
                 }
                 value=move || sheet_name.get()
-                on:input=move |ev| set_sheet_name.set(event_target_value(&ev))
+                on:input=move |ev| sheet_name.set(event_target_value(&ev))
             />
             <PrimaryRow
               primary_headers=move || sheet_primary_headers_resource.get().unwrap_or_default()
               non_primary_headers=primary_non_primary_headers
               new_columns=modified_primary_columns
-              set_new_columns=set_modified_primary_columns
             /><br/>
             <table>
                 <SheetHead basic_headers=basic_headers calc_headers=calc_headers/>
@@ -249,7 +247,6 @@ pub fn AddSheet() -> impl IntoView {
                         basic_headers=basic_headers
                         calc_headers=calc_headers
                         rows=rows
-                        set_rows=set_rows
                     sheet_id=move || sheet_id_resource.get().unwrap_or_default()
                     priorities=move || sheet_priorities_resource.get().unwrap_or_default()
                     />
@@ -277,16 +274,15 @@ pub fn AddSheet() -> impl IntoView {
 fn PrimaryRow<FP, FN>(
     primary_headers: FP,
     non_primary_headers: FN,
-    new_columns: ReadSignal<HashMap<String, Column>>,
-    set_new_columns: WriteSignal<HashMap<String, Column>>,
+    new_columns: RwSignal<HashMap<String, Column>>,
 ) -> impl IntoView
 where
     FP: Fn() -> Vec<String> + 'static + Clone + Copy,
     FN: Fn() -> Vec<String> + 'static + Clone + Copy,
 {
-    let (add_what, set_add_what) = create_signal(None::<&str>);
-    let (header, set_header) = create_signal(String::from(""));
-    let (column_value, set_column_value) = create_signal(ColumnValue::Float(0.0));
+    let add_what = RwSignal::from(None::<&str>);
+    let header = RwSignal::from(String::from(""));
+    let column_value = RwSignal::from(ColumnValue::Float(0.0));
 
     let headers = move || {
         let mut primary_headers = primary_headers();
@@ -309,7 +305,7 @@ where
     };
 
     let on_value_input = move |ev| {
-        set_column_value.update(|x| match x {
+        column_value.update(|x| match x {
             ColumnValue::String(_) => *x = ColumnValue::String(Some(event_target_value(&ev))),
             ColumnValue::Date(_) => {
                 *x = ColumnValue::Date(Some(event_target_value(&ev).parse().unwrap_or_default()))
@@ -321,7 +317,7 @@ where
     };
 
     let append = move |_| {
-        set_new_columns.update(|map| {
+        new_columns.update(|map| {
             map.insert(
                 header.get(),
                 Column {
@@ -330,7 +326,7 @@ where
                 },
             );
         });
-        set_add_what.set(None);
+        add_what.set(None);
     };
 
     view! {
@@ -372,28 +368,28 @@ where
             <button
             class="centered-button"
             on:click=move |_| {
-            set_add_what.set(Some("date"));
-            set_column_value.set(ColumnValue::Date(Some(Local::now().date_naive())))
+            add_what.set(Some("date"));
+            column_value.set(ColumnValue::Date(Some(Local::now().date_naive())))
             }
             >"+ تاريخ"</button>
             <button
             class="centered-button"
             on:click=move |_| {
-            set_add_what.set(Some("number"));
-            set_column_value.set(ColumnValue::Float(0.0));
+            add_what.set(Some("number"));
+            column_value.set(ColumnValue::Float(0.0));
             }
             >"+ رقم"</button>
             <button
             class="centered-button"
             on:click=move |_| {
-            set_add_what.set(Some("text"));
-            set_column_value.set(ColumnValue::String(Some("".to_string())));
+            add_what.set(Some("text"));
+            column_value.set(ColumnValue::String(Some("".to_string())));
             }
             >"+ نص"</button>
             <button
             class="centered-button"
             on:click=move |_| {
-            set_new_columns.set(HashMap::new());
+            new_columns.set(HashMap::new());
             }
             >"الغاء التعديلات"</button>
         </>
@@ -404,7 +400,7 @@ where
             style="width:40%; height:30px;"
             type="text"
             placeholder="العنوان"
-                on:input=move |ev| set_header.set(event_target_value(&ev))
+                on:input=move |ev| header.set(event_target_value(&ev))
             />
             <input
             style="width:40%; height:30px;"
@@ -420,7 +416,7 @@ where
         >"تاكيد"</button>
         <button
         class="centered-button"
-           on:click=move |_| set_add_what.set(None)
+           on:click=move |_| add_what.set(None)
         >"الغاء"</button>
     </Show>
     </>

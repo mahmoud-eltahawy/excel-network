@@ -128,7 +128,7 @@ fn ColumnEdit<F1, F2, F3>(
     mode: F1,
     cancel: F2,
     priorities: F3,
-    set_rows: WriteSignal<Vec<Row>>,
+    rows: RwSignal<Vec<Row>>,
 ) -> impl IntoView
 where
     F1: Fn() -> (String, Uuid, Rc<HashMap<String, Column>>) + 'static,
@@ -136,10 +136,9 @@ where
     F3: Fn() -> Vec<String> + 'static + Clone + Copy,
 {
     let (header, id, map) = mode();
-    let (column_value, set_column_value) =
-        create_signal(map.clone().get(&header).map(|x| x.value.clone()));
-    let (top, set_top) = create_signal(None::<usize>);
-    let (down, set_down) = create_signal(None::<usize>);
+    let column_value = RwSignal::from(map.clone().get(&header).map(|x| x.value.clone()));
+    let top = RwSignal::from(None::<usize>);
+    let down = RwSignal::from(None::<usize>);
     let header = Rc::new(header);
     let on_input = move |ev| {
         let value = event_target_value(&ev);
@@ -150,19 +149,19 @@ where
             }
             _ => ColumnValue::String(Some(value)),
         };
-        set_column_value.set(Some(value));
+        column_value.set(Some(value));
     };
 
     let save = move |_| {
         let Some(value) = column_value.get() else {
             return;
         };
-        let mut rows = Vec::new();
-        set_rows.update(|xs| {
+        let mut the_rows = Vec::new();
+        rows.update(|xs| {
             let Some(index) = xs.iter().position(|x| x.id == id) else {
                 return;
             };
-            rows = match (top.get(), down.get()) {
+            the_rows = match (top.get(), down.get()) {
                 (None, None) => vec![xs.remove(index)],
                 (Some(up), None) => {
                     let begin = if up > index { 0 } else { index - up };
@@ -197,8 +196,8 @@ where
                 }
             };
         });
-        set_rows.update(|xs| {
-            let rows = rows
+        rows.update(|xs| {
+            let rows = the_rows
                 .into_iter()
                 .map(|row| {
                     let mut columns = row.columns;
@@ -216,8 +215,8 @@ where
             rows.sort_rows(priorities());
             *xs = rows;
         });
-        set_down.set(None);
-        set_top.set(None);
+        down.set(None);
+        top.set(None);
         cancel()
     };
     view! {
@@ -239,12 +238,12 @@ where
             <input
         type="number"
             placeholder="لاعلي"
-            on:input=move |ev| set_top.set(Some(event_target_value(&ev).parse().unwrap_or_default()))
+            on:input=move |ev| top.set(Some(event_target_value(&ev).parse().unwrap_or_default()))
         />
             <input
         type="number"
             placeholder="لاسفل"
-            on:input=move |ev| set_down.set(Some(event_target_value(&ev).parse().unwrap_or_default()))
+            on:input=move |ev| down.set(Some(event_target_value(&ev).parse().unwrap_or_default()))
         />
             <button on:click=move|_| cancel() class="centered-button">
                 "الغاء"
@@ -263,8 +262,7 @@ pub fn ShowNewRows<BH, CH, FD, FP, FI>(
     delete_row: FD,
     priorities: FP,
     sheet_id: FI,
-    rows: ReadSignal<Vec<Row>>,
-    set_rows: WriteSignal<Vec<Row>>,
+    rows: RwSignal<Vec<Row>>,
 ) -> impl IntoView
 where
     BH: Fn() -> Vec<String> + 'static + Clone + Copy,
@@ -273,8 +271,7 @@ where
     FD: Fn(Uuid) + 'static + Clone + Copy,
     FI: Fn() -> Uuid + 'static + Clone + Copy,
 {
-    let (edit_column, set_edit_column) =
-        create_signal(None::<(String, Uuid, Rc<HashMap<String, Column>>)>);
+    let edit_column = RwSignal::from(None::<(String, Uuid, Rc<HashMap<String, Column>>)>);
     let new_rows = create_memo(move |_| {
         rows.get()
             .into_iter()
@@ -291,8 +288,8 @@ where
             >
                 <ColumnEdit
                     mode=move || edit_column.get().unwrap()
-                    cancel=move || set_edit_column.set(None)
-                    set_rows=set_rows
+                    cancel=move || edit_column.set(None)
+                    rows=rows
             priorities=priorities
                 />
             </Show>
@@ -317,7 +314,7 @@ where
                                             view! {
                                                 <td
                                                     style="cursor: pointer"
-                                                    on:dblclick=move |_| set_edit_column.set(Some((col_name1.clone(), id, columns1.clone())))
+                                                    on:dblclick=move |_| edit_column.set(Some((col_name1.clone(), id, columns1.clone())))
                                                 >
                                                     {move || columns2.get(&col_name2).map(|x| x.value.to_string())}
                                                 </td>
@@ -348,7 +345,7 @@ where
     }
 }
 
-type GetterSetter<T> = (ReadSignal<(T, bool)>, WriteSignal<(T, bool)>);
+type GetterSetter<T> = RwSignal<(T, bool)>;
 
 #[derive(Debug, Clone, PartialEq)]
 enum ColumnSignal {
@@ -380,7 +377,7 @@ where
                 }) => {
                     map.insert(
                         header,
-                        ColumnSignal::String(create_signal((String::from(""), is_completable))),
+                        ColumnSignal::String(RwSignal::from((String::from(""), is_completable))),
                     );
                 }
                 ColumnConfig::Date(ColumnProps {
@@ -389,7 +386,7 @@ where
                 }) => {
                     map.insert(
                         header,
-                        ColumnSignal::Date(create_signal((
+                        ColumnSignal::Date(RwSignal::from((
                             Local::now().date_naive(),
                             is_completable,
                         ))),
@@ -401,7 +398,7 @@ where
                 }) => {
                     map.insert(
                         header,
-                        ColumnSignal::Float(create_signal((0.0, is_completable))),
+                        ColumnSignal::Float(RwSignal::from((0.0, is_completable))),
                     );
                 }
             }
@@ -415,9 +412,9 @@ where
             let mut basic_map = HashMap::new();
             for (header, column_signal) in basic_signals_map.get() {
                 let column_value = match column_signal {
-                    ColumnSignal::String((reader, _)) => ColumnValue::String(Some(reader.get().0)),
-                    ColumnSignal::Float((reader, _)) => ColumnValue::Float(reader.get().0),
-                    ColumnSignal::Date((reader, _)) => ColumnValue::Date(Some(reader.get().0)),
+                    ColumnSignal::String(reader) => ColumnValue::String(Some(reader.get().0)),
+                    ColumnSignal::Float(reader) => ColumnValue::Float(reader.get().0),
+                    ColumnSignal::Date(reader) => ColumnValue::Date(Some(reader.get().0)),
                 };
                 basic_map.insert(header, column_value);
             }
@@ -435,15 +432,15 @@ where
             result.insert(
                 key,
                 match value {
-                    ColumnSignal::String((reader, _)) => Column {
+                    ColumnSignal::String(reader) => Column {
                         is_basic: true,
                         value: ColumnValue::String(Some(reader.get().0)),
                     },
-                    ColumnSignal::Float((reader, _)) => Column {
+                    ColumnSignal::Float(reader) => Column {
                         is_basic: true,
                         value: ColumnValue::Float(reader.get().0),
                     },
-                    ColumnSignal::Date((reader, _)) => Column {
+                    ColumnSignal::Date(reader) => Column {
                         is_basic: true,
                         value: ColumnValue::Date(Some(reader.get().0)),
                     },
@@ -509,9 +506,9 @@ fn MyInput(
 ) -> impl IntoView {
     let cmp_arg = basic_signals_map.get();
     let (i_type, value) = match cmp_arg.get(&header) {
-        Some(ColumnSignal::String((read, _))) => ("text", read.get().0.to_string()),
-        Some(ColumnSignal::Float((read, _))) => ("number", read.get().0.to_string()),
-        Some(ColumnSignal::Date((read, _))) => ("date", read.get().0.to_string()),
+        Some(ColumnSignal::String(read)) => ("text", read.get().0.to_string()),
+        Some(ColumnSignal::Float(read)) => ("number", read.get().0.to_string()),
+        Some(ColumnSignal::Date(read)) => ("date", read.get().0.to_string()),
         None => ("", "".to_string()),
     };
     view! {
@@ -520,13 +517,13 @@ fn MyInput(
                 type=i_type
                 value=move || value.clone()
                 on:change=move |ev| match cmp_arg.get(&header) {
-                    Some(ColumnSignal::String((_, write))) => {
+                    Some(ColumnSignal::String(write)) => {
                         write.update(|x| x.0 = event_target_value(&ev))
                     }
-                    Some(ColumnSignal::Float((_, write))) => {
+                    Some(ColumnSignal::Float(write)) => {
                         write.update(|x| x.0 = event_target_value(&ev).parse().unwrap_or_default())
                     }
-                    Some(ColumnSignal::Date((_, write))) => {
+                    Some(ColumnSignal::Date(write)) => {
                         write.update(|x| x.0 = event_target_value(&ev).parse().unwrap_or_default())
                     }
                     None => {}
@@ -549,17 +546,16 @@ pub fn PrimaryRow<FP, FN>(
     primary_headers: FP,
     non_primary_headers: FN,
     columns: Memo<HashMap<String, Column>>,
-    new_columns: ReadSignal<HashMap<String, Column>>,
-    set_new_columns: WriteSignal<HashMap<String, Column>>,
-    edit_mode: ReadSignal<EditState>,
+    new_columns: RwSignal<HashMap<String, Column>>,
+    edit_mode: RwSignal<EditState>,
 ) -> impl IntoView
 where
     FP: Fn() -> Vec<String> + 'static + Clone + Copy,
     FN: Fn() -> Vec<String> + 'static + Clone + Copy,
 {
-    let (add_what, set_add_what) = create_signal(None::<&str>);
-    let (header, set_header) = create_signal(String::from(""));
-    let (column_value, set_column_value) = create_signal(ColumnValue::Float(0.0));
+    let add_what = RwSignal::from(None::<&str>);
+    let header = RwSignal::from(String::from(""));
+    let column_value = RwSignal::from(ColumnValue::Float(0.0));
 
     let headers = move || {
         let mut primary_headers = primary_headers();
@@ -590,7 +586,7 @@ where
     });
 
     let on_value_input = move |ev| {
-        set_column_value.update(|x| match x {
+        column_value.update(|x| match x {
             ColumnValue::String(_) => *x = ColumnValue::String(Some(event_target_value(&ev))),
             ColumnValue::Date(_) => {
                 *x = ColumnValue::Date(Some(event_target_value(&ev).parse().unwrap_or_default()))
@@ -602,7 +598,7 @@ where
     };
 
     let append = move |_| {
-        set_new_columns.update(|map| {
+        new_columns.update(|map| {
             map.insert(
                 header.get(),
                 Column {
@@ -611,7 +607,7 @@ where
                 },
             );
         });
-        set_add_what.set(None);
+        add_what.set(None);
     };
 
     view! {
@@ -657,28 +653,28 @@ where
             <button
             class="centered-button"
             on:click=move |_| {
-            set_add_what.set(Some("date"));
-            set_column_value.set(ColumnValue::Date(Some(Local::now().date_naive())))
+            add_what.set(Some("date"));
+            column_value.set(ColumnValue::Date(Some(Local::now().date_naive())))
             }
             >"+ تاريخ"</button>
             <button
             class="centered-button"
             on:click=move |_| {
-            set_add_what.set(Some("number"));
-            set_column_value.set(ColumnValue::Float(0.0));
+            add_what.set(Some("number"));
+            column_value.set(ColumnValue::Float(0.0));
             }
             >"+ رقم"</button>
             <button
             class="centered-button"
             on:click=move |_| {
-            set_add_what.set(Some("text"));
-            set_column_value.set(ColumnValue::String(Some("".to_string())));
+            add_what.set(Some("text"));
+            column_value.set(ColumnValue::String(Some("".to_string())));
             }
             >"+ نص"</button>
             <button
             class="centered-button"
             on:click=move |_| {
-            set_new_columns.set(HashMap::new());
+            new_columns.set(HashMap::new());
             }
             >"الغاء التعديلات"</button>
         </>
@@ -689,7 +685,7 @@ where
             style="width:40%; height:30px;"
             type="text"
             placeholder="العنوان"
-                on:input=move |ev| set_header.set(event_target_value(&ev))
+                on:input=move |ev| header.set(event_target_value(&ev))
             />
             <input
             style="width:40%; height:30px;"
@@ -705,7 +701,7 @@ where
         >"تاكيد"</button>
         <button
         class="centered-button"
-           on:click=move |_| set_add_what.set(None)
+           on:click=move |_| add_what.set(None)
         >"الغاء"</button>
         </Show>
     </Show>
