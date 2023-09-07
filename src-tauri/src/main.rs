@@ -13,6 +13,7 @@ use std::{
     collections::HashMap,
     env,
     fs::{create_dir_all, rename, File},
+    io::BufRead,
     path::Path,
 };
 use uuid::Uuid;
@@ -411,13 +412,20 @@ struct Priorities(HashMap<String, Vec<String>>);
 struct SheetImport(HashMap<String, ImportConfig>);
 struct SheetRowsIds(HashMap<String, RowIdentity>);
 
+use std::io::{BufReader, Cursor};
+
 fn main() {
     dotenv().ok();
 
-    let file_path = "config.json";
-    let mut file = File::open(file_path).expect("config file does not exist");
+    let file_path = "config";
+    let file = File::open(file_path).expect("config file does not exist");
+    let mut reader = BufReader::new(file);
 
-    let config: Config = serde_json::from_reader(&mut file).unwrap();
+    let buf = reader.fill_buf().unwrap();
+
+    let v: ciborium::Value = ciborium::de::from_reader(Cursor::new(buf)).unwrap();
+    let config: Config = v.deserialized().unwrap();
+
     let Config { priorities, sheets } = config;
     let sheets_types_names_vec = sheets
         .iter()

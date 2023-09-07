@@ -1,7 +1,10 @@
 use chrono::NaiveDate;
+use ciborium_io::Write;
 use serde::{Deserialize, Serialize};
-use std::{cmp::Ordering, collections::HashMap};
+use std::{cmp::Ordering, collections::HashMap, io::Cursor};
 use uuid::Uuid;
+
+use std::fs::File;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ColumnId {
@@ -213,9 +216,6 @@ pub struct Config {
     pub sheets: Vec<SheetConfig>,
 }
 
-use std::fs::File;
-use std::io::Write;
-
 pub fn get_config_example() {
     let fcp = |header| ColumnProps {
         header,
@@ -394,9 +394,13 @@ pub fn get_config_example() {
         ],
     };
 
-    let b = serde_json::to_string(&a).unwrap_or_default();
+    let mut buf = vec![];
+    let mut file_cbor = File::create("output").unwrap();
+    ciborium::ser::into_writer(&a, Cursor::new(&mut buf)).unwrap();
 
-    let mut file = File::create("output.json").unwrap();
+    file_cbor.write_all(&buf).unwrap();
 
-    file.write_all(b.as_bytes()).unwrap();
+    let v: ciborium::Value = ciborium::de::from_reader(Cursor::new(buf)).unwrap();
+    let e: Config = v.deserialized().unwrap();
+    dbg!(e);
 }

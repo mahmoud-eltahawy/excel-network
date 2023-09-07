@@ -25,6 +25,8 @@ bigdecimal = { workspace = true }
 reqwest = { version = "^0.11", features = ["json"] }
 dirs = "^5"
 rust_xlsxwriter = "^0.42"
+ciborium = { workspace = true }
+ciborium-io = { workspace = true, features = ["std"] }
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem
