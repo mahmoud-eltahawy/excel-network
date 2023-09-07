@@ -22,7 +22,7 @@ async fn delete_columns(
 ) -> impl Responder {
     for ids in ids.into_inner() {
         if let Err(err) = delete_column_by_column_id(&state, ids).await {
-            return HttpResponse::InternalServerError().json(err.to_string());
+            return HttpResponse::InternalServerError().body(err.to_string());
         }
     }
     HttpResponse::Ok().into()
@@ -36,7 +36,7 @@ async fn update_columns(
     for ids_and_value in ids_and_values.into_inner() {
         let (ids, value) = ids_and_value;
         if let Err(err) = update_column_by_column_id(&state, ids, value).await {
-            return HttpResponse::InternalServerError().json(err.to_string());
+            return HttpResponse::InternalServerError().body(err.to_string());
         }
     }
     HttpResponse::Ok().into()
@@ -57,7 +57,7 @@ async fn save_columns(
             value,
         ) = ids_and_value;
         if let Err(err) = save_cloumn_value(&state, &row_id, header, value).await {
-            return HttpResponse::InternalServerError().json(err.to_string());
+            return HttpResponse::InternalServerError().body(err.to_string());
         }
     }
     HttpResponse::Ok().into()

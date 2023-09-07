@@ -1,6 +1,8 @@
-use models::{ColumnId, ColumnValue, Name, Row, SearchSheetParams, Sheet};
+use models::{ColumnId, ColumnValue, Name, NameSerial, Row, SearchSheetParams, Sheet, SheetSerial};
 use reqwest::StatusCode;
 use uuid::Uuid;
+
+use std::io::Cursor;
 
 use crate::AppState;
 
@@ -18,7 +20,11 @@ pub async fn save_sheet(
     if res.status() == StatusCode::OK {
         Ok(())
     } else {
-        Err(res.json::<String>().await?.into())
+        let body = res.bytes().await.unwrap_or_default();
+        let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body))
+            .map(|body| body.deserialized::<String>().unwrap_or_default())
+            .unwrap_or_default();
+        Err(body.into())
     }
 }
 
@@ -36,7 +42,11 @@ pub async fn update_sheet_name(
     if res.status() == StatusCode::OK {
         Ok(())
     } else {
-        Err(res.json::<String>().await?.into())
+        let body = res.bytes().await.unwrap_or_default();
+        let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body))
+            .map(|body| body.deserialized::<String>().unwrap_or_default())
+            .unwrap_or_default();
+        Err(body.into())
     }
 }
 
@@ -54,7 +64,11 @@ pub async fn update_columns(
     if res.status() == StatusCode::OK {
         Ok(())
     } else {
-        Err(res.json::<String>().await?.into())
+        let body = res.bytes().await.unwrap_or_default();
+        let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body))
+            .map(|body| body.deserialized::<String>().unwrap_or_default())
+            .unwrap_or_default();
+        Err(body.into())
     }
 }
 
@@ -72,7 +86,11 @@ pub async fn save_columns(
     if res.status() == StatusCode::OK {
         Ok(())
     } else {
-        Err(res.json::<String>().await?.into())
+        let body = res.bytes().await.unwrap_or_default();
+        let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body))
+            .map(|body| body.deserialized::<String>().unwrap_or_default())
+            .unwrap_or_default();
+        Err(body.into())
     }
 }
 
@@ -90,7 +108,11 @@ pub async fn delete_columns(
     if res.status() == StatusCode::OK {
         Ok(())
     } else {
-        Err(res.json::<String>().await?.into())
+        let body = res.bytes().await.unwrap_or_default();
+        let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body))
+            .map(|body| body.deserialized::<String>().unwrap_or_default())
+            .unwrap_or_default();
+        Err(body.into())
     }
 }
 
@@ -109,7 +131,11 @@ pub async fn add_rows_to_sheet(
     if res.status() == StatusCode::OK {
         Ok(())
     } else {
-        Err(res.json::<String>().await?.into())
+        let body = res.bytes().await.unwrap_or_default();
+        let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body))
+            .map(|body| body.deserialized::<String>().unwrap_or_default())
+            .unwrap_or_default();
+        Err(body.into())
     }
 }
 
@@ -128,7 +154,11 @@ pub async fn delete_rows_from_sheet(
     if res.status() == StatusCode::OK {
         Ok(())
     } else {
-        Err(res.json::<String>().await?.into())
+        let body = res.bytes().await.unwrap_or_default();
+        let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body))
+            .map(|body| body.deserialized::<String>().unwrap_or_default())
+            .unwrap_or_default();
+        Err(body.into())
     }
 }
 
@@ -137,15 +167,36 @@ pub async fn search_for_5_sheets(
     params: &SearchSheetParams,
 ) -> Result<Vec<Name>, Box<dyn std::error::Error>> {
     let origin = &app_state.origin;
-    let names = reqwest::Client::new()
+    let res = reqwest::Client::new()
         .post(format!("{origin}/sheet/search"))
         .json(params)
         .send()
-        .await?
-        .json::<Vec<Name>>()
         .await?;
 
-    Ok(names)
+    if res.status() == StatusCode::OK {
+        let body = res.bytes().await.unwrap_or_default();
+        let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body))
+            .map(|body| {
+                let body = body
+                    .deserialized::<Vec<NameSerial>>()
+                    .map(|names| {
+                        names
+                            .into_iter()
+                            .flat_map(|name| name.to_origin())
+                            .collect::<Vec<_>>()
+                    })
+                    .unwrap_or_default();
+                body
+            })
+            .unwrap_or_default();
+        Ok(body)
+    } else {
+        let body = res.bytes().await.unwrap_or_default();
+        let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body))
+            .map(|body| body.deserialized::<String>().unwrap_or_default())
+            .unwrap_or_default();
+        Err(body.into())
+    }
 }
 
 pub async fn get_sheet_by_id(
@@ -153,12 +204,29 @@ pub async fn get_sheet_by_id(
     id: &Uuid,
 ) -> Result<Sheet, Box<dyn std::error::Error>> {
     let origin = &app_state.origin;
-    let sheet = reqwest::Client::new()
+    let res = reqwest::Client::new()
         .get(format!("{origin}/sheet/{}", id))
         .send()
-        .await?
-        .json::<Sheet>()
         .await?;
 
-    Ok(sheet)
+    if res.status() == StatusCode::OK {
+        let body = res.bytes().await.unwrap_or_default();
+        let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body)).map(|body| {
+            body.deserialized::<SheetSerial>()
+                .unwrap_or_default()
+                .to_origin()
+        });
+
+        match body {
+            Ok(Ok(body)) => Ok(body),
+            Ok(Err(err)) => Err(err.to_string().into()),
+            Err(err) => Err(err.to_string().into()),
+        }
+    } else {
+        let body = res.bytes().await.unwrap_or_default();
+        let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body))
+            .map(|body| body.deserialized::<String>().unwrap_or_default())
+            .unwrap_or_default();
+        Err(body.into())
+    }
 }

@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
 use ciborium_io::Write;
 use serde::{Deserialize, Serialize};
-use std::{cmp::Ordering, collections::HashMap, io::Cursor};
+use std::{cmp::Ordering, collections::HashMap, io::Cursor, str::FromStr};
 use uuid::Uuid;
 
 use std::fs::File;
@@ -23,9 +23,33 @@ pub struct SearchSheetParams {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
+pub struct NameSerial {
+    pub id: String,
+    pub the_name: String,
+}
+
+impl NameSerial {
+    pub fn to_origin(self) -> Result<Name, Box<dyn std::error::Error>> {
+        let NameSerial { id, the_name } = self;
+        let id = Uuid::from_str(&id)?;
+        Ok(Name { id, the_name })
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct Name {
     pub id: Uuid,
     pub the_name: String,
+}
+
+impl Name {
+    pub fn to_serial(self) -> NameSerial {
+        let Name { id, the_name } = self;
+        NameSerial {
+            id: id.to_string(),
+            the_name,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -70,9 +94,33 @@ impl Column {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct RowSerial {
+    pub id: String,
+    pub columns: HashMap<String, Column>,
+}
+
+impl RowSerial {
+    pub fn to_origin(self) -> Result<Row, Box<dyn std::error::Error>> {
+        let RowSerial { id, columns } = self;
+        let id = Uuid::from_str(&id)?;
+        Ok(Row { id, columns })
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Row {
     pub id: Uuid,
     pub columns: HashMap<String, Column>,
+}
+
+impl Row {
+    pub fn to_serial(self) -> RowSerial {
+        let Row { id, columns } = self;
+        RowSerial {
+            id: id.to_string(),
+            columns,
+        }
+    }
 }
 
 pub trait RowsSort {
@@ -101,12 +149,69 @@ impl RowsSort for Vec<Row> {
 }
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
+pub struct SheetSerial {
+    pub id: String,
+    pub sheet_name: String,
+    pub type_name: String,
+    pub insert_date: NaiveDate,
+    pub rows: Vec<RowSerial>,
+}
+
+impl SheetSerial {
+    pub fn to_origin(self) -> Result<Sheet, Box<dyn std::error::Error>> {
+        let SheetSerial {
+            id,
+            sheet_name,
+            type_name,
+            insert_date,
+            rows,
+        } = self;
+        let id = Uuid::from_str(&id)?;
+        let rows = rows
+            .into_iter()
+            .flat_map(|row| row.to_origin())
+            .collect::<Vec<_>>();
+        Ok(Sheet {
+            id,
+            sheet_name,
+            type_name,
+            insert_date,
+            rows,
+        })
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
 pub struct Sheet {
     pub id: Uuid,
     pub sheet_name: String,
     pub type_name: String,
     pub insert_date: NaiveDate,
     pub rows: Vec<Row>,
+}
+
+impl Sheet {
+    pub fn to_serial(self) -> SheetSerial {
+        let Sheet {
+            id,
+            sheet_name,
+            type_name,
+            insert_date,
+            rows,
+        } = self;
+        let id = id.to_string();
+        let rows = rows
+            .into_iter()
+            .map(|row| row.to_serial())
+            .collect::<Vec<_>>();
+        SheetSerial {
+            id,
+            sheet_name,
+            type_name,
+            insert_date,
+            rows,
+        }
+    }
 }
 
 pub trait HeaderGetter {
