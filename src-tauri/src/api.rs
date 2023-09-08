@@ -1,4 +1,7 @@
-use models::{ColumnId, ColumnValue, Name, NameSerial, Row, SearchSheetParams, Sheet, SheetSerial};
+use models::{
+    ColumnId, ColumnValue, Name, NameSerial, Row, SearchSheetParams, Sheet, SheetSerial, ToOrigin,
+    ToSerial,
+};
 use reqwest::StatusCode;
 use uuid::Uuid;
 
@@ -149,11 +152,11 @@ pub async fn add_rows_to_sheet(
         .into_iter()
         .map(|col| col.to_serial())
         .collect::<Vec<_>>();
-    ciborium::ser::into_writer(&(sheet_id.to_string(), rows), Cursor::new(&mut buffer))?;
+    ciborium::ser::into_writer(&rows, Cursor::new(&mut buffer))?;
 
     let origin = &app_state.origin;
     let res = reqwest::Client::new()
-        .post(format!("{origin}/sheet/rows"))
+        .post(format!("{origin}/sheet/{sheet_id}/rows"))
         .body(buffer)
         .send()
         .await?;
@@ -175,13 +178,13 @@ pub async fn delete_rows_from_sheet(
     let mut buffer = vec![];
     let rows = rows
         .into_iter()
-        .map(|col| col.to_string())
+        .map(|col| col.to_serial())
         .collect::<Vec<_>>();
-    ciborium::ser::into_writer(&(sheet_id.to_string(), rows), Cursor::new(&mut buffer))?;
+    ciborium::ser::into_writer(&rows, Cursor::new(&mut buffer))?;
 
     let origin = &app_state.origin;
     let res = reqwest::Client::new()
-        .post(format!("{origin}/sheet/delete/rows"))
+        .post(format!("{origin}/sheet/delete/{sheet_id}/rows"))
         .body(buffer)
         .send()
         .await?;

@@ -8,7 +8,7 @@ use std::io::Cursor;
 
 use crate::AppState;
 
-use models::{ColumnId, ColumnIdSerial, ColumnValue};
+use models::{ColumnId, ColumnIdSerial, ColumnValue, ToOrigin};
 
 pub fn scope() -> Scope {
     web::scope("/columns")

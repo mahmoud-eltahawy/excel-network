@@ -1,10 +1,36 @@
 use chrono::NaiveDate;
 use ciborium_io::Write;
 use serde::{Deserialize, Serialize};
-use std::{cmp::Ordering, collections::HashMap, io::Cursor, str::FromStr};
+use std::{cmp::Ordering, collections::HashMap, io::Cursor, marker::Sized, str::FromStr};
 use uuid::Uuid;
 
 use std::fs::File;
+
+pub trait ToOrigin<T>: Sized
+where
+    T: ToSerial<Self>,
+{
+    fn to_origin(self) -> Result<T, Box<dyn std::error::Error>>;
+}
+
+pub trait ToSerial<T>: Sized
+where
+    T: ToOrigin<Self>,
+{
+    fn to_serial(self) -> T;
+}
+
+impl ToSerial<String> for Uuid {
+    fn to_serial(self) -> String {
+        self.to_string()
+    }
+}
+
+impl ToOrigin<Uuid> for String {
+    fn to_origin(self) -> Result<Uuid, Box<dyn std::error::Error>> {
+        Ok(Uuid::from_str(&self)?)
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ColumnIdSerial {
@@ -13,15 +39,15 @@ pub struct ColumnIdSerial {
     pub header: String,
 }
 
-impl ColumnIdSerial {
-    pub fn to_origin(self) -> Result<ColumnId, Box<dyn std::error::Error>> {
+impl ToOrigin<ColumnId> for ColumnIdSerial {
+    fn to_origin(self) -> Result<ColumnId, Box<dyn std::error::Error>> {
         let ColumnIdSerial {
             sheet_id,
             row_id,
             header,
         } = self;
-        let sheet_id = Uuid::from_str(&sheet_id)?;
-        let row_id = Uuid::from_str(&row_id)?;
+        let sheet_id = sheet_id.to_origin()?;
+        let row_id = row_id.to_origin()?;
         Ok(ColumnId {
             sheet_id,
             row_id,
@@ -37,15 +63,15 @@ pub struct ColumnId {
     pub header: String,
 }
 
-impl ColumnId {
-    pub fn to_serial(self) -> ColumnIdSerial {
+impl ToSerial<ColumnIdSerial> for ColumnId {
+    fn to_serial(self) -> ColumnIdSerial {
         let ColumnId {
             sheet_id,
             row_id,
             header,
         } = self;
-        let sheet_id = sheet_id.to_string();
-        let row_id = row_id.to_string();
+        let sheet_id = sheet_id.to_serial();
+        let row_id = row_id.to_serial();
         ColumnIdSerial {
             sheet_id,
             row_id,
@@ -69,10 +95,10 @@ pub struct NameSerial {
     pub the_name: String,
 }
 
-impl NameSerial {
-    pub fn to_origin(self) -> Result<Name, Box<dyn std::error::Error>> {
+impl ToOrigin<Name> for NameSerial {
+    fn to_origin(self) -> Result<Name, Box<dyn std::error::Error>> {
         let NameSerial { id, the_name } = self;
-        let id = Uuid::from_str(&id)?;
+        let id = id.to_origin()?;
         Ok(Name { id, the_name })
     }
 }
@@ -83,13 +109,11 @@ pub struct Name {
     pub the_name: String,
 }
 
-impl Name {
-    pub fn to_serial(self) -> NameSerial {
+impl ToSerial<NameSerial> for Name {
+    fn to_serial(self) -> NameSerial {
         let Name { id, the_name } = self;
-        NameSerial {
-            id: id.to_string(),
-            the_name,
-        }
+        let id = id.to_serial();
+        NameSerial { id, the_name }
     }
 }
 
@@ -140,10 +164,10 @@ pub struct RowSerial {
     pub columns: HashMap<String, Column>,
 }
 
-impl RowSerial {
-    pub fn to_origin(self) -> Result<Row, Box<dyn std::error::Error>> {
+impl ToOrigin<Row> for RowSerial {
+    fn to_origin(self) -> Result<Row, Box<dyn std::error::Error>> {
         let RowSerial { id, columns } = self;
-        let id = Uuid::from_str(&id)?;
+        let id = id.to_origin()?;
         Ok(Row { id, columns })
     }
 }
@@ -154,13 +178,11 @@ pub struct Row {
     pub columns: HashMap<String, Column>,
 }
 
-impl Row {
-    pub fn to_serial(self) -> RowSerial {
+impl ToSerial<RowSerial> for Row {
+    fn to_serial(self) -> RowSerial {
         let Row { id, columns } = self;
-        RowSerial {
-            id: id.to_string(),
-            columns,
-        }
+        let id = id.to_serial();
+        RowSerial { id, columns }
     }
 }
 
@@ -198,8 +220,8 @@ pub struct SheetSerial {
     pub rows: Vec<RowSerial>,
 }
 
-impl SheetSerial {
-    pub fn to_origin(self) -> Result<Sheet, Box<dyn std::error::Error>> {
+impl ToOrigin<Sheet> for SheetSerial {
+    fn to_origin(self) -> Result<Sheet, Box<dyn std::error::Error>> {
         let SheetSerial {
             id,
             sheet_name,
@@ -207,7 +229,7 @@ impl SheetSerial {
             insert_date,
             rows,
         } = self;
-        let id = Uuid::from_str(&id)?;
+        let id = id.to_origin()?;
         let rows = rows
             .into_iter()
             .flat_map(|row| row.to_origin())
@@ -231,8 +253,8 @@ pub struct Sheet {
     pub rows: Vec<Row>,
 }
 
-impl Sheet {
-    pub fn to_serial(self) -> SheetSerial {
+impl ToSerial<SheetSerial> for Sheet {
+    fn to_serial(self) -> SheetSerial {
         let Sheet {
             id,
             sheet_name,
@@ -240,7 +262,7 @@ impl Sheet {
             insert_date,
             rows,
         } = self;
-        let id = id.to_string();
+        let id = id.to_serial();
         let rows = rows
             .into_iter()
             .map(|row| row.to_serial())
