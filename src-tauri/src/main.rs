@@ -103,7 +103,7 @@ async fn save_sheet(
         insert_date: Local::now().date_naive(),
         rows,
     };
-    match api::save_sheet(&app_state, &sheet).await {
+    match api::save_sheet(&app_state, sheet).await {
         Ok(_) => Ok(()),
         Err(err) => Err(err.to_string()),
     }
@@ -178,7 +178,7 @@ async fn update_sheet_name(
     app_state: tauri::State<'_, AppState>,
     name: Name,
 ) -> Result<(), String> {
-    match api::update_sheet_name(&app_state, &name).await {
+    match api::update_sheet_name(&app_state, name).await {
         Ok(_) => Ok(()),
         Err(err) => Err(err.to_string()),
     }

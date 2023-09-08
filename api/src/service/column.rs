@@ -4,9 +4,11 @@ use sqlx::query;
 use std::error::Error;
 use uuid::Uuid;
 
+use std::io::Cursor;
+
 use crate::AppState;
 
-use models::{ColumnId, ColumnValue};
+use models::{ColumnId, ColumnIdSerial, ColumnValue};
 
 pub fn scope() -> Scope {
     web::scope("/columns")
@@ -16,38 +18,88 @@ pub fn scope() -> Scope {
 }
 
 #[post("/delete")]
-async fn delete_columns(
-    state: web::Data<AppState>,
-    ids: web::Json<Vec<ColumnId>>,
-) -> impl Responder {
-    for ids in ids.into_inner() {
-        if let Err(err) = delete_column_by_column_id(&state, ids).await {
-            return HttpResponse::InternalServerError().body(err.to_string());
+async fn delete_columns(state: web::Data<AppState>, ids: web::Bytes) -> impl Responder {
+    let ids = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(ids)).map(|body| {
+        body.deserialized::<Vec<ColumnIdSerial>>().map(|xs| {
+            xs.into_iter()
+                .flat_map(|col| col.to_origin())
+                .collect::<Vec<_>>()
+        })
+    });
+
+    let ids = match ids {
+        Ok(Ok(ids)) => ids,
+        Ok(Err(err)) => {
+            return HttpResponse::InternalServerError().body(err.to_string().into_bytes())
+        }
+        Err(err) => return HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
+    };
+
+    for id in ids {
+        if let Err(err) = delete_column_by_column_id(&state, id).await {
+            return HttpResponse::InternalServerError().body(err.to_string().into_bytes());
         }
     }
+
     HttpResponse::Ok().into()
 }
 
 #[put("/")]
-async fn update_columns(
-    state: web::Data<AppState>,
-    ids_and_values: web::Json<Vec<(ColumnId, ColumnValue)>>,
-) -> impl Responder {
-    for ids_and_value in ids_and_values.into_inner() {
+async fn update_columns(state: web::Data<AppState>, ids_and_values: web::Bytes) -> impl Responder {
+    let ids_and_values =
+        ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(ids_and_values)).map(|body| {
+            body.deserialized::<Vec<(ColumnIdSerial, ColumnValue)>>()
+                .map(|xs| {
+                    xs.into_iter()
+                        .flat_map(|(col, val)| match col.to_origin() {
+                            Ok(col) => Some((col, val)),
+                            Err(_) => None,
+                        })
+                        .collect::<Vec<_>>()
+                })
+        });
+
+    let ids_and_values = match ids_and_values {
+        Ok(Ok(ids_and_values)) => ids_and_values,
+        Ok(Err(err)) => {
+            return HttpResponse::InternalServerError().body(err.to_string().into_bytes())
+        }
+        Err(err) => return HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
+    };
+
+    for ids_and_value in ids_and_values {
         let (ids, value) = ids_and_value;
         if let Err(err) = update_column_by_column_id(&state, ids, value).await {
-            return HttpResponse::InternalServerError().body(err.to_string());
+            return HttpResponse::InternalServerError().body(err.to_string().into_bytes());
         }
     }
     HttpResponse::Ok().into()
 }
 
 #[post("/")]
-async fn save_columns(
-    state: web::Data<AppState>,
-    ids_and_values: web::Json<Vec<(ColumnId, ColumnValue)>>,
-) -> impl Responder {
-    for ids_and_value in ids_and_values.into_inner() {
+async fn save_columns(state: web::Data<AppState>, ids_and_values: web::Bytes) -> impl Responder {
+    let ids_and_values =
+        ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(ids_and_values)).map(|body| {
+            body.deserialized::<Vec<(ColumnIdSerial, ColumnValue)>>()
+                .map(|xs| {
+                    xs.into_iter()
+                        .flat_map(|(col, val)| match col.to_origin() {
+                            Ok(col) => Some((col, val)),
+                            Err(_) => None,
+                        })
+                        .collect::<Vec<_>>()
+                })
+        });
+
+    let ids_and_values = match ids_and_values {
+        Ok(Ok(ids_and_values)) => ids_and_values,
+        Ok(Err(err)) => {
+            return HttpResponse::InternalServerError().body(err.to_string().into_bytes())
+        }
+        Err(err) => return HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
+    };
+
+    for ids_and_value in ids_and_values {
         let (
             ColumnId {
                 sheet_id: _,
@@ -57,7 +109,7 @@ async fn save_columns(
             value,
         ) = ids_and_value;
         if let Err(err) = save_cloumn_value(&state, &row_id, header, value).await {
-            return HttpResponse::InternalServerError().body(err.to_string());
+            return HttpResponse::InternalServerError().body(err.to_string().into_bytes());
         }
     }
     HttpResponse::Ok().into()

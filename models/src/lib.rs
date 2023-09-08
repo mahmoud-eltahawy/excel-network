@@ -7,10 +7,51 @@ use uuid::Uuid;
 use std::fs::File;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct ColumnIdSerial {
+    pub sheet_id: String,
+    pub row_id: String,
+    pub header: String,
+}
+
+impl ColumnIdSerial {
+    pub fn to_origin(self) -> Result<ColumnId, Box<dyn std::error::Error>> {
+        let ColumnIdSerial {
+            sheet_id,
+            row_id,
+            header,
+        } = self;
+        let sheet_id = Uuid::from_str(&sheet_id)?;
+        let row_id = Uuid::from_str(&row_id)?;
+        Ok(ColumnId {
+            sheet_id,
+            row_id,
+            header,
+        })
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ColumnId {
     pub sheet_id: Uuid,
     pub row_id: Uuid,
     pub header: String,
+}
+
+impl ColumnId {
+    pub fn to_serial(self) -> ColumnIdSerial {
+        let ColumnId {
+            sheet_id,
+            row_id,
+            header,
+        } = self;
+        let sheet_id = sheet_id.to_string();
+        let row_id = row_id.to_string();
+        ColumnIdSerial {
+            sheet_id,
+            row_id,
+            header,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

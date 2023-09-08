@@ -5,10 +5,10 @@ use actix_web::{
     HttpResponse, Responder, Scope,
 };
 use sqlx::{query, query_as};
-use std::{collections::HashMap, error::Error};
+use std::{collections::HashMap, error::Error, str::FromStr};
 use uuid::Uuid;
 
-use models::{Column, Name, Row, SearchSheetParams, Sheet};
+use models::{Column, Name, NameSerial, Row, RowSerial, SearchSheetParams, Sheet, SheetSerial};
 
 use std::io::Cursor;
 
@@ -25,8 +25,19 @@ pub fn scope() -> Scope {
 }
 
 #[post("/search")]
-async fn search(state: Data<AppState>, params: web::Json<SearchSheetParams>) -> impl Responder {
-    match search_by_params(&state, params.into_inner()).await {
+async fn search(state: Data<AppState>, params: web::Bytes) -> impl Responder {
+    let params = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(params))
+        .map(|body| body.deserialized::<SearchSheetParams>());
+
+    let params = match params {
+        Ok(Ok(params)) => params,
+        Ok(Err(err)) => {
+            return HttpResponse::InternalServerError().body(err.to_string().into_bytes())
+        }
+        Err(err) => return HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
+    };
+
+    match search_by_params(&state, params).await {
         Ok(dep) => {
             let mut buf = vec![];
             let res = ciborium::ser::into_writer(
@@ -36,29 +47,60 @@ async fn search(state: Data<AppState>, params: web::Json<SearchSheetParams>) -> 
                 Cursor::new(&mut buf),
             )
             .map(|_| HttpResponse::Ok().body(buf))
-            .map_err(|err| HttpResponse::InternalServerError().body(err.to_string()));
+            .map_err(|err| HttpResponse::InternalServerError().body(err.to_string().into_bytes()));
             match res {
                 Ok(fine) => fine,
                 Err(err) => err,
             }
         }
-        Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+        Err(err) => HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
     }
 }
 
 #[post("/")]
-async fn save(state: Data<AppState>, sheet: web::Json<Sheet>) -> impl Responder {
-    match save_sheet(&state, sheet.into_inner()).await {
+async fn save(state: Data<AppState>, sheet: web::Bytes) -> impl Responder {
+    let sheet = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(sheet)).map(|body| {
+        body.deserialized::<SheetSerial>()
+            .map(|sheet| sheet.to_origin())
+    });
+
+    let sheet = match sheet {
+        Ok(Ok(Ok(sheet))) => sheet,
+        Ok(Ok(Err(err))) => {
+            return HttpResponse::InternalServerError().body(err.to_string().into_bytes())
+        }
+        Ok(Err(err)) => {
+            return HttpResponse::InternalServerError().body(err.to_string().into_bytes())
+        }
+        Err(err) => return HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
+    };
+    match save_sheet(&state, sheet).await {
         Ok(_) => HttpResponse::Ok().into(),
-        Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+        Err(err) => HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
     }
 }
 
 #[put("/name")]
-async fn update_name(state: Data<AppState>, name: web::Json<Name>) -> impl Responder {
-    match update_sheet_name(&state, name.into_inner()).await {
+async fn update_name(state: Data<AppState>, name: web::Bytes) -> impl Responder {
+    let name = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(name)).map(|body| {
+        body.deserialized::<NameSerial>()
+            .map(|name| name.to_origin())
+    });
+
+    let name = match name {
+        Ok(Ok(Ok(name))) => name,
+        Ok(Ok(Err(err))) => {
+            return HttpResponse::InternalServerError().body(err.to_string().into_bytes())
+        }
+        Ok(Err(err)) => {
+            return HttpResponse::InternalServerError().body(err.to_string().into_bytes())
+        }
+        Err(err) => return HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
+    };
+
+    match update_sheet_name(&state, name).await {
         Ok(_) => HttpResponse::Ok().into(),
-        Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+        Err(err) => HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
     }
 }
 
@@ -69,13 +111,15 @@ async fn get_sheet_by_id(state: Data<AppState>, id: web::Path<Uuid>) -> impl Res
             let mut buf = vec![];
             let res = ciborium::ser::into_writer(&sheet.to_serial(), Cursor::new(&mut buf))
                 .map(|_| HttpResponse::Ok().body(buf))
-                .map_err(|err| HttpResponse::InternalServerError().body(err.to_string()));
+                .map_err(|err| {
+                    HttpResponse::InternalServerError().body(err.to_string().into_bytes())
+                });
             match res {
                 Ok(fine) => fine,
                 Err(err) => err,
             }
         }
-        Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+        Err(err) => HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
     }
 }
 
@@ -90,13 +134,15 @@ async fn get_custom_sheet_by_id(
             let mut buf = vec![];
             let res = ciborium::ser::into_writer(&sheet.to_serial(), Cursor::new(&mut buf))
                 .map(|_| HttpResponse::Ok().body(buf))
-                .map_err(|err| HttpResponse::InternalServerError().body(err.to_string()));
+                .map_err(|err| {
+                    HttpResponse::InternalServerError().body(err.to_string().into_bytes())
+                });
             match res {
                 Ok(fine) => fine,
                 Err(err) => err,
             }
         }
-        Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+        Err(err) => HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
     }
 }
 
@@ -124,39 +170,81 @@ async fn get_number_of_sheet_rows_by_id(
                 Cursor::new(&mut buf),
             )
             .map(|_| HttpResponse::Ok().body(buf))
-            .map_err(|err| HttpResponse::InternalServerError().body(err.to_string()));
+            .map_err(|err| HttpResponse::InternalServerError().body(err.to_string().into_bytes()));
             match res {
                 Ok(fine) => fine,
                 Err(err) => err,
             }
         }
-        Err(err) => HttpResponse::InternalServerError().body(err.to_string()),
+        Err(err) => HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
     }
 }
 
 #[post("/rows")]
-async fn add_rows_to_sheet(
-    state: Data<AppState>,
-    rows: web::Json<(Uuid, Vec<Row>)>,
-) -> impl Responder {
-    let (sheet_id, rows) = rows.into_inner();
+async fn add_rows_to_sheet(state: Data<AppState>, rows: web::Bytes) -> impl Responder {
+    let rows = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(rows)).map(|body| {
+        body.deserialized::<(String, Vec<RowSerial>)>()
+            .map(|(sheet_id, rows)| {
+                (
+                    sheet_id,
+                    rows.into_iter()
+                        .flat_map(|x| x.to_origin())
+                        .collect::<Vec<_>>(),
+                )
+            })
+    });
+
+    let (sheet_id, rows) = match rows {
+        Ok(Ok(rows)) => rows,
+        Ok(Err(err)) => {
+            return HttpResponse::InternalServerError().body(err.to_string().into_bytes())
+        }
+        Err(err) => return HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
+    };
+
+    let sheet_id = match Uuid::from_str(&sheet_id) {
+        Ok(sheet_id) => sheet_id,
+        Err(err) => return HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
+    };
+
     for row in rows {
         if let Err(err) = save_row(&state, &sheet_id, row).await {
-            return HttpResponse::InternalServerError().body(err.to_string());
+            return HttpResponse::InternalServerError().body(err.to_string().into_bytes());
         }
     }
     HttpResponse::Ok().into()
 }
 
 #[post("/delete/rows")]
-async fn delete_sheet_rows(
-    state: Data<AppState>,
-    ids: web::Json<(Uuid, Vec<Uuid>)>,
-) -> impl Responder {
-    let (sheet_id, rows_id) = ids.into_inner();
-    for row_id in rows_id {
+async fn delete_sheet_rows(state: Data<AppState>, rows: web::Bytes) -> impl Responder {
+    let rows = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(rows)).map(|body| {
+        body.deserialized::<(String, Vec<String>)>()
+            .map(|(sheet_id, rows)| {
+                (
+                    sheet_id,
+                    rows.into_iter()
+                        .flat_map(|x| Uuid::from_str(&x))
+                        .collect::<Vec<_>>(),
+                )
+            })
+    });
+
+    let (sheet_id, rows) = match rows {
+        Ok(Ok(rows)) => rows,
+        Ok(Err(err)) => {
+            return HttpResponse::InternalServerError().body(err.to_string().into_bytes())
+        }
+        Err(err) => return HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
+    };
+
+    let sheet_id = match Uuid::from_str(&sheet_id) {
+        Ok(sheet_id) => sheet_id,
+        Err(err) => return HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
+    };
+
+    for row_id in rows {
         if let Err(err) = delete_row_by_id(&state, &sheet_id, row_id).await {
-            return HttpResponse::InternalServerError().body(err.to_string());
+            return HttpResponse::InternalServerError().body(err.to_string().into_bytes());
         }
     }
     HttpResponse::Ok().into()
