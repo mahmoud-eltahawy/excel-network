@@ -184,7 +184,12 @@ pub fn ShowSheet() -> impl IntoView {
     );
 
     let rows_offset = RwSignal::from(OFFSET_LIMIT);
-    let rows_number = create_memo(move |_| sheet_resource.get().map(|x| x.1).unwrap_or(30));
+    let rows_number = create_memo(move |_| {
+        sheet_resource
+            .get()
+            .map(|x| x.1)
+            .unwrap_or(OFFSET_LIMIT * 4)
+    });
 
     let rows_accumalator = RwSignal::from(vec![]);
 
@@ -391,6 +396,7 @@ pub fn ShowSheet() -> impl IntoView {
             return HashMap::new();
         };
         rows.into_iter()
+            .chain(get_accumalted_rows())
             .filter(|x| x.id == id)
             .collect::<Vec<_>>()
             .first()
@@ -647,6 +653,11 @@ pub fn ShowSheet() -> impl IntoView {
           primary_headers=move || sheet_primary_headers_resource.get().unwrap_or_default()
           edit_mode=edit_mode
         /><br/>
+        <Show
+        when=move || {rows_offset.get() <= rows_number.get()}
+        fallback=|| view!{<></>}>
+            <progress max=move || rows_number.get() value=move || rows_offset.get()/>
+        </Show>
             <table>
                 <SheetHead basic_headers=basic_headers calc_headers=calc_headers/>
                 <tbody>
