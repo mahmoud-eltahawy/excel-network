@@ -1,6 +1,6 @@
 use models::{
-    ColumnId, ColumnValue, Name, NameSerial, Row, SearchSheetParams, Sheet, SheetSerial, ToOrigin,
-    ToSerial,
+    ColumnId, ColumnValue, Name, NameSerial, Row, RowSerial, SearchSheetParams, Sheet, SheetSerial,
+    ToOrigin, ToSerial,
 };
 use reqwest::StatusCode;
 use uuid::Uuid;
@@ -236,26 +236,61 @@ pub async fn search_for_5_sheets(
     }
 }
 
-pub async fn get_sheet_by_id(
+pub async fn get_custom_sheet_by_id(
     app_state: &AppState,
     id: &Uuid,
-) -> Result<Sheet, Box<dyn std::error::Error>> {
+    limit: i64,
+) -> Result<(Sheet, i64), Box<dyn std::error::Error>> {
     let origin = &app_state.origin;
     let res = reqwest::Client::new()
-        .get(format!("{origin}/sheet/{}", id))
+        .get(format!("{origin}/sheet/{id}/{limit}"))
         .send()
         .await?;
 
     if res.status() == StatusCode::OK {
         let body = res.bytes().await.unwrap_or_default();
         let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body)).map(|body| {
-            body.deserialized::<SheetSerial>()
-                .unwrap_or_default()
-                .to_origin()
+            body.deserialized::<(SheetSerial, i64)>()
+                .map(|(sheet, len)| (sheet.to_origin(), len))
         });
 
         match body {
-            Ok(Ok(body)) => Ok(body),
+            Ok(Ok((Ok(sheet), len))) => Ok((sheet, len)),
+            Ok(Ok((Err(err), _))) => Err(err.to_string().into()),
+            Ok(Err(err)) => Err(err.to_string().into()),
+            Err(err) => Err(err.to_string().into()),
+        }
+    } else {
+        let body = res.bytes().await.unwrap_or_default();
+        let body = String::from_utf8(body.to_vec()).unwrap_or_default();
+        Err(body.into())
+    }
+}
+
+pub async fn get_sheet_rows_between(
+    app_state: &AppState,
+    id: &Uuid,
+    offset: i64,
+    limit: i64,
+) -> Result<Vec<Row>, Box<dyn std::error::Error>> {
+    let origin = &app_state.origin;
+    let res = reqwest::Client::new()
+        .get(format!("{origin}/sheet/{id}/{offset}/{limit}"))
+        .send()
+        .await?;
+
+    if res.status() == StatusCode::OK {
+        let body = res.bytes().await.unwrap_or_default();
+        let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body)).map(|body| {
+            body.deserialized::<Vec<RowSerial>>().map(|rows| {
+                rows.into_iter()
+                    .flat_map(|x| x.to_origin())
+                    .collect::<Vec<_>>()
+            })
+        });
+
+        match body {
+            Ok(Ok(rows)) => Ok(rows),
             Ok(Err(err)) => Err(err.to_string().into()),
             Err(err) => Err(err.to_string().into()),
         }

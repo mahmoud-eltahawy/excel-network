@@ -17,14 +17,13 @@ use std::io::Cursor;
 
 pub fn scope() -> Scope {
     web::scope("/sheet")
-        .service(get_sheet_by_id)
+        .service(get_custom_sheet_by_id)
         .service(search)
         .service(save)
         .service(update_name)
         .service(delete_sheet_rows)
         .service(add_rows_to_sheet)
         .service(get_number_of_sheet_rows_by_id)
-        .service(get_custom_sheet_by_id)
 }
 
 #[post("/search")]
@@ -107,35 +106,19 @@ async fn update_name(state: Data<AppState>, name: web::Bytes) -> impl Responder 
     }
 }
 
-#[get("/{id}")]
-async fn get_sheet_by_id(state: Data<AppState>, id: web::Path<Uuid>) -> impl Responder {
-    match fetch_sheet_by_id(&state, id.into_inner()).await {
-        Ok(sheet) => {
-            let mut buf = vec![];
-            let res = ciborium::ser::into_writer(&sheet.to_serial(), Cursor::new(&mut buf))
-                .map(|_| HttpResponse::Ok().body(buf))
-                .map_err(|err| {
-                    HttpResponse::InternalServerError().body(err.to_string().into_bytes())
-                });
-            match res {
-                Ok(fine) => fine,
-                Err(err) => err,
-            }
-        }
-        Err(err) => HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
-    }
-}
-
 #[get("/{id}/{limit}")]
 async fn get_custom_sheet_by_id(
     state: Data<AppState>,
     path: web::Path<(Uuid, i64)>,
 ) -> impl Responder {
     let (id, limit) = path.into_inner();
-    match fetch_custom_sheet_by_id(&state, id, limit).await {
-        Ok(sheet) => {
+    match (
+        fetch_sheet_rows_length(&state, &id).await,
+        fetch_custom_sheet_by_id(&state, id, limit).await,
+    ) {
+        (Ok(len), Ok(sheet)) => {
             let mut buf = vec![];
-            let res = ciborium::ser::into_writer(&sheet.to_serial(), Cursor::new(&mut buf))
+            let res = ciborium::ser::into_writer(&(sheet.to_serial(), len), Cursor::new(&mut buf))
                 .map(|_| HttpResponse::Ok().body(buf))
                 .map_err(|err| {
                     HttpResponse::InternalServerError().body(err.to_string().into_bytes())
@@ -145,7 +128,12 @@ async fn get_custom_sheet_by_id(
                 Err(err) => err,
             }
         }
-        Err(err) => HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
+        (Err(err1), Err(err2)) => HttpResponse::InternalServerError()
+            .body((err1.to_string() + " and " + &err2.to_string()).into_bytes()),
+        (Err(err1), Ok(_)) => {
+            HttpResponse::InternalServerError().body(err1.to_string().into_bytes())
+        }
+        (Ok(_), Err(err)) => HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
     }
 }
 
@@ -280,7 +268,7 @@ async fn fetch_rows_ids_by_sheet_id_in_limit(
     let records = query!(
         r#"
         select id
-        from rows WHERE sheet_id = $1 OFFSET $2 LIMIT $3"#,
+        from rows WHERE sheet_id = $1 ORDER BY insert_date OFFSET $2 LIMIT $3"#,
         sheet_id,
         offset,
         limit,
@@ -290,19 +278,16 @@ async fn fetch_rows_ids_by_sheet_id_in_limit(
     Ok(records.into_iter().map(|x| x.id).collect())
 }
 
-pub async fn fetch_rows_ids_by_sheet_id(
-    state: &AppState,
-    sheet_id: &Uuid,
-) -> Result<Vec<Uuid>, Box<dyn Error>> {
+async fn fetch_sheet_rows_length(state: &AppState, sheet_id: &Uuid) -> Result<i64, Box<dyn Error>> {
     let records = query!(
         r#"
-        select id
+        select count(id) as len
         from rows WHERE sheet_id = $1"#,
         sheet_id,
     )
-    .fetch_all(&state.db)
+    .fetch_one(&state.db)
     .await?;
-    Ok(records.into_iter().map(|x| x.id).collect())
+    Ok(records.len.unwrap_or_default())
 }
 
 pub async fn delete_row_by_id(
@@ -320,30 +305,6 @@ pub async fn delete_row_by_id(
     .execute(&state.db)
     .await?;
     Ok(())
-}
-
-async fn fetch_sheet_by_id(state: &AppState, id: Uuid) -> Result<Sheet, Box<dyn Error>> {
-    let record = query!(
-        r#"
-        select *
-        from sheets WHERE id = $1"#,
-        id
-    )
-    .fetch_one(&state.db)
-    .await?;
-    let id = record.id;
-    let mut rows = Vec::new();
-    for id in fetch_rows_ids_by_sheet_id(state, &id).await?.into_iter() {
-        let columns = fetch_columns_by_row_id(state, &id).await?;
-        rows.push(Row { id, columns });
-    }
-    Ok(Sheet {
-        id,
-        sheet_name: record.sheet_name,
-        type_name: record.type_name,
-        insert_date: record.insert_date,
-        rows,
-    })
 }
 
 async fn fetch_custom_sheet_by_id(

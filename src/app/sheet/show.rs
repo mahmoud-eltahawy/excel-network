@@ -51,6 +51,8 @@ struct ColumnIdentity {
     value: ColumnValue,
 }
 
+const OFFSET_LIMIT: i64 = 7;
+
 #[component]
 fn ColumnEdit<F1, F2, F3>(mode: F1, cancel: F2, push_to_modified: F3) -> impl IntoView
 where
@@ -106,6 +108,13 @@ where
             </button>
         </div>
     }
+}
+
+#[derive(Serialize, Deserialize)]
+struct LimitedId {
+    id: Option<Uuid>,
+    offset: i64,
+    limit: i64,
 }
 
 #[component]
@@ -168,11 +177,46 @@ pub fn ShowSheet() -> impl IntoView {
     let sheet_resource = create_resource(
         || (),
         move |_| async move {
-            invoke::<Id, Sheet>("get_sheet", &Id { id: sheet_id() })
+            invoke::<Id, (Sheet, i64)>("get_sheet", &Id { id: sheet_id() })
                 .await
                 .unwrap_or_default()
         },
     );
+
+    let rows_offset = RwSignal::from(OFFSET_LIMIT);
+    let rows_number = create_memo(move |_| sheet_resource.get().map(|x| x.1).unwrap_or(30));
+
+    let rows_accumalator = RwSignal::from(vec![]);
+
+    let sheet_rows_resource = create_resource(
+        move || rows_offset.get(),
+        move |offset| async move {
+            let rows_number = rows_number.get();
+            let v = invoke::<_, Vec<Row>>(
+                "get_sheet_rows",
+                &LimitedId {
+                    id: sheet_id(),
+                    offset,
+                    limit: OFFSET_LIMIT,
+                },
+            )
+            .await
+            .unwrap_or_default();
+            if offset <= rows_number {
+                rows_offset.update(|x| *x += OFFSET_LIMIT);
+            }
+            if !v.is_empty() {
+                rows_accumalator.update(|xs| xs.extend(v));
+            }
+        },
+    );
+
+    let get_accumalted_rows = move || {
+        sheet_rows_resource.get();
+        rows_accumalator.get()
+    };
+
+    let sheet_init_memo = create_memo(move |_| sheet_resource.get().map(|x| x.0));
 
     let sheet_headers_resource = create_resource(
         move || sheet_type_name_resource.get(),
@@ -242,10 +286,11 @@ pub fn ShowSheet() -> impl IntoView {
 
     let sheet_with_primary_row_with_calc_values = create_memo(move |_| {
         let c_cols = calc_columns.get();
-        let mut sheet = sheet_resource.get().unwrap_or_default();
+        let mut sheet = sheet_init_memo.get().unwrap_or_default();
         sheet.rows = sheet
             .rows
             .into_iter()
+            .chain(get_accumalted_rows())
             .map(|Row { id, columns }| Row {
                 id,
                 columns: {
@@ -286,7 +331,8 @@ pub fn ShowSheet() -> impl IntoView {
         sheet.rows = sheet
             .rows
             .into_iter()
-            .filter(|x| x.id != sheet_resource.get().map(|x| x.id).unwrap_or_default())
+            .chain(get_accumalted_rows())
+            .filter(|x| x.id != sheet_init_memo.get().map(|x| x.id).unwrap_or_default())
             .collect::<Vec<_>>();
         sheet
     });
@@ -341,7 +387,7 @@ pub fn ShowSheet() -> impl IntoView {
         added_rows.update(|xs| xs.sort_rows(sheet_priorities_resource.get().unwrap_or_default()));
     };
     let primary_row_columns = create_memo(move |_| {
-        let Some(Sheet { id, rows, .. }) = sheet_resource.get() else {
+        let Some(Sheet { id, rows, .. }) = sheet_init_memo.get() else {
             return HashMap::new();
         };
         rows.into_iter()
@@ -353,7 +399,7 @@ pub fn ShowSheet() -> impl IntoView {
     });
 
     let save_edits = move |_| {
-        let Some(sheet) = sheet_resource.get() else {
+        let Some(sheet) = sheet_init_memo.get() else {
             return;
         };
         let sheetid = sheet.id;
@@ -521,7 +567,7 @@ pub fn ShowSheet() -> impl IntoView {
             let Some(filepath) = open_file().await else {
                 return;
             };
-            let sheet_id = sheet_resource.get().map(|x| x.id).unwrap_or_default();
+            let sheet_id = sheet_init_memo.get().map(|x| x.id).unwrap_or_default();
             let rows = import_sheet_rows(sheet_id, sheettype, filepath).await;
 
             let primary_row = rows.iter().filter(|x| x.id == sheet_id).collect::<Vec<_>>();
@@ -578,7 +624,7 @@ pub fn ShowSheet() -> impl IntoView {
             <Show
                 when=move || matches!(edit_mode.get(),EditState::Primary)
                 fallback=move || {
-                    view! {  <h1>{move || sheet_resource.get().unwrap_or_default().sheet_name}</h1> }
+                    view! {  <h1>{move || sheet_init_memo.get().unwrap_or_default().sheet_name}</h1> }
                 }
             >
                 <input
@@ -586,7 +632,7 @@ pub fn ShowSheet() -> impl IntoView {
                     class="centered-input"
                     placeholder=move || {
                         format!(
-                            "{} ({})", "اسم الشيت", sheet_resource.get().unwrap_or_default()
+                            "{} ({})", "اسم الشيت", sheet_init_memo.get().unwrap_or_default()
                             .sheet_name
                         )
                     }
@@ -612,7 +658,7 @@ pub fn ShowSheet() -> impl IntoView {
                         edit_mode=edit_mode
                         is_deleted=is_deleted
                         modified_columns=modified_columns
-                        sheet_id=move || sheet_resource.get().map(|x| x.id).unwrap_or_default()
+                        sheet_id=move || sheet_init_memo.get().map(|x| x.id).unwrap_or_default()
             />
             <Show
             when=move || !added_rows.get().is_empty()
@@ -625,7 +671,7 @@ pub fn ShowSheet() -> impl IntoView {
                         basic_headers=basic_headers
                         calc_headers=calc_headers
                         rows=added_rows
-                    sheet_id=move ||sheet_resource.get().map(|x| x.id).unwrap_or_default()
+                    sheet_id=move ||sheet_init_memo.get().map(|x| x.id).unwrap_or_default()
                     priorities=move || sheet_priorities_resource.get().unwrap_or_default()
                     />
                     <Show

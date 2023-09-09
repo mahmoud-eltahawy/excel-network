@@ -7,7 +7,7 @@ use chrono::{Local, NaiveDate};
 use dotenv::dotenv;
 use models::{
     Column, ColumnId, ColumnValue, Config, ConfigValue, ImportConfig, Name, Row, RowIdentity,
-    RowsSort, SearchSheetParams, Sheet, SheetConfig,
+    SearchSheetParams, Sheet, SheetConfig,
 };
 use std::{
     collections::HashMap,
@@ -123,22 +123,27 @@ async fn top_5_sheets(
 #[tauri::command]
 async fn get_sheet(
     app_state: tauri::State<'_, AppState>,
-    priorities: tauri::State<'_, Priorities>,
     id: Option<Uuid>,
-) -> Result<Sheet, String> {
+) -> Result<(Sheet, i64), String> {
     match id {
-        Some(id) => match api::get_sheet_by_id(&app_state, &id).await {
-            Ok(sheet) => {
-                let mut sheet = sheet;
-                sheet.rows.sort_rows(
-                    priorities
-                        .0
-                        .get(&sheet.type_name)
-                        .unwrap_or(&vec![])
-                        .to_vec(),
-                );
-                Ok(sheet)
-            }
+        Some(id) => match api::get_custom_sheet_by_id(&app_state, &id, 10).await {
+            Ok((sheet, len)) => Ok((sheet, len)),
+            Err(err) => Err(err.to_string()),
+        },
+        None => Err("id is none".to_string()),
+    }
+}
+
+#[tauri::command]
+async fn get_sheet_rows(
+    app_state: tauri::State<'_, AppState>,
+    id: Option<Uuid>,
+    offset: i64,
+    limit: i64,
+) -> Result<Vec<Row>, String> {
+    match id {
+        Some(id) => match api::get_sheet_rows_between(&app_state, &id, offset, limit).await {
+            Ok(rows) => Ok(rows),
             Err(err) => Err(err.to_string()),
         },
         None => Err("id is none".to_string()),
@@ -475,6 +480,7 @@ fn main() {
             delete_columns,
             save_columns,
             update_columns,
+            get_sheet_rows,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
