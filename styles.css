@@ -43,16 +43,19 @@ html {
 .button:hover {
   border-color: #396cd8;
 }
+
 .button:active {
   border-color: #396cd8;
   background-color: #e8e8e8;
 }
+
 table {
   border-collapse: collapse;
   width: 100%;
 }
 
-th, td {
+th,
+td {
   border: 1px solid black;
   padding: 5px;
 }
@@ -75,7 +78,7 @@ td {
 }
 
 .spanA td {
-    column-span: all;
+  column-span: all;
 }
 
 ul {
@@ -131,52 +134,78 @@ p {
   background-color: #eee;
 }
 
-button:hover{
-    border-color: blue;
+button:hover {
+  border-color: blue;
 }
 
 .right-corner {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    font-size: 24px;
-    border-radius: 50%;
-    background-color: skyblue;
-    color: white;
-    padding: 20px;
-    text-align: center;
-    text-decoration: none;
-    display: inline-block;
-    margin: 4px 2px;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  font-size: 24px;
+  border-radius: 50%;
+  background-color: skyblue;
+  color: white;
+  padding: 20px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  margin: 4px 2px;
+}
 
-    
+.right-corner-left {
+  position: absolute;
+  top: 10px;
+  right: 90px;
+  font-size: 24px;
+  border-radius: 50%;
+  background-color: skyblue;
+  color: white;
+  padding: 20px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  margin: 4px 2px;
 }
 
 .left-corner {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    font-size: 24px;
-    border-radius: 50%;
-    background-color: skyblue;
-    color: white;
-    padding: 20px;
-    text-align: center;
-    text-decoration: none;
-    display: inline-block;
-    margin: 4px 2px;
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  font-size: 24px;
+  border-radius: 50%;
+  background-color: skyblue;
+  color: white;
+  padding: 20px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  margin: 4px 2px;
+}
 
-    
+.left-corner-right {
+  position: absolute;
+  top: 10px;
+  left: 90px;
+  font-size: 24px;
+  border-radius: 50%;
+  background-color: skyblue;
+  color: white;
+  padding: 20px;
+  text-align: center;
+  text-decoration: none;
+  display: inline-block;
+  margin: 4px 2px;
 }
 
 .right-corner:hover {
-    font-size: 34px;
-    border-radius: 10%;
+  font-size: 34px;
+  border-radius: 10%;
 }
 
 .left-corner:hover {
-    font-size: 34px;
-    border-radius: 10%;
+  font-size: 34px;
+  border-radius: 10%;
 }
 
 .btn {
@@ -203,13 +232,15 @@ button:hover{
 .date-input-container {
   display: block;
 }
+
 .date-input-container input {
-    margin: 17px;
-    font-size: 24px;
+  margin: 17px;
+  font-size: 24px;
 }
+
 .date-input-container label {
-    margin: 17px;
-    font-size: 24px;
+  margin: 17px;
+  font-size: 24px;
 }
 
 .deleted {
@@ -218,8 +249,8 @@ button:hover{
 }
 
 .shapeless {
-    border: none;
-    background: transparent;
+  border: none;
+  background: transparent;
 }
 
 td input {
@@ -230,19 +261,19 @@ td input {
 }
 
 .popup {
-    display: block;
-    position: fixed;
-    width: 50%;
-    height: 50%;
-    top: 20%;
-    right: 30%;
-    background-color: gray;
+  display: block;
+  position: fixed;
+  width: 50%;
+  height: 50%;
+  top: 20%;
+  right: 30%;
+  background-color: gray;
 }
 
 .popup input {
-    display: block;
-    margin: 2px auto;
-    width: 80%;
-    height: 30%;
-    font-size: 24px;
+  display: block;
+  margin: 2px auto;
+  width: 80%;
+  height: 30%;
+  font-size: 24px;
 }
