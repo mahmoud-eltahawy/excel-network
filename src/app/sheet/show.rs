@@ -165,7 +165,7 @@ pub fn ShowSheet() -> impl IntoView {
         },
     );
 
-    create_effect(move |_| log!("{:#?}", rows_ids_resource.get()));
+    create_effect(move |_| logging::log!("{:#?}", rows_ids_resource.get()));
 
     let sheet_id = move || {
         params.with(|params| match params.get("sheet_id") {
