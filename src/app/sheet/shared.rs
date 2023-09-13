@@ -272,7 +272,7 @@ where
     FI: Fn() -> Uuid + 'static + Clone + Copy,
 {
     let edit_column = RwSignal::from(None::<(String, Uuid, Rc<HashMap<String, Column>>)>);
-    let new_rows = create_memo(move |_| {
+    let new_rows = Memo::new(move |_| {
         rows.get()
             .into_iter()
             .filter(|x| x.id != sheet_id())
@@ -367,7 +367,7 @@ where
     BH: Fn() -> Vec<String> + 'static + Clone,
     CH: Fn() -> Vec<String> + 'static,
 {
-    let basic_signals_map = create_memo(move |_| {
+    let basic_signals_map = Memo::new(move |_| {
         let mut map = HashMap::new();
         for x in basic_columns.get().into_iter() {
             match x {
@@ -406,7 +406,7 @@ where
         map
     });
 
-    let calc_signals_map = create_memo(move |_| {
+    let calc_signals_map = Memo::new(move |_| {
         let mut map = HashMap::new();
         for OperationConfig { header, value } in calc_columns.get().into_iter() {
             let mut basic_map = HashMap::new();
@@ -577,7 +577,7 @@ where
             .collect::<Vec<_>>()
     };
 
-    let all_columns = create_memo(move |_| {
+    let all_columns = Memo::new(move |_| {
         columns
             .get()
             .into_iter()

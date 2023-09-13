@@ -58,14 +58,11 @@ use uuid::Uuid;
 
 #[component]
 pub fn Home() -> impl IntoView {
-    let sheets_types_names = create_resource(
-        || (),
-        |_| async move {
-            invoke::<Non, Vec<Name>>("sheets_types_names", &Non {})
-                .await
-                .unwrap_or_default()
-        },
-    );
+    let sheets_types_names = Resource::once(|| async move {
+        invoke::<Non, Vec<Name>>("sheets_types_names", &Non {})
+            .await
+            .unwrap_or_default()
+    });
 
     view! {
         <section>

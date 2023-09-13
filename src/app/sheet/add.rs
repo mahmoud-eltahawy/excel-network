@@ -35,21 +35,18 @@ pub fn AddSheet() -> impl IntoView {
             None => None,
         })
     };
-    let sheet_type_name_resource = create_resource(
-        || (),
-        move |_| async move {
-            invoke::<Id, String>(
-                "sheet_type_name",
-                &Id {
-                    id: sheet_type_id(),
-                },
-            )
-            .await
-            .unwrap_or_default()
-        },
-    );
+    let sheet_type_name_resource = Resource::once(move || async move {
+        invoke::<Id, String>(
+            "sheet_type_name",
+            &Id {
+                id: sheet_type_id(),
+            },
+        )
+        .await
+        .unwrap_or_default()
+    });
 
-    let sheet_priorities_resource = create_resource(
+    let sheet_priorities_resource = Resource::new(
         move || sheet_type_name_resource.get(),
         move |name| async move {
             invoke::<NameArg, Vec<String>>("get_priorities", &NameArg { name })
@@ -58,7 +55,7 @@ pub fn AddSheet() -> impl IntoView {
         },
     );
 
-    let sheet_headers_resource = create_resource(
+    let sheet_headers_resource = Resource::new(
         move || sheet_type_name_resource.get(),
         move |name| async move {
             invoke::<NameArg, Vec<ConfigValue>>("sheet_headers", &NameArg { name })
@@ -66,8 +63,8 @@ pub fn AddSheet() -> impl IntoView {
                 .unwrap_or_default()
         },
     );
-    let sheet_id_resource = create_resource(|| (), move |_| async move { new_id().await });
-    let basic_columns = create_memo(move |_| {
+    let sheet_id_resource = Resource::once(move || async move { new_id().await });
+    let basic_columns = Memo::new(move |_| {
         sheet_headers_resource
             .get()
             .unwrap_or_default()
@@ -79,7 +76,7 @@ pub fn AddSheet() -> impl IntoView {
             .collect::<Vec<_>>()
     });
 
-    let calc_columns = create_memo(move |_| {
+    let calc_columns = Memo::new(move |_| {
         sheet_headers_resource
             .get()
             .unwrap_or_default()
@@ -162,7 +159,7 @@ pub fn AddSheet() -> impl IntoView {
         });
     };
 
-    let sheet_primary_headers_resource = create_resource(
+    let sheet_primary_headers_resource = Resource::new(
         move || sheet_type_name_resource.get(),
         move |name| async move {
             invoke::<NameArg, Vec<String>>("sheet_primary_headers", &NameArg { name })

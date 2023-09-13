@@ -133,21 +133,18 @@ pub fn ShowSheet() -> impl IntoView {
             None => None,
         })
     };
-    let sheet_type_name_resource = create_resource(
-        || (),
-        move |_| async move {
-            invoke::<Id, String>(
-                "sheet_type_name",
-                &Id {
-                    id: sheet_type_id(),
-                },
-            )
-            .await
-            .unwrap_or_default()
-        },
-    );
+    let sheet_type_name_resource = Resource::once(move || async move {
+        invoke::<Id, String>(
+            "sheet_type_name",
+            &Id {
+                id: sheet_type_id(),
+            },
+        )
+        .await
+        .unwrap_or_default()
+    });
 
-    let sheet_priorities_resource = create_resource(
+    let sheet_priorities_resource = Resource::new(
         move || sheet_type_name_resource.get(),
         move |name| async move {
             invoke::<NameArg, Vec<String>>("get_priorities", &NameArg { name })
@@ -156,7 +153,7 @@ pub fn ShowSheet() -> impl IntoView {
         },
     );
 
-    let rows_ids_resource = create_resource(
+    let rows_ids_resource = Resource::new(
         move || sheet_type_name_resource.get(),
         move |name| async move {
             invoke::<NameArg, RowIdentity>("get_rows_ids", &NameArg { name })
@@ -165,7 +162,7 @@ pub fn ShowSheet() -> impl IntoView {
         },
     );
 
-    create_effect(move |_| logging::log!("{:#?}", rows_ids_resource.get()));
+    Effect::new(move |_| logging::log!("{:#?}", rows_ids_resource.get()));
 
     let sheet_id = move || {
         params.with(|params| match params.get("sheet_id") {
@@ -174,17 +171,15 @@ pub fn ShowSheet() -> impl IntoView {
         })
     };
 
-    let sheet_resource = create_resource(
-        || (),
-        move |_| async move {
-            invoke::<Id, (Sheet, i64)>("get_sheet", &Id { id: sheet_id() })
-                .await
-                .unwrap_or_default()
-        },
-    );
+    let sheet_resource = Resource::once(move || async move {
+        invoke::<Id, (Sheet, i64)>("get_sheet", &Id { id: sheet_id() })
+            .await
+            .unwrap_or_default()
+    });
 
     let rows_offset = RwSignal::from(OFFSET_LIMIT);
-    let rows_number = create_memo(move |_| {
+
+    let rows_number = Memo::new(move |_| {
         sheet_resource
             .get()
             .map(|x| x.1)
@@ -193,7 +188,7 @@ pub fn ShowSheet() -> impl IntoView {
 
     let rows_accumalator = RwSignal::from(vec![]);
 
-    let sheet_rows_resource = create_resource(
+    let sheet_rows_resource = Resource::new(
         move || rows_offset.get(),
         move |offset| async move {
             let rows_number = rows_number.get();
@@ -221,9 +216,9 @@ pub fn ShowSheet() -> impl IntoView {
         rows_accumalator.get()
     };
 
-    let sheet_init_memo = create_memo(move |_| sheet_resource.get().map(|x| x.0));
+    let sheet_init_memo = Memo::new(move |_| sheet_resource.get().map(|x| x.0));
 
-    let sheet_headers_resource = create_resource(
+    let sheet_headers_resource = Resource::new(
         move || sheet_type_name_resource.get(),
         move |name| async move {
             invoke::<NameArg, Vec<ConfigValue>>("sheet_headers", &NameArg { name })
@@ -231,7 +226,7 @@ pub fn ShowSheet() -> impl IntoView {
                 .unwrap_or_default()
         },
     );
-    let sheet_primary_headers_resource = create_resource(
+    let sheet_primary_headers_resource = Resource::new(
         move || sheet_type_name_resource.get(),
         move |name| async move {
             invoke::<NameArg, Vec<String>>("sheet_primary_headers", &NameArg { name })
@@ -240,7 +235,7 @@ pub fn ShowSheet() -> impl IntoView {
         },
     );
 
-    let basic_columns = create_memo(move |_| {
+    let basic_columns = Memo::new(move |_| {
         sheet_headers_resource
             .get()
             .unwrap_or_default()
@@ -252,7 +247,7 @@ pub fn ShowSheet() -> impl IntoView {
             .collect::<Vec<_>>()
     });
 
-    let calc_columns = create_memo(move |_| {
+    let calc_columns = Memo::new(move |_| {
         sheet_headers_resource
             .get()
             .unwrap_or_default()
@@ -280,16 +275,7 @@ pub fn ShowSheet() -> impl IntoView {
             .collect::<Vec<_>>()
     };
 
-    // let basic_rows_columns =
-    //     create_memo(move |_| sheet_resource.get().map(|x| x.rows).unwrap_or_default());
-
-    // let calc_rows_columns = create_memo(move |_| {
-    //     basic_rows_columns.get().into_iter().map(|x| {
-    //         let columns = x.columns;
-    //     })
-    // });
-
-    let sheet_with_primary_row_with_calc_values = create_memo(move |_| {
+    let sheet_with_primary_row_with_calc_values = Memo::new(move |_| {
         let c_cols = calc_columns.get();
         let mut sheet = sheet_init_memo.get().unwrap_or_default();
         sheet.rows = sheet
@@ -331,7 +317,7 @@ pub fn ShowSheet() -> impl IntoView {
         sheet
     });
 
-    let sheet_without_primary_row_with_calc_values = create_memo(move |_| {
+    let sheet_without_primary_row_with_calc_values = Memo::new(move |_| {
         let mut sheet = sheet_with_primary_row_with_calc_values.get();
         sheet.rows = sheet
             .rows
@@ -398,7 +384,7 @@ pub fn ShowSheet() -> impl IntoView {
         added_rows.update_untracked(|xs| xs.push(row));
         added_rows.update(|xs| xs.sort_rows(sheet_priorities_resource.get().unwrap_or_default()));
     };
-    let primary_row_columns = create_memo(move |_| {
+    let primary_row_columns = Memo::new(move |_| {
         let Some(Sheet { id, rows, .. }) = sheet_init_memo.get() else {
             return HashMap::new();
         };
@@ -806,7 +792,7 @@ where
     FI: Fn() -> Uuid + 'static + Clone + Copy,
 {
     let edit_column = RwSignal::from(None::<ColumnIdentity>);
-    let new_rows = create_memo(move |_| {
+    let new_rows = Memo::new(move |_| {
         rows()
             .into_iter()
             .filter(|x| x.id != sheet_id())

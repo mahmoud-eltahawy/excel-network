@@ -28,14 +28,11 @@ pub fn SheetHome() -> impl IntoView {
             None => None,
         })
     };
-    let sheet_type_name_resource = create_resource(
-        || (),
-        move |_| async move {
-            invoke::<Id, String>("sheet_type_name", &Id { id: sheet_id() })
-                .await
-                .unwrap_or_default()
-        },
-    );
+    let sheet_type_name_resource = Resource::once(move || async move {
+        invoke::<Id, String>("sheet_type_name", &Id { id: sheet_id() })
+            .await
+            .unwrap_or_default()
+    });
 
     let sheet_type_name = move || match sheet_type_name_resource.get() {
         Some(name) => name,
@@ -57,7 +54,7 @@ pub fn SheetHome() -> impl IntoView {
         },
     };
 
-    let bills = create_resource(search_args, |value| async move {
+    let bills = Resource::new(search_args, |value| async move {
         invoke::<_, Vec<Name>>("top_5_sheets", &value)
             .await
             .unwrap_or_default()
