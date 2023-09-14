@@ -218,9 +218,9 @@ async fn delete_rows_from_sheet(
 async fn delete_columns(
     app_state: tauri::State<'_, AppState>,
     sheetid: Uuid,
-    rows_headers: Vec<(Uuid, String)>,
+    rowsheaders: Vec<(Uuid, String)>,
 ) -> Result<(), String> {
-    let columns_ids = rows_headers
+    let columns_ids = rowsheaders
         .into_iter()
         .map(|(row_id, header)| ColumnId {
             sheet_id: sheetid,

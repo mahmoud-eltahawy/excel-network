@@ -563,6 +563,7 @@ pub fn PrimaryRow<FP, FN>(
     non_primary_headers: FN,
     columns: Memo<HashMap<Rc<str>, FrontendColumn>>,
     new_columns: RwSignal<HashMap<Rc<str>, FrontendColumn>>,
+    deleted_columns: RwSignal<Vec<Rc<str>>>,
     edit_mode: RwSignal<EditState>,
 ) -> impl IntoView
 where
@@ -632,6 +633,28 @@ where
         add_what.set(None);
     };
 
+    let is_in_edit_mode = move || matches!(edit_mode.get(), EditState::Primary);
+    let is_deleted = move |header| deleted_columns.get().into_iter().any(|x| x == header);
+    let is_new = move |header| new_columns.get().keys().any(|x| x.clone() == header);
+
+    let delete_fun = move |p: Rc<str>| {
+        move |_| {
+            if is_new(p.clone()) {
+                new_columns.update(|xs| xs.retain(|x, _| x.clone() != p));
+            } else {
+                if is_deleted(p.clone()) {
+                    deleted_columns.update(|xs| xs.retain(|x| x.clone() != p.clone()))
+                } else {
+                    deleted_columns.update(|xs| {
+                        if !p.is_empty() {
+                            xs.push(p.clone())
+                        }
+                    })
+                }
+            }
+        }
+    };
+
     view! {
     <>
     <table>
@@ -642,30 +665,44 @@ where
             <tr>
             <td>{let a = primary.clone();move || a.to_string()}</td>
             <td class="shapeless">" "</td>
-            <td>{move || columns
+            <td>{let p = primary.clone();move || columns
                  .get()
-                 .get(&primary)
+                 .get(&p)
                  .map(|x| x.value.to_string()
                   + &new_columns
                   .get()
-                  .get(&primary)
+                  .get(&p)
                   .map(|x| " => ".to_string() + &x.value.to_string())
                   .unwrap_or_default()
                  )
             }
             </td>
+            <Show when=is_in_edit_mode fallback=|| view! {<></>}>
+                <td><button
+                    on:click=delete_fun(primary.clone())>{
+                        let p = primary.clone();
+                        move || if is_deleted(p.clone()) {"P"} else {"X"}
+                    }</button></td>
+            </Show>
             <td class="shapeless">" "</td>
             <td class="shapeless">" | "</td>
             <td class="shapeless">" "</td>
             <td>{let a = non_primary.clone();move || a.to_string()}</td>
             <td class="shapeless">" "</td>
-            <td>{move ||all_columns.get().get(&non_primary).map(|x| x.value.to_string())}</td>
+            <td>{let np = non_primary.clone();move ||all_columns.get().get(&np).map(|x| x.value.to_string())}</td>
+            <Show when=is_in_edit_mode fallback=|| view! {<></>}>
+                <td><button
+                     on:click=delete_fun(non_primary.clone())>{
+                        let p = non_primary.clone();
+                        move || if is_deleted(p.clone()) {"P"} else {"X"}
+                    }</button></td>
+            </Show>
             </tr>
         }
         />
     </table>
     <Show
-        when=move || matches!(edit_mode.get(),EditState::Primary)
+        when=is_in_edit_mode
         fallback=move|| view!{<></>}
     >
         <Show
@@ -693,12 +730,6 @@ where
             column_value.set(FrontendColumnValue::String(Some(Rc::from(""))));
             }
             >"+ نص"</button>
-            <button
-            class="centered-button"
-            on:click=move |_| {
-            new_columns.set(HashMap::new());
-            }
-            >"الغاء التعديلات"</button>
         </>
         }
         >

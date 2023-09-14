@@ -35,6 +35,12 @@ struct UpdateColumnsArgs {
 }
 
 #[derive(Serialize, Deserialize)]
+struct DeleteColumnsArgs {
+    sheetid: Uuid,
+    rowsheaders: Vec<(Uuid, Rc<str>)>,
+}
+
+#[derive(Serialize, Deserialize)]
 struct RowsDeleteArg {
     sheetid: Uuid,
     rowsids: Vec<Uuid>,
@@ -131,6 +137,7 @@ pub fn ShowSheet() -> impl IntoView {
     let added_rows = RwSignal::from(Vec::<FrontendRow>::new());
     let modified_columns = RwSignal::from(Vec::<ColumnIdentity>::new());
     let modified_primary_columns = RwSignal::from(HashMap::<Rc<str>, FrontendColumn>::new());
+    let deleted_primary_columns = RwSignal::from(Vec::<Rc<str>>::new());
     let on_edit = RwSignal::from(false);
     let params = use_params_map();
     let sheet_type_id = move || {
@@ -139,6 +146,9 @@ pub fn ShowSheet() -> impl IntoView {
             None => None,
         })
     };
+
+    Effect::new(move |_| logging::log!("{:#?}", modified_primary_columns.get()));
+
     let sheet_type_name_resource = Resource::once(move || async move {
         invoke::<Id, Rc<str>>(
             "sheet_type_name",
@@ -390,6 +400,7 @@ pub fn ShowSheet() -> impl IntoView {
             || !added_rows.get().is_empty()
             || !modified_columns.get().is_empty()
             || !modified_primary_columns.get().is_empty()
+            || !deleted_primary_columns.get().is_empty()
     };
 
     let cancel_edit = move || {
@@ -406,6 +417,7 @@ pub fn ShowSheet() -> impl IntoView {
                 added_rows.set(Vec::new());
                 modified_columns.set(Vec::new());
                 modified_primary_columns.set(HashMap::new());
+                deleted_primary_columns.set(Vec::new());
             }
         })
     };
@@ -483,6 +495,12 @@ pub fn ShowSheet() -> impl IntoView {
             .map(|x| (x.row_id, x.header, x.value))
             .chain(updated_row_primary_columns)
             .collect::<Vec<_>>();
+
+        let primary_deleted_columnsidentifiers = deleted_primary_columns
+            .get()
+            .into_iter()
+            .map(|x| (sheetid.clone(), x))
+            .collect::<Vec<_>>();
         let mut success = true;
         spawn_local(async move {
             if !the_sheet_name.is_empty() && the_sheet_name != sheet.sheet_name {
@@ -527,6 +545,24 @@ pub fn ShowSheet() -> impl IntoView {
                     &RowsAddArg {
                         sheetid: sheet.id,
                         rows: the_added_rows,
+                    },
+                )
+                .await
+                {
+                    Ok(_) => (),
+                    Err(err) => {
+                        alert(err.to_string().as_str()).await;
+                        success = false;
+                    }
+                }
+            }
+
+            if !primary_deleted_columnsidentifiers.is_empty() {
+                match invoke::<_, ()>(
+                    "delete_columns",
+                    &DeleteColumnsArgs {
+                        sheetid,
+                        rowsheaders: primary_deleted_columnsidentifiers,
                     },
                 )
                 .await
@@ -588,6 +624,7 @@ pub fn ShowSheet() -> impl IntoView {
         added_rows.set(Vec::new());
         modified_columns.set(Vec::new());
         modified_primary_columns.set(HashMap::new());
+        deleted_primary_columns.set(Vec::new());
         on_edit.set(false);
     };
 
@@ -703,6 +740,7 @@ pub fn ShowSheet() -> impl IntoView {
           columns=primary_row_columns
           non_primary_headers=primary_row_non_primary_headers
           new_columns=modified_primary_columns
+          deleted_columns=deleted_primary_columns
           primary_headers=move || sheet_primary_headers_resource.get().unwrap_or_default()
           edit_mode=edit_mode
         /><br/>
