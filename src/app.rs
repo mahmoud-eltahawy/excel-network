@@ -56,12 +56,14 @@ pub fn App() -> impl IntoView {
 use models::Name;
 use uuid::Uuid;
 
+use std::rc::Rc;
+
 #[component]
 pub fn Home() -> impl IntoView {
     let sheets_types_names = Resource::once(|| async move {
-        invoke::<Non, Vec<Name>>("sheets_types_names", &Non {})
+        invoke::<Non, Rc<[Name]>>("sheets_types_names", &Non {})
             .await
-            .unwrap_or_default()
+            .unwrap_or(Rc::from(vec![]))
     });
 
     view! {
@@ -69,7 +71,7 @@ pub fn Home() -> impl IntoView {
             <br/>
             <br/>
             <For
-                each=move || sheets_types_names.get().unwrap_or_default()
+                each=move || sheets_types_names.get().unwrap_or(Rc::from(vec![])).to_vec()
                 key=|s| s.id
                 view=move | s| {
                     view! {

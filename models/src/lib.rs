@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
 use ciborium_io::Write;
 use serde::{Deserialize, Serialize};
-use std::{cmp::Ordering, collections::HashMap, io::Cursor, marker::Sized, str::FromStr};
+use std::{cmp::Ordering, collections::HashMap, io::Cursor, marker::Sized, rc::Rc, str::FromStr};
 use uuid::Uuid;
 
 use std::fs::File;
@@ -124,10 +124,35 @@ pub enum ColumnValue {
     Date(Option<NaiveDate>),
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum FrontendColumnValue {
+    String(Option<Rc<str>>),
+    Float(f64),
+    Date(Option<NaiveDate>),
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub enum BackendColumnValue {
+    String(Option<Arc<str>>),
+    Float(f64),
+    Date(Option<NaiveDate>),
+}
+
 impl ToString for ColumnValue {
     fn to_string(&self) -> String {
         match self {
             Self::String(Some(v)) => v.to_owned(),
+            Self::Float(v) => format!("{:.2}", v),
+            Self::Date(Some(v)) => v.to_string(),
+            _ => String::from(""),
+        }
+    }
+}
+
+impl ToString for FrontendColumnValue {
+    fn to_string(&self) -> String {
+        match self {
+            Self::String(Some(v)) => v.to_string(),
             Self::Float(v) => format!("{:.2}", v),
             Self::Date(Some(v)) => v.to_string(),
             _ => String::from(""),
@@ -141,18 +166,34 @@ pub struct Column {
     pub value: ColumnValue,
 }
 
-impl Column {
-    fn compare(&self, other: &Column) -> Option<Ordering> {
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct FrontendColumn {
+    pub is_basic: bool,
+    pub value: FrontendColumnValue,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct BackendColumn {
+    pub is_basic: bool,
+    pub value: BackendColumnValue,
+}
+
+impl FrontendColumn {
+    fn compare(&self, other: &FrontendColumn) -> Option<Ordering> {
         match (self.value.clone(), other.value.clone()) {
-            (ColumnValue::Float(n1), ColumnValue::Float(n2)) => Some(if n1 > n2 {
+            (FrontendColumnValue::Float(n1), FrontendColumnValue::Float(n2)) => Some(if n1 > n2 {
                 Ordering::Greater
             } else if n1 < n2 {
                 Ordering::Less
             } else {
                 Ordering::Equal
             }),
-            (ColumnValue::String(Some(s1)), ColumnValue::String(Some(s2))) => Some(s1.cmp(&s2)),
-            (ColumnValue::Date(Some(b1)), ColumnValue::Date(Some(b2))) => Some(b1.cmp(&b2)),
+            (FrontendColumnValue::String(Some(s1)), FrontendColumnValue::String(Some(s2))) => {
+                Some(s1.cmp(&s2))
+            }
+            (FrontendColumnValue::Date(Some(b1)), FrontendColumnValue::Date(Some(b2))) => {
+                Some(b1.cmp(&b2))
+            }
             _ => None,
         }
     }
@@ -178,6 +219,18 @@ pub struct Row {
     pub columns: HashMap<String, Column>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct FrontendRow {
+    pub id: Uuid,
+    pub columns: HashMap<Rc<str>, FrontendColumn>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct BackendRow {
+    pub id: Uuid,
+    pub columns: HashMap<Arc<str>, BackendColumn>,
+}
+
 impl ToSerial<RowSerial> for Row {
     fn to_serial(self) -> RowSerial {
         let Row { id, columns } = self;
@@ -187,11 +240,11 @@ impl ToSerial<RowSerial> for Row {
 }
 
 pub trait RowsSort {
-    fn sort_rows(&mut self, keys: Vec<String>);
+    fn sort_rows(&mut self, keys: Rc<[Rc<str>]>);
 }
 
-impl RowsSort for Vec<Row> {
-    fn sort_rows(&mut self, keys: Vec<String>) {
+impl RowsSort for Vec<FrontendRow> {
+    fn sort_rows(&mut self, keys: Rc<[Rc<str>]>) {
         self.sort_by(|row_one, row_two| {
             let mut result = Ordering::Equal;
             for key in keys.iter() {
@@ -253,6 +306,26 @@ pub struct Sheet {
     pub rows: Vec<Row>,
 }
 
+use std::sync::Arc;
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct BackendSheet {
+    pub id: Uuid,
+    pub sheet_name: Arc<str>,
+    pub type_name: Arc<str>,
+    pub insert_date: NaiveDate,
+    pub rows: Vec<BackendRow>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct FrontendSheet {
+    pub id: Uuid,
+    pub sheet_name: Rc<str>,
+    pub type_name: Rc<str>,
+    pub insert_date: NaiveDate,
+    pub rows: Vec<FrontendRow>,
+}
+
 impl ToSerial<SheetSerial> for Sheet {
     fn to_serial(self) -> SheetSerial {
         let Sheet {
@@ -278,7 +351,7 @@ impl ToSerial<SheetSerial> for Sheet {
 }
 
 pub trait HeaderGetter {
-    fn get_header(self) -> String;
+    fn get_header(self) -> Rc<str>;
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -295,11 +368,11 @@ pub enum ColumnConfig {
 }
 
 impl HeaderGetter for ColumnConfig {
-    fn get_header(self) -> String {
+    fn get_header(self) -> Rc<str> {
         match self {
-            Self::String(prop) => prop.header,
-            Self::Float(prop) => prop.header,
-            Self::Date(prop) => prop.header,
+            Self::String(prop) => Rc::from(prop.header),
+            Self::Float(prop) => Rc::from(prop.header),
+            Self::Date(prop) => Rc::from(prop.header),
         }
     }
 }
@@ -339,10 +412,10 @@ pub enum ConfigValue {
 }
 
 impl HeaderGetter for ConfigValue {
-    fn get_header(self) -> String {
+    fn get_header(self) -> Rc<str> {
         match self {
-            Self::Basic(cv) => cv.get_header(),
-            Self::Calculated(cv) => cv.header,
+            Self::Basic(cv) => Rc::from(cv.get_header()),
+            Self::Calculated(cv) => Rc::from(cv.header),
         }
     }
 }
@@ -380,7 +453,7 @@ pub struct SheetConfig {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
-    pub priorities: HashMap<String, Vec<String>>,
+    pub priorities: HashMap<Arc<str>, Arc<[Arc<str>]>>,
     pub sheets: Vec<SheetConfig>,
 }
 
@@ -396,11 +469,11 @@ pub fn get_config_example() {
     let a = Config {
         priorities: HashMap::from([
             (
-                String::from("مبيعات"),
-                vec!["التاريخ".to_string(), "رقم الفاتورة".to_string()],
+                Arc::from("مبيعات"),
+                Arc::from(vec![Arc::from("التاريخ"), Arc::from("رقم الفاتورة")]),
             ),
-            (String::from("مشتريات"), vec!["التاريخ".to_string()]),
-            (String::from("كارت صنف"), vec!["التاريخ".to_string()]),
+            (Arc::from("مشتريات"), Arc::from(vec![Arc::from("التاريخ")])),
+            (Arc::from("كارت صنف"), Arc::from(vec![Arc::from("التاريخ")])),
         ]),
         sheets: vec![
             SheetConfig {

@@ -6,8 +6,8 @@ mod api;
 use chrono::{Local, NaiveDate};
 use dotenv::dotenv;
 use models::{
-    Column, ColumnId, ColumnValue, Config, ConfigValue, ImportConfig, Name, Row, RowIdentity,
-    SearchSheetParams, Sheet, SheetConfig,
+    BackendColumnValue, BackendSheet, Column, ColumnId, ColumnValue, Config, ConfigValue,
+    ImportConfig, Name, Row, RowIdentity, SearchSheetParams, Sheet, SheetConfig,
 };
 use std::{
     collections::HashMap,
@@ -15,6 +15,7 @@ use std::{
     fs::{create_dir_all, rename, File},
     io::BufRead,
     path::Path,
+    sync::Arc,
 };
 use uuid::Uuid;
 
@@ -166,14 +167,14 @@ async fn get_rows_ids(
 
 #[tauri::command]
 async fn get_priorities(
-    priorities: tauri::State<'_, Priorities>,
-    name: Option<String>,
-) -> Result<Vec<String>, String> {
+    priorities: tauri::State<'_, HashMap<Arc<str>, Arc<[Arc<str>]>>>,
+    name: Option<Arc<str>>,
+) -> Result<Arc<[Arc<str>]>, String> {
     let Some(name) = name else {
-        return Ok(vec![]);
+        return Ok(Arc::from([]));
     };
-    match priorities.0.get(&name) {
-        Some(list) => Ok(list.to_vec()),
+    match priorities.get(&name) {
+        Some(list) => Ok(list.clone()),
         None => Err("priority does not exist".to_string()),
     }
 }
@@ -284,7 +285,7 @@ async fn update_columns(
 }
 
 #[tauri::command]
-async fn export_sheet(headers: Vec<String>, sheet: Sheet) -> Result<(), String> {
+async fn export_sheet(headers: Arc<[Arc<str>]>, sheet: BackendSheet) -> Result<(), String> {
     match write_sheet(headers, sheet).await {
         Ok(_) => Ok(()),
         Err(err) => Err(err.to_string()),
@@ -413,7 +414,6 @@ async fn import_sheet(
 
 struct SheetsTypesNames(Vec<Name>);
 struct SheetsRows(HashMap<String, Vec<ConfigValue>>);
-struct Priorities(HashMap<String, Vec<String>>);
 struct SheetImport(HashMap<String, ImportConfig>);
 struct SheetRowsIds(HashMap<String, RowIdentity>);
 
@@ -458,7 +458,7 @@ fn main() {
         .manage(AppState::default())
         .manage(SheetsTypesNames(sheets_types_names_vec))
         .manage(SheetsRows(sheet_map))
-        .manage(Priorities(priorities))
+        .manage(priorities)
         .manage(SheetImport(sheet_import))
         .manage(SheetRowsIds(sheet_rows_ids))
         .invoke_handler(tauri::generate_handler![
@@ -502,10 +502,10 @@ impl Default for AppState {
 }
 
 pub async fn write_sheet(
-    headers: Vec<String>,
-    sheet: Sheet,
+    headers: Arc<[Arc<str>]>,
+    sheet: BackendSheet,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let Sheet {
+    let BackendSheet {
         id,
         sheet_name,
         type_name,
@@ -526,7 +526,7 @@ pub async fn write_sheet(
 
     let worksheet = workbook.add_worksheet();
 
-    for (row, (header, value)) in primary_row.into_iter().enumerate() {
+    for (row, (header, column)) in primary_row.into_iter().enumerate() {
         let row = row as u32;
         worksheet.set_row_height(row, 35)?;
 
@@ -540,18 +540,18 @@ pub async fn write_sheet(
                 .set_border(FormatBorder::Thin),
         )?;
 
-        match value.value {
-            ColumnValue::String(v) => {
-                worksheet.write_string(row, 1, header)?;
-                worksheet.write_string(row, 3, v.unwrap_or_default())?;
+        match column.value {
+            BackendColumnValue::String(v) => {
+                worksheet.write_string(row, 1, header.to_string())?;
+                worksheet.write_string(row, 3, v.map(|x| x.to_string()).unwrap_or_default())?;
             }
-            ColumnValue::Float(v) => {
-                worksheet.write_string(row, 1, header)?;
+            BackendColumnValue::Float(v) => {
+                worksheet.write_string(row, 1, header.to_string())?;
                 worksheet.write_number(row, 3, v)?;
             }
-            ColumnValue::Date(v) => {
+            BackendColumnValue::Date(v) => {
                 let v = v.map(|x| x.to_string()).unwrap_or_default();
-                worksheet.write_string(row, 1, header)?;
+                worksheet.write_string(row, 1, header.to_string())?;
                 worksheet.write_string(row, 3, v)?;
             }
         }
@@ -559,7 +559,7 @@ pub async fn write_sheet(
 
     for (col, header) in headers.iter().enumerate() {
         let col = col as u16;
-        worksheet.write_string(second_row_index as u32, col, header)?;
+        worksheet.write_string(second_row_index as u32, col, header.to_string())?;
     }
 
     for (row, columns) in rows.into_iter().map(|x| x.columns).enumerate() {
@@ -569,14 +569,14 @@ pub async fn write_sheet(
             worksheet.set_row_height(row, 30)?;
             match &columns.get(header) {
                 Some(column) => match &column.value {
-                    ColumnValue::Date(Some(date)) => {
+                    BackendColumnValue::Date(Some(date)) => {
                         let string = date.to_string();
                         worksheet.write_string(row, col, string)?;
                     }
-                    ColumnValue::String(Some(string)) => {
-                        worksheet.write_string(row, col, string)?;
+                    BackendColumnValue::String(Some(string)) => {
+                        worksheet.write_string(row, col, string.to_string())?;
                     }
-                    ColumnValue::Float(number) => {
+                    BackendColumnValue::Float(number) => {
                         worksheet.write_number(row, col, *number)?;
                     }
                     _ => (),
@@ -600,13 +600,13 @@ pub async fn write_sheet(
 
     worksheet.set_right_to_left(true);
 
-    worksheet.set_name(&type_name)?;
+    worksheet.set_name(&type_name.to_string())?;
 
     let file_path = dirs::home_dir()
         .unwrap_or_default()
         .join("Downloads")
         .join(WORKDIR)
-        .join(&type_name)
+        .join(type_name.to_string())
         .join("الشيتات المصدرة");
 
     if !create_dir_all(file_path.clone()).is_ok() {

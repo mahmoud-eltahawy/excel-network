@@ -1,24 +1,26 @@
 use crate::Id;
+use chrono::NaiveDate;
 use leptos::{ev::MouseEvent, *};
 use leptos_router::*;
 use models::{
-    Column, ColumnValue, ConfigValue, HeaderGetter, Name, Row, RowIdentity, RowsSort, Sheet,
+    ConfigValue, FrontendColumn, FrontendColumnValue, FrontendRow, FrontendSheet, HeaderGetter,
+    RowIdentity, RowsSort,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::str::FromStr;
+use std::{collections::HashMap, rc::Rc};
 use tauri_sys::tauri::invoke;
 use uuid::Uuid;
 
 use super::shared::{
     alert, confirm, import_sheet_rows, message, open_file, resolve_operation, EditState, InputRow,
-    NameArg, PrimaryRow, SheetHead, ShowNewRows,
+    Name, NameArg, PrimaryRow, SheetHead, ShowNewRows,
 };
 
 #[derive(Serialize, Deserialize)]
 struct ExportSheetArg {
-    headers: Vec<String>,
-    sheet: Sheet,
+    headers: Vec<Rc<str>>,
+    sheet: FrontendSheet,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -29,7 +31,7 @@ struct SheetNameArg {
 #[derive(Serialize, Deserialize)]
 struct UpdateColumnsArgs {
     sheetid: Uuid,
-    columnsidentifiers: Vec<(Uuid, String, ColumnValue)>,
+    columnsidentifiers: Vec<(Uuid, Rc<str>, FrontendColumnValue)>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -41,14 +43,14 @@ struct RowsDeleteArg {
 #[derive(Serialize, Deserialize)]
 struct RowsAddArg {
     sheetid: Uuid,
-    rows: Vec<Row>,
+    rows: Vec<FrontendRow>,
 }
 
 #[derive(Debug, Clone)]
 struct ColumnIdentity {
     row_id: Uuid,
-    header: String,
-    value: ColumnValue,
+    header: Rc<str>,
+    value: FrontendColumnValue,
 }
 
 const OFFSET_LIMIT: i64 = 7;
@@ -64,9 +66,13 @@ where
     let on_input = move |ev| {
         let value = event_target_value(&ev);
         let value = match column_value.get() {
-            ColumnValue::Float(_) => ColumnValue::Float(value.parse().unwrap_or_default()),
-            ColumnValue::Date(_) => ColumnValue::Date(Some(value.parse().unwrap_or_default())),
-            _ => ColumnValue::String(Some(value)),
+            FrontendColumnValue::Float(_) => {
+                FrontendColumnValue::Float(value.parse().unwrap_or_default())
+            }
+            FrontendColumnValue::Date(_) => {
+                FrontendColumnValue::Date(Some(value.parse().unwrap_or_default()))
+            }
+            _ => FrontendColumnValue::String(Some(Rc::from(value))),
         };
         column_value.set(value);
     };
@@ -89,8 +95,8 @@ where
         <div class="popup">
             <input
                 type=move || match column_value.get() {
-                    ColumnValue::Float(_) => "number",
-                    ColumnValue::Date(_) => "date",
+                    FrontendColumnValue::Float(_) => "number",
+                    FrontendColumnValue::Date(_) => "date",
                     _ => "text",
                 }
                 placeholder=move || {
@@ -120,11 +126,11 @@ struct LimitedId {
 #[component]
 pub fn ShowSheet() -> impl IntoView {
     let edit_mode = RwSignal::from(EditState::None);
-    let sheet_name = RwSignal::from(String::from(""));
+    let sheet_name = RwSignal::<Rc<str>>::from(Rc::from(""));
     let deleted_rows = RwSignal::from(Vec::<Uuid>::new());
-    let added_rows = RwSignal::from(Vec::<Row>::new());
+    let added_rows = RwSignal::from(Vec::<FrontendRow>::new());
     let modified_columns = RwSignal::from(Vec::<ColumnIdentity>::new());
-    let modified_primary_columns = RwSignal::from(HashMap::<String, Column>::new());
+    let modified_primary_columns = RwSignal::from(HashMap::<Rc<str>, FrontendColumn>::new());
     let on_edit = RwSignal::from(false);
     let params = use_params_map();
     let sheet_type_id = move || {
@@ -134,22 +140,22 @@ pub fn ShowSheet() -> impl IntoView {
         })
     };
     let sheet_type_name_resource = Resource::once(move || async move {
-        invoke::<Id, String>(
+        invoke::<Id, Rc<str>>(
             "sheet_type_name",
             &Id {
                 id: sheet_type_id(),
             },
         )
         .await
-        .unwrap_or_default()
+        .unwrap_or(Rc::from(""))
     });
 
     let sheet_priorities_resource = Resource::new(
         move || sheet_type_name_resource.get(),
         move |name| async move {
-            invoke::<NameArg, Vec<String>>("get_priorities", &NameArg { name })
+            invoke::<NameArg, Rc<[Rc<str>]>>("get_priorities", &NameArg { name })
                 .await
-                .unwrap_or_default()
+                .unwrap_or(Rc::from([]))
         },
     );
 
@@ -172,18 +178,19 @@ pub fn ShowSheet() -> impl IntoView {
     };
 
     let sheet_resource = Resource::once(move || async move {
-        invoke::<Id, (Sheet, i64)>("get_sheet", &Id { id: sheet_id() })
+        invoke::<Id, (FrontendSheet, i64)>("get_sheet", &Id { id: sheet_id() })
             .await
-            .unwrap_or_default()
+            .ok()
     });
 
     let rows_offset = RwSignal::from(OFFSET_LIMIT);
 
     let rows_number = Memo::new(move |_| {
+        let default = OFFSET_LIMIT * 4;
         sheet_resource
             .get()
-            .map(|x| x.1)
-            .unwrap_or(OFFSET_LIMIT * 4)
+            .map(|x| x.map(|x| x.1).unwrap_or(default))
+            .unwrap_or(default)
     });
 
     let rows_accumalator = RwSignal::from(vec![]);
@@ -192,7 +199,7 @@ pub fn ShowSheet() -> impl IntoView {
         move || rows_offset.get(),
         move |offset| async move {
             let rows_number = rows_number.get();
-            let v = invoke::<_, Vec<Row>>(
+            let v = invoke::<_, Vec<FrontendRow>>(
                 "get_sheet_rows",
                 &LimitedId {
                     id: sheet_id(),
@@ -216,20 +223,26 @@ pub fn ShowSheet() -> impl IntoView {
         rows_accumalator.get()
     };
 
-    let sheet_init_memo = Memo::new(move |_| sheet_resource.get().map(|x| x.0));
+    let sheet_init_memo = Memo::new(move |_| {
+        let s = sheet_resource.get().map(|x| x.map(|x| x.0));
+        match s {
+            Some(Some(s)) => Some(s),
+            _ => None,
+        }
+    });
 
     let sheet_headers_resource = Resource::new(
         move || sheet_type_name_resource.get(),
         move |name| async move {
-            invoke::<NameArg, Vec<ConfigValue>>("sheet_headers", &NameArg { name })
+            invoke::<NameArg, Rc<[ConfigValue]>>("sheet_headers", &NameArg { name })
                 .await
-                .unwrap_or_default()
+                .unwrap_or(Rc::from([]))
         },
     );
     let sheet_primary_headers_resource = Resource::new(
         move || sheet_type_name_resource.get(),
         move |name| async move {
-            invoke::<NameArg, Vec<String>>("sheet_primary_headers", &NameArg { name })
+            invoke::<NameArg, Vec<Rc<str>>>("sheet_primary_headers", &NameArg { name })
                 .await
                 .unwrap_or_default()
         },
@@ -238,24 +251,26 @@ pub fn ShowSheet() -> impl IntoView {
     let basic_columns = Memo::new(move |_| {
         sheet_headers_resource
             .get()
-            .unwrap_or_default()
+            .unwrap_or(Rc::from([]))
             .into_iter()
             .flat_map(|x| match x {
                 ConfigValue::Basic(conf) => Some(conf),
                 ConfigValue::Calculated(_) => None,
             })
+            .cloned()
             .collect::<Vec<_>>()
     });
 
     let calc_columns = Memo::new(move |_| {
         sheet_headers_resource
             .get()
-            .unwrap_or_default()
+            .unwrap_or(Rc::from([]))
             .into_iter()
             .flat_map(|x| match x {
                 ConfigValue::Basic(_) => None,
                 ConfigValue::Calculated(conf) => Some(conf),
             })
+            .cloned()
             .collect::<Vec<_>>()
     });
 
@@ -271,39 +286,50 @@ pub fn ShowSheet() -> impl IntoView {
         calc_columns
             .get()
             .into_iter()
-            .map(|x| x.header)
-            .collect::<Vec<_>>()
+            .map(|x| Rc::from(x.header))
+            .collect::<Vec<Rc<str>>>()
     };
 
     let sheet_with_primary_row_with_calc_values = Memo::new(move |_| {
         let c_cols = calc_columns.get();
-        let mut sheet = sheet_init_memo.get().unwrap_or_default();
+        let mut sheet = match sheet_init_memo.get() {
+            Some(x) => x,
+            None => {
+                return FrontendSheet {
+                    id: Uuid::nil(),
+                    sheet_name: Rc::from(""),
+                    type_name: Rc::from(""),
+                    insert_date: NaiveDate::default(),
+                    rows: vec![],
+                }
+            }
+        };
         sheet.rows = sheet
             .rows
             .into_iter()
             .chain(get_accumalted_rows())
-            .map(|Row { id, columns }| Row {
+            .map(|FrontendRow { id, columns }| FrontendRow {
                 id,
                 columns: {
                     let mut columns = columns;
                     for header in calc_headers().into_iter() {
                         let mut map = HashMap::new();
-                        for (col_header, Column { is_basic: _, value }) in &columns {
+                        for (col_header, FrontendColumn { is_basic: _, value }) in &columns {
                             map.insert(col_header.clone(), value.clone());
                         }
                         let value = &c_cols;
                         let value = value
                             .iter()
-                            .filter(|x| x.header == header)
+                            .filter(|x| x.header == header.to_string())
                             .collect::<Vec<_>>();
                         let value = value.first().unwrap();
 
                         if id != sheet.id {
                             columns.insert(
                                 header,
-                                Column {
+                                FrontendColumn {
                                     is_basic: false,
-                                    value: ColumnValue::Float(
+                                    value: FrontendColumnValue::Float(
                                         resolve_operation(&value.value, &map).unwrap_or_default(),
                                     ),
                                 },
@@ -334,7 +360,10 @@ pub fn ShowSheet() -> impl IntoView {
                 "export_sheet",
                 &ExportSheetArg {
                     sheet: sheet_with_primary_row_with_calc_values.get(),
-                    headers: basic_headers().into_iter().chain(calc_headers()).collect(),
+                    headers: basic_headers()
+                        .into_iter()
+                        .chain(calc_headers())
+                        .collect::<Vec<Rc<str>>>(),
                 },
             )
             .await
@@ -372,7 +401,7 @@ pub fn ShowSheet() -> impl IntoView {
             };
             if reset {
                 edit_mode.set(EditState::None);
-                sheet_name.set(String::from(""));
+                sheet_name.set(Rc::from(""));
                 deleted_rows.set(Vec::new());
                 added_rows.set(Vec::new());
                 modified_columns.set(Vec::new());
@@ -382,10 +411,11 @@ pub fn ShowSheet() -> impl IntoView {
     };
     let append = move |row| {
         added_rows.update_untracked(|xs| xs.push(row));
-        added_rows.update(|xs| xs.sort_rows(sheet_priorities_resource.get().unwrap_or_default()));
+        added_rows
+            .update(|xs| xs.sort_rows(sheet_priorities_resource.get().unwrap_or(Rc::from([]))));
     };
     let primary_row_columns = Memo::new(move |_| {
-        let Some(Sheet { id, rows, .. }) = sheet_init_memo.get() else {
+        let Some(FrontendSheet { id, rows, .. }) = sheet_init_memo.get() else {
             return HashMap::new();
         };
         rows.into_iter()
@@ -553,7 +583,7 @@ pub fn ShowSheet() -> impl IntoView {
         });
 
         edit_mode.set(EditState::None);
-        sheet_name.set(String::from(""));
+        sheet_name.set(Rc::from(""));
         deleted_rows.set(Vec::new());
         added_rows.set(Vec::new());
         modified_columns.set(Vec::new());
@@ -562,7 +592,7 @@ pub fn ShowSheet() -> impl IntoView {
     };
 
     let load_file = move |_| {
-        let sheettype = sheet_type_name_resource.get().unwrap_or_default();
+        let sheettype = sheet_type_name_resource.get().unwrap_or(Rc::from(""));
         edit_mode.set(EditState::LoadFile);
         spawn_local(async move {
             let Some(filepath) = open_file().await else {
@@ -595,7 +625,7 @@ pub fn ShowSheet() -> impl IntoView {
                 )
             });
             added_rows
-                .update(|xs| xs.sort_rows(sheet_priorities_resource.get().unwrap_or_default()));
+                .update(|xs| xs.sort_rows(sheet_priorities_resource.get().unwrap_or(Rc::from([]))));
         });
     };
 
@@ -608,7 +638,7 @@ pub fn ShowSheet() -> impl IntoView {
             .chain(primary_row_columns.get())
             .collect::<HashMap<_, _>>()
             .keys()
-            .map(|x| x.to_string())
+            .cloned()
             .filter(|x| !primary_headers.contains(&x))
             .collect::<Vec<_>>()
     };
@@ -653,7 +683,7 @@ pub fn ShowSheet() -> impl IntoView {
             <Show
                 when=move || matches!(edit_mode.get(),EditState::Primary)
                 fallback=move || {
-                    view! {  <h1>{move || sheet_init_memo.get().unwrap_or_default().sheet_name}</h1> }
+                    view! {<h1>{move || sheet_init_memo.get().map(|x| x.sheet_name.to_string())}</h1> }
                 }
             >
                 <input
@@ -661,12 +691,12 @@ pub fn ShowSheet() -> impl IntoView {
                     class="centered-input"
                     placeholder=move || {
                         format!(
-                            "{} ({})", "اسم الشيت", sheet_init_memo.get().unwrap_or_default()
-                            .sheet_name
+                            "{} ({})", "اسم الشيت", sheet_init_memo
+                                .get().map(|x| x.sheet_name.to_string()).unwrap_or_default()
                         )
                     }
-                    value=move || sheet_name.get()
-                    on:input=move |ev| sheet_name.set(event_target_value(&ev))
+                    value=move || sheet_name.get().to_string()
+                    on:input=move |ev| sheet_name.set(Rc::from(event_target_value(&ev)))
                 />
             </Show>
         <PrimaryRow
@@ -706,7 +736,7 @@ pub fn ShowSheet() -> impl IntoView {
                         calc_headers=calc_headers
                         rows=added_rows
                     sheet_id=move ||sheet_init_memo.get().map(|x| x.id).unwrap_or_default()
-                    priorities=move || sheet_priorities_resource.get().unwrap_or_default()
+                    priorities=move || sheet_priorities_resource.get().unwrap_or(Rc::from([]))
                     />
                     <Show
                         when=move || matches!(edit_mode.get(),EditState::NonePrimary)
@@ -784,9 +814,9 @@ fn ShowRows<BH, CH, FD, ID, FI, FR>(
     modified_columns: RwSignal<Vec<ColumnIdentity>>,
 ) -> impl IntoView
 where
-    BH: Fn() -> Vec<String> + 'static + Clone + Copy,
-    CH: Fn() -> Vec<String> + 'static + Clone + Copy,
-    FR: Fn() -> Vec<Row> + 'static + Clone + Copy,
+    BH: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
+    CH: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
+    FR: Fn() -> Vec<FrontendRow> + 'static + Clone + Copy,
     ID: Fn(Uuid) -> bool + 'static + Clone + Copy,
     FD: Fn(Uuid) + 'static + Clone + Copy,
     FI: Fn() -> Uuid + 'static + Clone + Copy,
@@ -816,7 +846,7 @@ where
         <For
             each=move || new_rows.get()
             key=|row| row.id
-            view=move | Row { columns, id }| {
+            view=move | FrontendRow { columns, id }| {
                 let columns = std::rc::Rc::new(columns);
                 view! {
                     <tr>
@@ -827,11 +857,11 @@ where
                                     each=basic_headers
                                     key=|key| key.clone()
                                     view=move |column| {
-                    let header1 = column.clone();
-                    let header2 = header1.clone();
-                    let header3 = header2.clone();
-                    let columns1 = columns.clone();
-                    let columns2 = columns1.clone();
+                        let header1 = column.clone();
+                        let header2 = header1.clone();
+                        let header3 = header2.clone();
+                        let columns1 = columns.clone();
+                        let columns2 = columns1.clone();
                         view! { <td
                                 style="cursor: pointer"
                                  on:dblclick=move |_| if matches!(edit_mode.get(),EditState::NonePrimary) {
@@ -841,7 +871,7 @@ where
                             value :columns1
                                 .get(&header2)
                                         .map(|x| x.value.clone())
-                                        .unwrap_or(ColumnValue::String(Some("Empty".to_string())))
+                                        .unwrap_or(FrontendColumnValue::String(Some(Rc::from("Empty"))))
                             }))
                          }
                          >{

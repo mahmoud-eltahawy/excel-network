@@ -10,6 +10,8 @@ use tauri_sys::tauri::invoke;
 
 use models::{Name, SearchSheetParams};
 
+use std::rc::Rc;
+
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 struct SheetArgs {
     params: SearchSheetParams,
@@ -29,14 +31,14 @@ pub fn SheetHome() -> impl IntoView {
         })
     };
     let sheet_type_name_resource = Resource::once(move || async move {
-        invoke::<Id, String>("sheet_type_name", &Id { id: sheet_id() })
+        invoke::<Id, Rc<str>>("sheet_type_name", &Id { id: sheet_id() })
             .await
-            .unwrap_or_default()
+            .unwrap_or(Rc::from(""))
     });
 
     let sheet_type_name = move || match sheet_type_name_resource.get() {
         Some(name) => name,
-        None => "none".to_string(),
+        None => Rc::from("none"),
     };
 
     let offset = RwSignal::from(0_u64);
@@ -47,7 +49,7 @@ pub fn SheetHome() -> impl IntoView {
     let search_args = move || SheetArgs {
         params: SearchSheetParams {
             offset: offset.get() as i64,
-            sheet_type_name: sheet_type_name(),
+            sheet_type_name: sheet_type_name().to_string(),
             sheet_name: sheet_name.get(),
             begin: begin.get(),
             end: end.get(),
@@ -55,9 +57,9 @@ pub fn SheetHome() -> impl IntoView {
     };
 
     let bills = Resource::new(search_args, |value| async move {
-        invoke::<_, Vec<Name>>("top_5_sheets", &value)
+        invoke::<_, Rc<[Name]>>("top_5_sheets", &value)
             .await
-            .unwrap_or_default()
+            .unwrap_or(Rc::from(vec![]))
     });
 
     view! {
@@ -108,7 +110,7 @@ pub fn SheetHome() -> impl IntoView {
             <br/>
             <br/>
             <For
-                each=move || bills.get().unwrap_or_default()
+                each=move || bills.get().unwrap_or(Rc::from(vec![])).to_vec()
                 key=|s| s.id
                 view=move |s| {
                     view! {
@@ -119,7 +121,7 @@ pub fn SheetHome() -> impl IntoView {
                 }
             />
             <Show
-                when=move || { bills.get().unwrap_or_default().len() >= 5 }
+                when=move || { bills.get().unwrap_or(Rc::from(vec![])).len() >= 5 }
                 fallback=|| {
                     view! {  <></> }
                 }
