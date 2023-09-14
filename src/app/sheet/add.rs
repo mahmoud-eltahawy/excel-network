@@ -4,7 +4,7 @@ use models::{
     ConfigValue, FrontendColumn, FrontendColumnValue, FrontendRow, HeaderGetter, RowsSort,
 };
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
+use std::{cmp::Ordering, str::FromStr};
 
 use super::shared::{
     alert, import_sheet_rows, message, new_id, open_file, InputRow, NameArg, SheetHead, ShowNewRows,
@@ -181,7 +181,7 @@ pub fn AddSheet() -> impl IntoView {
             .get()
             .keys()
             .cloned()
-            .filter(|x| !primary_headers.contains(&x))
+            .filter(|x| !primary_headers.contains(x))
             .collect::<Vec<_>>()
     };
 
@@ -290,11 +290,13 @@ where
 
         let space = non_primary_headers.len() as i32 - primary_headers.len() as i32;
 
-        if space > 0 {
-            primary_headers.extend((0..space).map(|_| Rc::from("")));
-        } else if space < 0 {
-            let space = space * -1;
-            non_primary_headers.extend((0..space).map(|_| Rc::from("")));
+        match space.cmp(&0_i32) {
+            Ordering::Greater => primary_headers.extend((0..space).map(|_| Rc::from(""))),
+            Ordering::Less => {
+                let space = -space;
+                non_primary_headers.extend((0..space).map(|_| Rc::from("")));
+            }
+            Ordering::Equal => (),
         }
 
         primary_headers
@@ -336,8 +338,8 @@ where
     <>
     <table>
         <For
-        each=move || headers()
-        key=|x| x.0.to_string() + &x.1.to_string()
+        each=headers
+        key=|x| x.0.to_string() + x.1.as_ref()
         view=move |(primary,non_primary)| view!{
             <tr>
             <td>{primary.to_string()}</td>

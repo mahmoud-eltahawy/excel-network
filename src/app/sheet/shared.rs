@@ -8,6 +8,7 @@ use chrono::Local;
 
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use tauri_sys::{
     dialog::{FileDialogBuilder, MessageDialogBuilder, MessageDialogKind},
@@ -431,7 +432,7 @@ where
                     ColumnSignal::Float(reader) => FrontendColumnValue::Float(reader.get().0),
                     ColumnSignal::Date(reader) => FrontendColumnValue::Date(Some(reader.get().0)),
                 };
-                basic_map.insert(Rc::from(header), column_value);
+                basic_map.insert(header, column_value);
             }
             map.insert(
                 Rc::from(header),
@@ -579,11 +580,13 @@ where
 
         let space = non_primary_headers.len() as i32 - primary_headers.len() as i32;
 
-        if space > 0 {
-            primary_headers.extend((0..space).map(|_| Rc::from("")));
-        } else if space < 0 {
-            let space = space * -1;
-            non_primary_headers.extend((0..space).map(|_| Rc::from("")));
+        match space.cmp(&0_i32) {
+            Ordering::Greater => primary_headers.extend((0..space).map(|_| Rc::from(""))),
+            Ordering::Less => {
+                let space = -space;
+                non_primary_headers.extend((0..space).map(|_| Rc::from("")));
+            }
+            Ordering::Equal => (),
         }
 
         primary_headers
@@ -633,8 +636,8 @@ where
     <>
     <table>
         <For
-        each=move || headers()
-        key=|x| x.0.to_string() + &x.1.to_string()
+        each=headers
+        key=|x| x.0.to_string() + x.1.as_ref()
         view=move |(primary,non_primary)| view!{
             <tr>
             <td>{let a = primary.clone();move || a.to_string()}</td>

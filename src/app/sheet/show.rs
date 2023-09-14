@@ -252,7 +252,7 @@ pub fn ShowSheet() -> impl IntoView {
         sheet_headers_resource
             .get()
             .unwrap_or(Rc::from([]))
-            .into_iter()
+            .iter()
             .flat_map(|x| match x {
                 ConfigValue::Basic(conf) => Some(conf),
                 ConfigValue::Calculated(_) => None,
@@ -265,7 +265,7 @@ pub fn ShowSheet() -> impl IntoView {
         sheet_headers_resource
             .get()
             .unwrap_or(Rc::from([]))
-            .into_iter()
+            .iter()
             .flat_map(|x| match x {
                 ConfigValue::Basic(_) => None,
                 ConfigValue::Calculated(conf) => Some(conf),
@@ -463,7 +463,7 @@ pub fn ShowSheet() -> impl IntoView {
                 sheet
                     .rows
                     .iter()
-                    .filter(|x| x.id.clone() == *row_id)
+                    .filter(|x| x.id == *row_id)
                     .any(|x| x.columns.keys().any(|x| x != header))
             })
             .map(|x| (x.row_id, x.header, x.value))
@@ -477,7 +477,7 @@ pub fn ShowSheet() -> impl IntoView {
                 sheet
                     .rows
                     .iter()
-                    .filter(|x| x.id.clone() == *row_id)
+                    .filter(|x| x.id == *row_id)
                     .any(|x| x.columns.keys().any(|x| x == header))
             })
             .map(|x| (x.row_id, x.header, x.value))
@@ -639,7 +639,7 @@ pub fn ShowSheet() -> impl IntoView {
             .collect::<HashMap<_, _>>()
             .keys()
             .cloned()
-            .filter(|x| !primary_headers.contains(&x))
+            .filter(|x| !primary_headers.contains(x))
             .collect::<Vec<_>>()
     };
 

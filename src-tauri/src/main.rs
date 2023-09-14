@@ -56,7 +56,7 @@ fn sheet_type_name(
 #[tauri::command]
 fn sheet_primary_headers(
     sheet_import: tauri::State<'_, SheetImport>,
-    name: Option<String>,
+    name: Option<Arc<str>>,
 ) -> Vec<String> {
     match name {
         Some(name) => sheet_import
@@ -74,7 +74,7 @@ fn sheet_primary_headers(
 #[tauri::command]
 fn sheet_headers(
     sheets_rows: tauri::State<'_, SheetsRows>,
-    name: Option<String>,
+    name: Option<Arc<str>>,
 ) -> Vec<ConfigValue> {
     match name {
         Some(name) => sheets_rows
@@ -154,7 +154,7 @@ async fn get_sheet_rows(
 #[tauri::command]
 async fn get_rows_ids(
     sheet_rows_ids: tauri::State<'_, SheetRowsIds>,
-    name: Option<String>,
+    name: Option<Arc<str>>,
 ) -> Result<RowIdentity, String> {
     let Some(name) = name else {
         return Err("id does not exist".to_string());
@@ -329,7 +329,7 @@ fn column_from_value(value: &Value) -> Column {
 #[tauri::command]
 async fn import_sheet(
     sheet_import: tauri::State<'_, SheetImport>,
-    sheettype: String,
+    sheettype: Arc<str>,
     sheetid: Uuid,
     filepath: String,
 ) -> Result<Vec<Row>, String> {
@@ -394,7 +394,7 @@ async fn import_sheet(
     let download_dir = dirs::home_dir().unwrap_or_default().join("Downloads");
     let new_path = download_dir
         .join(WORKDIR)
-        .join(&sheettype)
+        .join(&sheettype.to_string())
         .join("الملفات المستوردة");
 
     if !create_dir_all(new_path.clone()).is_ok() {
@@ -413,9 +413,9 @@ async fn import_sheet(
 }
 
 struct SheetsTypesNames(Vec<Name>);
-struct SheetsRows(HashMap<String, Vec<ConfigValue>>);
-struct SheetImport(HashMap<String, ImportConfig>);
-struct SheetRowsIds(HashMap<String, RowIdentity>);
+struct SheetsRows(HashMap<Arc<str>, Vec<ConfigValue>>);
+struct SheetImport(HashMap<Arc<str>, ImportConfig>);
+struct SheetRowsIds(HashMap<Arc<str>, RowIdentity>);
 
 use std::io::{BufReader, Cursor};
 
@@ -436,7 +436,7 @@ fn main() {
         .iter()
         .map(|x| Name {
             id: Uuid::new_v4(),
-            the_name: x.sheet_type_name.clone(),
+            the_name: x.sheet_type_name.to_string(),
         })
         .collect::<Vec<_>>();
     let mut sheet_map = HashMap::new();

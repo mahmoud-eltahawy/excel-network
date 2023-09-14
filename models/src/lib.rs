@@ -414,7 +414,7 @@ pub enum ConfigValue {
 impl HeaderGetter for ConfigValue {
     fn get_header(self) -> Rc<str> {
         match self {
-            Self::Basic(cv) => Rc::from(cv.get_header()),
+            Self::Basic(cv) => cv.get_header(),
             Self::Calculated(cv) => Rc::from(cv.header),
         }
     }
@@ -445,7 +445,7 @@ pub struct RowIdentity {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SheetConfig {
-    pub sheet_type_name: String,
+    pub sheet_type_name: Arc<str>,
     pub importing: ImportConfig,
     pub row: Vec<ConfigValue>,
     pub row_identity: RowIdentity,
@@ -486,7 +486,7 @@ pub fn get_config_example() {
                     ],
                     diff_ops: vec![("القيمة".to_string(), IdentityDiffsOps::Sum)],
                 },
-                sheet_type_name: String::from("مبيعات"),
+                sheet_type_name: Arc::from("مبيعات"),
                 importing: ImportConfig {
                     main_entry: vec![String::from("document")],
                     repeated_entry: vec!["invoiceLines".to_string()],
@@ -550,7 +550,7 @@ pub fn get_config_example() {
                     id: vec![],
                     diff_ops: vec![],
                 },
-                sheet_type_name: String::from("مشتريات"),
+                sheet_type_name: Arc::from("مشتريات"),
                 importing: ImportConfig {
                     main_entry: vec![String::from("document")],
                     repeated_entry: vec!["invoiceLines".to_string()],
@@ -593,7 +593,7 @@ pub fn get_config_example() {
                     id: vec![],
                     diff_ops: vec![],
                 },
-                sheet_type_name: String::from("كارت صنف"),
+                sheet_type_name: Arc::from("كارت صنف"),
                 importing: ImportConfig {
                     main_entry: vec![String::from("document")],
                     repeated_entry: vec!["invoiceLines".to_string()],
