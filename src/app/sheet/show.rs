@@ -1,5 +1,9 @@
+use crate::app::sheet::shared::{
+    merge_primary_row_headers, primary_row_append_column, primary_row_on_value_input,
+    PrimaryRowContent,
+};
 use crate::Id;
-use chrono::NaiveDate;
+use chrono::{Local, NaiveDate};
 use leptos::spawn_local;
 use leptos::{ev::MouseEvent, *};
 use leptos_router::*;
@@ -17,7 +21,7 @@ const SAVE_EDITS_TOTAL_TASKS: i32 = 6;
 
 use super::shared::{
     alert, confirm, import_sheet_rows, message, open_file, resolve_operation, EditState, InputRow,
-    Name, NameArg, PrimaryRow, SheetHead, ShowNewRows,
+    Name, NameArg, SheetHead, ShowNewRows,
 };
 
 #[derive(Serialize, Deserialize)]
@@ -502,7 +506,7 @@ pub fn ShowSheet() -> impl IntoView {
         let primary_deleted_columnsidentifiers = deleted_primary_columns
             .get()
             .into_iter()
-            .map(|x| (sheetid.clone(), x))
+            .map(|x| (sheetid, x))
             .collect::<Vec<_>>();
         spawn_local(async move {
             if !the_sheet_name.is_empty() && the_sheet_name != sheet.sheet_name {
@@ -1002,6 +1006,119 @@ where
                 }
             }
         />
+    </>
+    }
+}
+
+#[component]
+fn PrimaryRow<FP, FN>(
+    primary_headers: FP,
+    non_primary_headers: FN,
+    columns: Memo<HashMap<Rc<str>, FrontendColumn>>,
+    new_columns: RwSignal<HashMap<Rc<str>, FrontendColumn>>,
+    deleted_columns: RwSignal<Vec<Rc<str>>>,
+    edit_mode: RwSignal<EditState>,
+) -> impl IntoView
+where
+    FP: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
+    FN: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
+{
+    let add_what = RwSignal::from(None::<&str>);
+    let header = RwSignal::from(Rc::from(""));
+    let column_value = RwSignal::from(FrontendColumnValue::Float(0.0));
+
+    let headers = move || merge_primary_row_headers(primary_headers(), non_primary_headers());
+
+    let on_value_input = move |ev| primary_row_on_value_input(column_value, ev);
+
+    let append_column =
+        move |_| primary_row_append_column(new_columns, add_what, header, column_value);
+
+    let is_in_edit_mode = move || matches!(edit_mode.get(), EditState::Primary);
+    let is_deleted = move |header| deleted_columns.get().into_iter().any(|x| x == header);
+    let is_new = move |header| new_columns.get().keys().any(|x| x.clone() == header);
+
+    let delete_fun = move |p: Rc<str>| {
+        if is_new(p.clone()) {
+            new_columns.update(|xs| xs.retain(|x, _| x.clone() != p));
+        } else if is_deleted(p.clone()) {
+            deleted_columns.update(|xs| xs.retain(|x| x.clone() != p.clone()))
+        } else {
+            deleted_columns.update(|xs| {
+                if !p.is_empty() {
+                    xs.push(p.clone())
+                }
+            })
+        }
+    };
+
+    view! {
+    <>
+    <PrimaryRowContent
+        headers=headers
+        is_in_edit_mode=is_in_edit_mode
+        is_deleted=is_deleted
+        delete_fun=delete_fun
+        columns=columns
+        new_columns=new_columns
+    />
+    <Show
+        when=is_in_edit_mode
+        fallback=move|| view!{<></>}
+    >
+        <Show
+        when=move || add_what.get().is_some()
+        fallback=move|| view!{
+        <>
+            <button
+            class="centered-button"
+            on:click=move |_| {
+            add_what.set(Some("date"));
+            column_value.set(FrontendColumnValue::Date(Some(Local::now().date_naive())))
+            }
+            >"+ تاريخ"</button>
+            <button
+            class="centered-button"
+            on:click=move |_| {
+            add_what.set(Some("number"));
+            column_value.set(FrontendColumnValue::Float(0.0));
+            }
+            >"+ رقم"</button>
+            <button
+            class="centered-button"
+            on:click=move |_| {
+            add_what.set(Some("text"));
+            column_value.set(FrontendColumnValue::String(Some(Rc::from(""))));
+            }
+            >"+ نص"</button>
+        </>
+        }
+        >
+            <div>
+            <input
+            style="width:40%; height:30px;"
+            type="text"
+            placeholder="العنوان"
+                on:input=move |ev| header.set(Rc::from(event_target_value(&ev)))
+            />
+            <input
+            style="width:40%; height:30px;"
+            type=add_what.get().unwrap_or_default()
+            placeholder="القيمة"
+                on:input=on_value_input
+            />
+            </div>
+            <br/>
+        <button
+            on:click=append_column
+        class="centered-button"
+        >"تاكيد"</button>
+        <button
+        class="centered-button"
+           on:click=move |_| add_what.set(None)
+        >"الغاء"</button>
+        </Show>
+    </Show>
     </>
     }
 }

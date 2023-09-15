@@ -1,3 +1,4 @@
+use leptos::web_sys::Event;
 use leptos::*;
 use models::FrontendColumn;
 use models::FrontendColumnValue;
@@ -557,45 +558,120 @@ pub enum EditState {
     None,
 }
 
+pub fn resolve_operation(
+    operation: &Operation,
+    columns_map: &HashMap<Rc<str>, FrontendColumnValue>,
+) -> Option<f64> {
+    fn get_op(op: &OperationKind) -> impl Fn(f64, f64) -> f64 {
+        match op {
+            OperationKind::Multiply => |v1, v2| v1 * v2,
+            OperationKind::Add => |v1, v2| v1 + v2,
+            OperationKind::Divide => |v1, v2| v1 / v2,
+            OperationKind::Minus => |v1, v2| v1 - v2,
+        }
+    }
+
+    fn resolve_hs(
+        hs: &ValueType,
+        columns_map: &HashMap<Rc<str>, FrontendColumnValue>,
+    ) -> Option<f64> {
+        match hs {
+            ValueType::Const(hs) => Some(*hs),
+            ValueType::Variable(hs) => match columns_map.get(&Rc::from(hs.as_str())) {
+                Some(FrontendColumnValue::Float(hs)) => Some(*hs),
+                _ => None,
+            },
+            ValueType::Operation(lhs) => {
+                let lhs = lhs;
+                resolve_operation(lhs, columns_map)
+            }
+        }
+    }
+
+    let Operation { op, lhs, rhs } = operation;
+    let op = get_op(op);
+    let lhs = resolve_hs(lhs, columns_map);
+    let rhs = resolve_hs(rhs, columns_map);
+    match (lhs, rhs) {
+        (Some(lhs), Some(rhs)) => Some(op(lhs, rhs)),
+        (Some(lhs), None) => Some(lhs),
+        (None, Some(rhs)) => Some(rhs),
+        (None, None) => None,
+    }
+}
+
+pub fn merge_primary_row_headers(
+    primary_headers: Vec<Rc<str>>,
+    non_primary_headers: Vec<Rc<str>>,
+) -> Vec<(Rc<str>, Rc<str>)> {
+    let space = non_primary_headers.len() as i32 - primary_headers.len() as i32;
+
+    let mut primary_headers = primary_headers;
+    let mut non_primary_headers = non_primary_headers;
+
+    match space.cmp(&0_i32) {
+        Ordering::Greater => primary_headers.extend((0..space).map(|_| Rc::from(""))),
+        Ordering::Less => {
+            let space = -space;
+            non_primary_headers.extend((0..space).map(|_| Rc::from("")));
+        }
+        Ordering::Equal => (),
+    }
+
+    primary_headers
+        .into_iter()
+        .zip(non_primary_headers)
+        .collect::<Vec<_>>()
+}
+
+pub fn primary_row_on_value_input(column_value: RwSignal<FrontendColumnValue>, ev: Event) {
+    column_value.update(|x| match x {
+        FrontendColumnValue::String(_) => {
+            *x = FrontendColumnValue::String(Some(Rc::from(event_target_value(&ev))))
+        }
+        FrontendColumnValue::Date(_) => {
+            *x =
+                FrontendColumnValue::Date(Some(event_target_value(&ev).parse().unwrap_or_default()))
+        }
+        FrontendColumnValue::Float(_) => {
+            *x = FrontendColumnValue::Float(event_target_value(&ev).parse().unwrap_or_default())
+        }
+    })
+}
+
+pub fn primary_row_append_column(
+    new_columns: RwSignal<HashMap<Rc<str>, FrontendColumn>>,
+    add_what: RwSignal<Option<&str>>,
+    header: RwSignal<Rc<str>>,
+    column_value: RwSignal<FrontendColumnValue>,
+) {
+    new_columns.update(|map| {
+        map.insert(
+            header.get(),
+            FrontendColumn {
+                is_basic: true,
+                value: column_value.get(),
+            },
+        );
+    });
+    add_what.set(None);
+}
+
 #[component]
-pub fn PrimaryRow<FP, FN>(
-    primary_headers: FP,
-    non_primary_headers: FN,
+pub fn PrimaryRowContent<F1, F2, F3, F4>(
+    headers: F1,
+    is_in_edit_mode: F2,
+    is_deleted: F3,
+    delete_fun: F4,
     columns: Memo<HashMap<Rc<str>, FrontendColumn>>,
     new_columns: RwSignal<HashMap<Rc<str>, FrontendColumn>>,
-    deleted_columns: RwSignal<Vec<Rc<str>>>,
-    edit_mode: RwSignal<EditState>,
 ) -> impl IntoView
 where
-    FP: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
-    FN: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
+    F1: Fn() -> Vec<(Rc<str>, Rc<str>)> + 'static + Clone + Copy,
+    F2: Fn() -> bool + 'static + Clone + Copy,
+    F3: Fn(Rc<str>) -> bool + 'static + Clone + Copy,
+    F4: Fn(Rc<str>) + 'static + Clone + Copy,
 {
-    let add_what = RwSignal::from(None::<&str>);
-    let header = RwSignal::from(Rc::from(""));
-    let column_value = RwSignal::from(FrontendColumnValue::Float(0.0));
-
-    let headers = move || {
-        let mut primary_headers = primary_headers();
-
-        let mut non_primary_headers = non_primary_headers();
-
-        let space = non_primary_headers.len() as i32 - primary_headers.len() as i32;
-
-        match space.cmp(&0_i32) {
-            Ordering::Greater => primary_headers.extend((0..space).map(|_| Rc::from(""))),
-            Ordering::Less => {
-                let space = -space;
-                non_primary_headers.extend((0..space).map(|_| Rc::from("")));
-            }
-            Ordering::Equal => (),
-        }
-
-        primary_headers
-            .into_iter()
-            .zip(non_primary_headers)
-            .collect::<Vec<_>>()
-    };
-
     let all_columns = Memo::new(move |_| {
         columns
             .get()
@@ -604,59 +680,19 @@ where
             .collect::<HashMap<_, _>>()
     });
 
-    let on_value_input = move |ev| {
-        column_value.update(|x| match x {
-            FrontendColumnValue::String(_) => {
-                *x = FrontendColumnValue::String(Some(Rc::from(event_target_value(&ev))))
-            }
-            FrontendColumnValue::Date(_) => {
-                *x = FrontendColumnValue::Date(Some(
-                    event_target_value(&ev).parse().unwrap_or_default(),
-                ))
-            }
-            FrontendColumnValue::Float(_) => {
-                *x = FrontendColumnValue::Float(event_target_value(&ev).parse().unwrap_or_default())
-            }
-        })
-    };
-
-    let append = move |_| {
-        new_columns.update(|map| {
-            map.insert(
-                header.get(),
-                FrontendColumn {
-                    is_basic: true,
-                    value: column_value.get(),
-                },
-            );
-        });
-        add_what.set(None);
-    };
-
-    let is_in_edit_mode = move || matches!(edit_mode.get(), EditState::Primary);
-    let is_deleted = move |header| deleted_columns.get().into_iter().any(|x| x == header);
-    let is_new = move |header| new_columns.get().keys().any(|x| x.clone() == header);
-
-    let delete_fun = move |p: Rc<str>| {
-        move |_| {
-            if is_new(p.clone()) {
-                new_columns.update(|xs| xs.retain(|x, _| x.clone() != p));
-            } else {
-                if is_deleted(p.clone()) {
-                    deleted_columns.update(|xs| xs.retain(|x| x.clone() != p.clone()))
-                } else {
-                    deleted_columns.update(|xs| {
-                        if !p.is_empty() {
-                            xs.push(p.clone())
-                        }
-                    })
-                }
-            }
+    let primary_value_and_transition = move |primary| {
+        move || {
+            columns.get().get(&primary).map(|x| {
+                x.value.to_string()
+                    + &new_columns
+                        .get()
+                        .get(&primary)
+                        .map(|x| " => ".to_string() + &x.value.to_string())
+                        .unwrap_or_default()
+            })
         }
     };
-
     view! {
-    <>
     <table>
         <For
         each=headers
@@ -665,21 +701,11 @@ where
             <tr>
             <td>{let a = primary.clone();move || a.to_string()}</td>
             <td class="shapeless">" "</td>
-            <td>{let p = primary.clone();move || columns
-                 .get()
-                 .get(&p)
-                 .map(|x| x.value.to_string()
-                  + &new_columns
-                  .get()
-                  .get(&p)
-                  .map(|x| " => ".to_string() + &x.value.to_string())
-                  .unwrap_or_default()
-                 )
-            }
+            <td>{primary_value_and_transition(primary.clone())}
             </td>
             <Show when=is_in_edit_mode fallback=|| view! {<></>}>
                 <td><button
-                    on:click=delete_fun(primary.clone())>{
+                    on:click={let a = primary.clone();move |_| delete_fun(a.clone())}>{
                         let p = primary.clone();
                         move || if is_deleted(p.clone()) {"P"} else {"X"}
                     }</button></td>
@@ -692,7 +718,7 @@ where
             <td>{let np = non_primary.clone();move ||all_columns.get().get(&np).map(|x| x.value.to_string())}</td>
             <Show when=is_in_edit_mode fallback=|| view! {<></>}>
                 <td><button
-                     on:click=delete_fun(non_primary.clone())>{
+                     on:click={let a =non_primary.clone(); move |_| delete_fun(a.clone())}>{
                         let p = non_primary.clone();
                         move || if is_deleted(p.clone()) {"P"} else {"X"}
                     }</button></td>
@@ -701,102 +727,5 @@ where
         }
         />
     </table>
-    <Show
-        when=is_in_edit_mode
-        fallback=move|| view!{<></>}
-    >
-        <Show
-        when=move || add_what.get().is_some()
-        fallback=move|| view!{
-        <>
-            <button
-            class="centered-button"
-            on:click=move |_| {
-            add_what.set(Some("date"));
-            column_value.set(FrontendColumnValue::Date(Some(Local::now().date_naive())))
-            }
-            >"+ تاريخ"</button>
-            <button
-            class="centered-button"
-            on:click=move |_| {
-            add_what.set(Some("number"));
-            column_value.set(FrontendColumnValue::Float(0.0));
-            }
-            >"+ رقم"</button>
-            <button
-            class="centered-button"
-            on:click=move |_| {
-            add_what.set(Some("text"));
-            column_value.set(FrontendColumnValue::String(Some(Rc::from(""))));
-            }
-            >"+ نص"</button>
-        </>
-        }
-        >
-            <div>
-            <input
-            style="width:40%; height:30px;"
-            type="text"
-            placeholder="العنوان"
-                on:input=move |ev| header.set(Rc::from(event_target_value(&ev)))
-            />
-            <input
-            style="width:40%; height:30px;"
-            type=add_what.get().unwrap_or_default()
-            placeholder="القيمة"
-                on:input=on_value_input
-            />
-            </div>
-            <br/>
-        <button
-            on:click=append
-        class="centered-button"
-        >"تاكيد"</button>
-        <button
-        class="centered-button"
-           on:click=move |_| add_what.set(None)
-        >"الغاء"</button>
-        </Show>
-    </Show>
-    </>
-    }
-}
-
-fn get_op(op: &OperationKind) -> impl Fn(f64, f64) -> f64 {
-    match op {
-        OperationKind::Multiply => |v1, v2| v1 * v2,
-        OperationKind::Add => |v1, v2| v1 + v2,
-        OperationKind::Divide => |v1, v2| v1 / v2,
-        OperationKind::Minus => |v1, v2| v1 - v2,
-    }
-}
-
-fn resolve_hs(hs: &ValueType, columns_map: &HashMap<Rc<str>, FrontendColumnValue>) -> Option<f64> {
-    match hs {
-        ValueType::Const(hs) => Some(*hs),
-        ValueType::Variable(hs) => match columns_map.get(&Rc::from(hs.as_str())) {
-            Some(FrontendColumnValue::Float(hs)) => Some(*hs),
-            _ => None,
-        },
-        ValueType::Operation(lhs) => {
-            let lhs = lhs;
-            resolve_operation(lhs, columns_map)
-        }
-    }
-}
-
-pub fn resolve_operation(
-    operation: &Operation,
-    columns_map: &HashMap<Rc<str>, FrontendColumnValue>,
-) -> Option<f64> {
-    let Operation { op, lhs, rhs } = operation;
-    let op = get_op(op);
-    let lhs = resolve_hs(lhs, columns_map);
-    let rhs = resolve_hs(rhs, columns_map);
-    match (lhs, rhs) {
-        (Some(lhs), Some(rhs)) => Some(op(lhs, rhs)),
-        (Some(lhs), None) => Some(lhs),
-        (None, Some(rhs)) => Some(rhs),
-        (None, None) => None,
     }
 }

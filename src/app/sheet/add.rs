@@ -4,7 +4,7 @@ use models::{
     ConfigValue, FrontendColumn, FrontendColumnValue, FrontendRow, HeaderGetter, RowsSort,
 };
 use serde::{Deserialize, Serialize};
-use std::{cmp::Ordering, str::FromStr};
+use std::str::FromStr;
 
 use super::shared::{
     alert, import_sheet_rows, message, new_id, open_file, InputRow, NameArg, SheetHead, ShowNewRows,
@@ -13,7 +13,13 @@ use super::shared::{
 use chrono::Local;
 use std::collections::HashMap;
 
-use crate::Id;
+use crate::{
+    app::sheet::shared::{
+        merge_primary_row_headers, primary_row_append_column, primary_row_on_value_input,
+        PrimaryRowContent,
+    },
+    Id,
+};
 use tauri_sys::tauri::invoke;
 use uuid::Uuid;
 
@@ -237,7 +243,8 @@ pub fn AddSheet() -> impl IntoView {
               primary_headers=move || sheet_primary_headers_resource.get().unwrap_or_default()
               non_primary_headers=primary_non_primary_headers
               new_columns=modified_primary_columns
-            /><br/>
+            />
+            <br/>
             <table>
                 <SheetHead basic_headers=basic_headers calc_headers=calc_headers/>
                 <tbody>
@@ -283,89 +290,23 @@ where
     let header = RwSignal::from(Rc::from(""));
     let column_value = RwSignal::from(FrontendColumnValue::Float(0.0));
 
-    let headers = move || {
-        let mut primary_headers = primary_headers();
+    let headers = move || merge_primary_row_headers(primary_headers(), non_primary_headers());
 
-        let mut non_primary_headers = non_primary_headers();
+    let on_value_input = move |ev| primary_row_on_value_input(column_value, ev);
 
-        let space = non_primary_headers.len() as i32 - primary_headers.len() as i32;
-
-        match space.cmp(&0_i32) {
-            Ordering::Greater => primary_headers.extend((0..space).map(|_| Rc::from(""))),
-            Ordering::Less => {
-                let space = -space;
-                non_primary_headers.extend((0..space).map(|_| Rc::from("")));
-            }
-            Ordering::Equal => (),
-        }
-
-        primary_headers
-            .into_iter()
-            .zip(non_primary_headers)
-            .collect::<Vec<_>>()
-    };
-
-    let on_value_input = move |ev| {
-        column_value.update(|x| match x {
-            FrontendColumnValue::String(_) => {
-                *x = FrontendColumnValue::String(Some(Rc::from(event_target_value(&ev))))
-            }
-            FrontendColumnValue::Date(_) => {
-                *x = FrontendColumnValue::Date(Some(
-                    event_target_value(&ev).parse().unwrap_or_default(),
-                ))
-            }
-            FrontendColumnValue::Float(_) => {
-                *x = FrontendColumnValue::Float(event_target_value(&ev).parse().unwrap_or_default())
-            }
-        })
-    };
-
-    let append = move |_| {
-        new_columns.update(|map| {
-            map.insert(
-                header.get(),
-                FrontendColumn {
-                    is_basic: true,
-                    value: column_value.get(),
-                },
-            );
-        });
-        add_what.set(None);
-    };
+    let append_column =
+        move |_| primary_row_append_column(new_columns, add_what, header, column_value);
 
     view! {
     <>
-    <table>
-        <For
-        each=headers
-        key=|x| x.0.to_string() + x.1.as_ref()
-        view=move |(primary,non_primary)| view!{
-            <tr>
-            <td>{primary.to_string()}</td>
-            <td class="shapeless">" "</td>
-            <td>{move || new_columns
-                 .get()
-                 .get(&primary)
-                 .map(|x| x.value.to_string()
-                  + &new_columns
-                  .get()
-                  .get(&primary)
-                  .map(|x| x.value.to_string())
-                  .unwrap_or_default()
-                 )
-            }
-            </td>
-            <td class="shapeless">" "</td>
-            <td class="shapeless">" | "</td>
-            <td class="shapeless">" "</td>
-            <td>{non_primary.to_string()}</td>
-            <td class="shapeless">" "</td>
-            <td>{move ||new_columns.get().get(&non_primary).map(|x| x.value.to_string())}</td>
-            </tr>
-        }
-        />
-    </table>
+    <PrimaryRowContent
+        headers=headers
+        delete_fun=move |header| new_columns.update(|xs| xs.retain(|x,_| x.clone() != header))
+        new_columns=new_columns
+        columns=Memo::new(move |_| HashMap::new())
+        is_in_edit_mode=move || true
+        is_deleted=move |_| false
+    />
     <Show
         when=move || add_what.get().is_some()
         fallback=move|| view!{
@@ -416,7 +357,7 @@ where
             </div>
             <br/>
         <button
-            on:click=append
+            on:click=append_column
         class="centered-button"
         >"تاكيد"</button>
         <button
