@@ -1,5 +1,6 @@
 use crate::Id;
 use chrono::NaiveDate;
+use leptos::spawn_local;
 use leptos::{ev::MouseEvent, *};
 use leptos_router::*;
 use models::{
@@ -11,6 +12,8 @@ use std::str::FromStr;
 use std::{collections::HashMap, rc::Rc};
 use tauri_sys::tauri::invoke;
 use uuid::Uuid;
+
+const SAVE_EDITS_TOTAL_TASKS: i32 = 6;
 
 use super::shared::{
     alert, confirm, import_sheet_rows, message, open_file, resolve_operation, EditState, InputRow,
@@ -146,8 +149,6 @@ pub fn ShowSheet() -> impl IntoView {
             None => None,
         })
     };
-
-    Effect::new(move |_| logging::log!("{:#?}", modified_primary_columns.get()));
 
     let sheet_type_name_resource = Resource::once(move || async move {
         invoke::<Id, Rc<str>>(
@@ -438,6 +439,8 @@ pub fn ShowSheet() -> impl IntoView {
             .map(|x| x.columns.clone())
             .unwrap_or_default()
     });
+    let save_edits_successes = RwSignal::from(0);
+    let save_edits_dones = RwSignal::from(0);
 
     let save_edits = move |_| {
         let Some(sheet) = sheet_init_memo.get() else {
@@ -501,7 +504,6 @@ pub fn ShowSheet() -> impl IntoView {
             .into_iter()
             .map(|x| (sheetid.clone(), x))
             .collect::<Vec<_>>();
-        let mut success = true;
         spawn_local(async move {
             if !the_sheet_name.is_empty() && the_sheet_name != sheet.sheet_name {
                 match invoke::<_, ()>(
@@ -515,13 +517,18 @@ pub fn ShowSheet() -> impl IntoView {
                 )
                 .await
                 {
-                    Ok(_) => (),
+                    Ok(_) => save_edits_successes.update(|x| *x += 1),
                     Err(err) => {
                         alert(err.to_string().as_str()).await;
-                        success = false;
+                        save_edits_successes.set(0);
                     }
                 }
+            } else {
+                save_edits_successes.update(|x| *x += 1);
             }
+            save_edits_dones.update(|x| *x += 1);
+        });
+        spawn_local(async move {
             if !the_deleted_rows.is_empty() {
                 match invoke::<_, ()>(
                     "delete_rows_from_sheet",
@@ -532,13 +539,18 @@ pub fn ShowSheet() -> impl IntoView {
                 )
                 .await
                 {
-                    Ok(_) => (),
+                    Ok(_) => save_edits_successes.update(|x| *x += 1),
                     Err(err) => {
                         alert(err.to_string().as_str()).await;
-                        success = false;
+                        save_edits_successes.set(0);
                     }
                 }
+            } else {
+                save_edits_successes.update(|x| *x += 1);
             }
+            save_edits_dones.update(|x| *x += 1);
+        });
+        spawn_local(async move {
             if !the_added_rows.is_empty() {
                 match invoke::<_, ()>(
                     "add_rows_to_sheet",
@@ -549,14 +561,18 @@ pub fn ShowSheet() -> impl IntoView {
                 )
                 .await
                 {
-                    Ok(_) => (),
+                    Ok(_) => save_edits_successes.update(|x| *x += 1),
                     Err(err) => {
                         alert(err.to_string().as_str()).await;
-                        success = false;
+                        save_edits_successes.set(0);
                     }
                 }
+            } else {
+                save_edits_successes.update(|x| *x += 1);
             }
-
+            save_edits_dones.update(|x| *x += 1);
+        });
+        spawn_local(async move {
             if !primary_deleted_columnsidentifiers.is_empty() {
                 match invoke::<_, ()>(
                     "delete_columns",
@@ -567,14 +583,18 @@ pub fn ShowSheet() -> impl IntoView {
                 )
                 .await
                 {
-                    Ok(_) => (),
+                    Ok(_) => save_edits_successes.update(|x| *x += 1),
                     Err(err) => {
                         alert(err.to_string().as_str()).await;
-                        success = false;
+                        save_edits_successes.set(0);
                     }
                 }
+            } else {
+                save_edits_successes.update(|x| *x += 1);
             }
-
+            save_edits_dones.update_untracked(|x| *x += 1);
+        });
+        spawn_local(async move {
             if !updated_columnsidentifiers.is_empty() {
                 match invoke::<_, ()>(
                     "update_columns",
@@ -585,14 +605,18 @@ pub fn ShowSheet() -> impl IntoView {
                 )
                 .await
                 {
-                    Ok(_) => (),
+                    Ok(_) => save_edits_successes.update_untracked(|x| *x += 1),
                     Err(err) => {
                         alert(err.to_string().as_str()).await;
-                        success = false;
+                        save_edits_successes.set(0);
                     }
                 }
+            } else {
+                save_edits_successes.update(|x| *x += 1);
             }
-
+            save_edits_dones.update(|x| *x += 1);
+        });
+        spawn_local(async move {
             if !new_columnsidentifiers.is_empty() {
                 match invoke::<_, ()>(
                     "save_columns",
@@ -603,19 +627,16 @@ pub fn ShowSheet() -> impl IntoView {
                 )
                 .await
                 {
-                    Ok(_) => (),
+                    Ok(_) => save_edits_successes.update(|x| *x += 1),
                     Err(err) => {
                         alert(err.to_string().as_str()).await;
-                        success = false;
+                        save_edits_successes.set(0);
                     }
                 }
+            } else {
+                save_edits_successes.update(|x| *x += 1);
             }
-
-            if success {
-                message("👍").await;
-            }
-
-            sheet_resource.refetch();
+            save_edits_dones.update(|x| *x += 1);
         });
 
         edit_mode.set(EditState::None);
@@ -627,6 +648,22 @@ pub fn ShowSheet() -> impl IntoView {
         deleted_primary_columns.set(Vec::new());
         on_edit.set(false);
     };
+
+    Effect::new(move |_| {
+        if save_edits_successes.get() == SAVE_EDITS_TOTAL_TASKS {
+            spawn_local(async move {
+                message("👍").await;
+                save_edits_successes.set(0);
+            });
+        }
+    });
+
+    Effect::new(move |_| {
+        if save_edits_dones.get() == SAVE_EDITS_TOTAL_TASKS {
+            sheet_resource.refetch();
+            save_edits_dones.set(0);
+        }
+    });
 
     let load_file = move |_| {
         let sheettype = sheet_type_name_resource.get().unwrap_or(Rc::from(""));
