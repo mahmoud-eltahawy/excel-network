@@ -1,8 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use models::{
-    ConfigValue, FrontendColumn, FrontendColumnValue, FrontendRow, HeaderGetter, RowsSort,
-};
+use models::{Column, ConfigValue, HeaderGetter, Row, RowsSort};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
@@ -10,14 +8,10 @@ use super::shared::{
     alert, import_sheet_rows, message, new_id, open_file, InputRow, NameArg, SheetHead, ShowNewRows,
 };
 
-use chrono::Local;
 use std::collections::HashMap;
 
 use crate::{
-    app::sheet::shared::{
-        merge_primary_row_headers, primary_row_append_column, primary_row_on_value_input,
-        PrimaryRowContent,
-    },
+    app::sheet::shared::{merge_primary_row_headers, PrimaryRowContent, PrimaryRowEditor},
     Id,
 };
 use tauri_sys::tauri::invoke;
@@ -28,7 +22,7 @@ struct SaveSheetArgs {
     sheetid: Uuid,
     sheetname: Rc<str>,
     typename: Rc<str>,
-    rows: Vec<FrontendRow>,
+    rows: Vec<Row<Rc<str>>>,
 }
 
 use std::rc::Rc;
@@ -36,8 +30,8 @@ use std::rc::Rc;
 #[component]
 pub fn AddSheet() -> impl IntoView {
     let sheet_name = RwSignal::from(Rc::from(""));
-    let rows = RwSignal::from(Vec::<FrontendRow>::new());
-    let modified_primary_columns = RwSignal::from(HashMap::<Rc<str>, FrontendColumn>::new());
+    let rows = RwSignal::from(Vec::<Row<Rc<str>>>::new());
+    let modified_primary_columns = RwSignal::from(HashMap::<Rc<str>, Column<Rc<str>>>::new());
     let params = use_params_map();
     let sheet_type_id = move || {
         params.with(|params| match params.get("sheet_type_id") {
@@ -114,7 +108,7 @@ pub fn AddSheet() -> impl IntoView {
             .collect::<Vec<_>>()
     };
 
-    let append = move |row: FrontendRow| {
+    let append = move |row: Row<Rc<str>>| {
         rows.update_untracked(|xs| xs.push(row));
         rows.update(|xs| xs.sort_rows(sheet_priorities_resource.get().unwrap_or(Rc::from([]))));
     };
@@ -128,7 +122,7 @@ pub fn AddSheet() -> impl IntoView {
             let index = the_rows.iter().position(|x| x.id == id);
             if let Some(index) = index {
                 if let Some(primary_row) = the_rows.get_mut(index) {
-                    *primary_row = FrontendRow {
+                    *primary_row = Row {
                         id: primary_row.id,
                         columns: primary_row
                             .clone()
@@ -147,13 +141,11 @@ pub fn AddSheet() -> impl IntoView {
                     typename: sheet_type_name_resource.get().unwrap_or(Rc::from("")),
                     rows: the_rows
                         .into_iter()
-                        .map(|FrontendRow { id, columns }| FrontendRow {
+                        .map(|Row { id, columns }| Row {
                             id,
                             columns: columns
                                 .into_iter()
-                                .filter(|(_, FrontendColumn { is_basic, value: _ })| {
-                                    is_basic.to_owned()
-                                })
+                                .filter(|(_, Column { is_basic, value: _ })| is_basic.to_owned())
                                 .collect(),
                         })
                         .collect::<Vec<_>>(),
@@ -174,21 +166,21 @@ pub fn AddSheet() -> impl IntoView {
     let sheet_primary_headers_resource = Resource::new(
         move || sheet_type_name_resource.get(),
         move |name| async move {
-            invoke::<NameArg, Vec<Rc<str>>>("sheet_primary_headers", &NameArg { name })
+            invoke::<NameArg, Rc<[Rc<str>]>>("sheet_primary_headers", &NameArg { name })
                 .await
-                .unwrap_or_default()
+                .unwrap_or(Rc::from([]))
         },
     );
 
     let primary_non_primary_headers = move || {
-        let primary_headers = sheet_primary_headers_resource.get().unwrap_or_default();
+        let primary_headers = sheet_primary_headers_resource.get().unwrap_or(Rc::from([]));
 
         modified_primary_columns
             .get()
             .keys()
             .cloned()
             .filter(|x| !primary_headers.contains(x))
-            .collect::<Vec<_>>()
+            .collect::<Rc<[_]>>()
     };
 
     let load_file = move |_| {
@@ -240,7 +232,7 @@ pub fn AddSheet() -> impl IntoView {
                 on:input=move |ev| sheet_name.set(Rc::from(event_target_value(&ev)))
             />
             <PrimaryRow
-              primary_headers=move || sheet_primary_headers_resource.get().unwrap_or_default()
+              primary_headers=move || sheet_primary_headers_resource.get().unwrap_or(Rc::from([]))
               non_primary_headers=primary_non_primary_headers
               new_columns=modified_primary_columns
             />
@@ -280,22 +272,13 @@ pub fn AddSheet() -> impl IntoView {
 fn PrimaryRow<FP, FN>(
     primary_headers: FP,
     non_primary_headers: FN,
-    new_columns: RwSignal<HashMap<Rc<str>, FrontendColumn>>,
+    new_columns: RwSignal<HashMap<Rc<str>, Column<Rc<str>>>>,
 ) -> impl IntoView
 where
-    FP: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
-    FN: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
+    FP: Fn() -> Rc<[Rc<str>]> + 'static + Clone + Copy,
+    FN: Fn() -> Rc<[Rc<str>]> + 'static + Clone + Copy,
 {
-    let add_what = RwSignal::from(None::<&str>);
-    let header = RwSignal::from(Rc::from(""));
-    let column_value = RwSignal::from(FrontendColumnValue::Float(0.0));
-
     let headers = move || merge_primary_row_headers(primary_headers(), non_primary_headers());
-
-    let on_value_input = move |ev| primary_row_on_value_input(column_value, ev);
-
-    let append_column =
-        move |_| primary_row_append_column(new_columns, add_what, header, column_value);
 
     view! {
     <>
@@ -307,64 +290,7 @@ where
         is_in_edit_mode=move || true
         is_deleted=move |_| false
     />
-    <Show
-        when=move || add_what.get().is_some()
-        fallback=move|| view!{
-        <>
-            <button
-            class="centered-button"
-            on:click=move |_| {
-            add_what.set(Some("date"));
-            column_value.set(FrontendColumnValue::Date(Some(Local::now().date_naive())))
-            }
-            >"+ تاريخ"</button>
-            <button
-            class="centered-button"
-            on:click=move |_| {
-            add_what.set(Some("number"));
-            column_value.set(FrontendColumnValue::Float(0.0));
-            }
-            >"+ رقم"</button>
-            <button
-            class="centered-button"
-            on:click=move |_| {
-            add_what.set(Some("text"));
-            column_value.set(FrontendColumnValue::String(Some(Rc::from(""))));
-            }
-            >"+ نص"</button>
-            <button
-            class="centered-button"
-            on:click=move |_| {
-            new_columns.set(HashMap::new());
-            }
-            >"الغاء التعديلات"</button>
-        </>
-        }
-        >
-            <div>
-            <input
-            style="width:40%; height:30px;"
-            type="text"
-            placeholder="العنوان"
-                on:input=move |ev| header.set(Rc::from(event_target_value(&ev)))
-            />
-            <input
-            style="width:40%; height:30px;"
-            type=add_what.get().unwrap_or_default()
-            placeholder="القيمة"
-                on:input=on_value_input
-            />
-            </div>
-            <br/>
-        <button
-            on:click=append_column
-        class="centered-button"
-        >"تاكيد"</button>
-        <button
-        class="centered-button"
-           on:click=move |_| add_what.set(None)
-        >"الغاء"</button>
-    </Show>
+        <PrimaryRowEditor new_columns=new_columns/>
     </>
     }
 }

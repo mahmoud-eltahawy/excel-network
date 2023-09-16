@@ -8,6 +8,8 @@ use sqlx::{query, query_as};
 use std::{collections::HashMap, error::Error};
 use uuid::Uuid;
 
+use std::sync::Arc;
+
 use models::{
     Column, Name, NameSerial, Row, RowSerial, SearchSheetParams, Sheet, SheetSerial, ToOrigin,
     ToSerial,
@@ -62,7 +64,7 @@ async fn search(state: Data<AppState>, params: web::Bytes) -> impl Responder {
 #[post("/")]
 async fn save(state: Data<AppState>, sheet: web::Bytes) -> impl Responder {
     let sheet = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(sheet)).map(|body| {
-        body.deserialized::<SheetSerial>()
+        body.deserialized::<SheetSerial<Arc<str>>>()
             .map(|sheet| sheet.to_origin())
     });
 
@@ -180,7 +182,7 @@ async fn add_rows_to_sheet(
     let sheet_id = sheet_id.into_inner();
 
     let rows = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(rows)).map(|body| {
-        body.deserialized::<Vec<RowSerial>>().map(|rows| {
+        body.deserialized::<Vec<RowSerial<Arc<str>>>>().map(|rows| {
             rows.into_iter()
                 .flat_map(|x| x.to_origin())
                 .collect::<Vec<_>>()
@@ -211,7 +213,7 @@ async fn delete_sheet_rows(
 ) -> impl Responder {
     let sheet_id = sheet_id.into_inner();
     let rows = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(rows)).map(|body| {
-        body.deserialized::<Vec<String>>().map(|rows| {
+        body.deserialized::<Vec<Arc<str>>>().map(|rows| {
             rows.into_iter()
                 .flat_map(|x| x.to_origin())
                 .collect::<Vec<_>>()
@@ -237,7 +239,7 @@ async fn delete_sheet_rows(
 pub async fn fetch_columns_by_row_id(
     state: &AppState,
     row_id: &Uuid,
-) -> Result<HashMap<String, Column>, Box<dyn Error>> {
+) -> Result<HashMap<Arc<str>, Column<Arc<str>>>, Box<dyn Error>> {
     let records = query!(
         r#"
         select header_name,value
@@ -246,10 +248,10 @@ pub async fn fetch_columns_by_row_id(
     )
     .fetch_all(&state.db)
     .await?;
-    let mut map = HashMap::new();
+    let mut map = HashMap::<Arc<str>, Column<Arc<str>>>::new();
     for record in records.into_iter() {
         map.insert(
-            record.header_name,
+            Arc::from(record.header_name),
             Column {
                 is_basic: true,
                 value: serde_json::from_value(record.value)?,
@@ -311,7 +313,7 @@ async fn fetch_custom_sheet_by_id(
     state: &AppState,
     id: Uuid,
     limit: i64,
-) -> Result<Sheet, Box<dyn Error>> {
+) -> Result<Sheet<Arc<str>>, Box<dyn Error>> {
     let record = query!(
         r#"
         select *
@@ -331,8 +333,8 @@ async fn fetch_custom_sheet_by_id(
     }
     Ok(Sheet {
         id,
-        sheet_name: record.sheet_name,
-        type_name: record.type_name,
+        sheet_name: Arc::from(record.sheet_name),
+        type_name: Arc::from(record.type_name),
         insert_date: record.insert_date,
         rows,
     })
@@ -472,7 +474,11 @@ async fn search_by_params(
     Ok(names)
 }
 
-async fn save_row(state: &AppState, sheet_id: &Uuid, row: Row) -> Result<(), Box<dyn Error>> {
+async fn save_row(
+    state: &AppState,
+    sheet_id: &Uuid,
+    row: Row<Arc<str>>,
+) -> Result<(), Box<dyn Error>> {
     let Row { id, columns } = row;
     query!(
         r#"
@@ -491,7 +497,7 @@ async fn save_row(state: &AppState, sheet_id: &Uuid, row: Row) -> Result<(), Box
     Ok(())
 }
 
-async fn save_sheet(state: &AppState, sheet: Sheet) -> Result<(), Box<dyn Error>> {
+async fn save_sheet(state: &AppState, sheet: Sheet<Arc<str>>) -> Result<(), Box<dyn Error>> {
     let Sheet {
         id,
         sheet_name,
@@ -504,8 +510,8 @@ async fn save_sheet(state: &AppState, sheet: Sheet) -> Result<(), Box<dyn Error>
 	INSERT INTO sheets(id,sheet_name,type_name,insert_date)
 	VALUES($1,$2,$3,$4)"#,
         id,
-        sheet_name,
-        type_name,
+        sheet_name.to_string(),
+        type_name.to_string(),
         insert_date,
     )
     .execute(&state.db)

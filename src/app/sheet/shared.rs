@@ -1,8 +1,7 @@
-use leptos::web_sys::Event;
 use leptos::*;
-use models::FrontendColumn;
-use models::FrontendColumnValue;
-use models::FrontendRow;
+use models::Column;
+use models::ColumnValue;
+use models::Row;
 
 use crate::Non;
 use chrono::Local;
@@ -50,8 +49,8 @@ pub async fn import_sheet_rows(
     sheetid: Uuid,
     sheettype: Rc<str>,
     filepath: String,
-) -> Vec<FrontendRow> {
-    invoke::<ImportSheetArgs, Vec<FrontendRow>>(
+) -> Vec<Row<Rc<str>>> {
+    invoke::<ImportSheetArgs, Vec<Row<Rc<str>>>>(
         "import_sheet",
         &ImportSheetArgs {
             sheettype,
@@ -142,10 +141,10 @@ fn ColumnEdit<F1, F2, F3>(
     mode: F1,
     cancel: F2,
     priorities: F3,
-    rows: RwSignal<Vec<FrontendRow>>,
+    rows: RwSignal<Vec<Row<Rc<str>>>>,
 ) -> impl IntoView
 where
-    F1: Fn() -> (Rc<str>, Uuid, Rc<HashMap<Rc<str>, FrontendColumn>>) + 'static,
+    F1: Fn() -> (Rc<str>, Uuid, Rc<HashMap<Rc<str>, Column<Rc<str>>>>) + 'static,
     F2: Fn() + 'static + Clone + Copy,
     F3: Fn() -> Rc<[Rc<str>]> + 'static + Clone + Copy,
 {
@@ -156,13 +155,11 @@ where
     let on_input = move |ev| {
         let value = event_target_value(&ev);
         let value = match column_value.get() {
-            Some(FrontendColumnValue::Float(_)) => {
-                FrontendColumnValue::Float(value.parse().unwrap_or_default())
+            Some(ColumnValue::Float(_)) => ColumnValue::Float(value.parse().unwrap_or_default()),
+            Some(ColumnValue::Date(_)) => {
+                ColumnValue::Date(Some(value.parse().unwrap_or_default()))
             }
-            Some(FrontendColumnValue::Date(_)) => {
-                FrontendColumnValue::Date(Some(value.parse().unwrap_or_default()))
-            }
-            _ => FrontendColumnValue::String(Some(Rc::from(value))),
+            _ => ColumnValue::String(Some(Rc::from(value))),
         };
         column_value.set(Some(value));
     };
@@ -218,12 +215,12 @@ where
                     let mut columns = row.columns;
                     columns.insert(
                         mode().0, //header
-                        FrontendColumn {
+                        Column {
                             is_basic: true,
                             value: value.clone(),
                         },
                     );
-                    FrontendRow { columns, ..row }
+                    Row { columns, ..row }
                 })
                 .collect::<Vec<_>>();
             let mut rows = xs.iter().cloned().chain(rows).collect::<Vec<_>>();
@@ -238,8 +235,8 @@ where
         <div class="popup">
             <input
                 type=move || match column_value.get() {
-                    Some(FrontendColumnValue::Float(_)) => "number",
-                    Some(FrontendColumnValue::Date(_)) => "date",
+                    Some(ColumnValue::Float(_)) => "number",
+                    Some(ColumnValue::Date(_)) => "date",
                     _ => "text",
                 }
                 placeholder=move || {
@@ -277,7 +274,7 @@ pub fn ShowNewRows<BH, CH, FD, FP, FI>(
     delete_row: FD,
     priorities: FP,
     sheet_id: FI,
-    rows: RwSignal<Vec<FrontendRow>>,
+    rows: RwSignal<Vec<Row<Rc<str>>>>,
 ) -> impl IntoView
 where
     BH: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
@@ -286,7 +283,8 @@ where
     FD: Fn(Uuid) + 'static + Clone + Copy,
     FI: Fn() -> Uuid + 'static + Clone + Copy,
 {
-    let edit_column = RwSignal::from(None::<(Rc<str>, Uuid, Rc<HashMap<Rc<str>, FrontendColumn>>)>);
+    let edit_column =
+        RwSignal::from(None::<(Rc<str>, Uuid, Rc<HashMap<Rc<str>, Column<Rc<str>>>>)>);
     let new_rows = Memo::new(move |_| {
         rows.get()
             .into_iter()
@@ -311,7 +309,7 @@ where
             <For
                 each=move || new_rows.get()
                 key=|row| row.id
-                view=move | FrontendRow { columns, id }| {
+                view=move | Row { columns, id }| {
                     let columns = Rc::new(columns);
                     view! {
                         <tr>
@@ -378,7 +376,7 @@ pub fn InputRow<F, BH, CH>(
     calc_columns: Memo<Vec<OperationConfig>>,
 ) -> impl IntoView
 where
-    F: Fn(FrontendRow) + 'static + Clone + Copy,
+    F: Fn(Row<Rc<str>>) + 'static + Clone + Copy,
     BH: Fn() -> Vec<Rc<str>> + 'static + Clone,
     CH: Fn() -> Vec<Rc<str>> + 'static,
 {
@@ -428,10 +426,10 @@ where
             for (header, column_signal) in basic_signals_map.get() {
                 let column_value = match column_signal {
                     ColumnSignal::String(reader) => {
-                        FrontendColumnValue::String(Some(Rc::from(reader.get().0)))
+                        ColumnValue::String(Some(Rc::from(reader.get().0)))
                     }
-                    ColumnSignal::Float(reader) => FrontendColumnValue::Float(reader.get().0),
-                    ColumnSignal::Date(reader) => FrontendColumnValue::Date(Some(reader.get().0)),
+                    ColumnSignal::Float(reader) => ColumnValue::Float(reader.get().0),
+                    ColumnSignal::Date(reader) => ColumnValue::Date(Some(reader.get().0)),
                 };
                 basic_map.insert(header, column_value);
             }
@@ -444,22 +442,22 @@ where
     });
 
     let on_click = move |_| {
-        let mut result = HashMap::<Rc<str>, FrontendColumn>::new();
+        let mut result = HashMap::<Rc<str>, Column<Rc<str>>>::new();
         for (key, value) in basic_signals_map.get() {
             result.insert(
                 key,
                 match value {
-                    ColumnSignal::String(reader) => FrontendColumn {
+                    ColumnSignal::String(reader) => Column {
                         is_basic: true,
-                        value: FrontendColumnValue::String(Some(Rc::from(reader.get().0))),
+                        value: ColumnValue::String(Some(Rc::from(reader.get().0))),
                     },
-                    ColumnSignal::Float(reader) => FrontendColumn {
+                    ColumnSignal::Float(reader) => Column {
                         is_basic: true,
-                        value: FrontendColumnValue::Float(reader.get().0),
+                        value: ColumnValue::Float(reader.get().0),
                     },
-                    ColumnSignal::Date(reader) => FrontendColumn {
+                    ColumnSignal::Date(reader) => Column {
                         is_basic: true,
-                        value: FrontendColumnValue::Date(Some(reader.get().0)),
+                        value: ColumnValue::Date(Some(reader.get().0)),
                     },
                 },
             );
@@ -467,14 +465,14 @@ where
         for (key, value) in calc_signals_map.get() {
             result.insert(
                 key,
-                FrontendColumn {
+                Column {
                     is_basic: false,
-                    value: FrontendColumnValue::Float(value),
+                    value: ColumnValue::Float(value),
                 },
             );
         }
         spawn_local(async move {
-            append(FrontendRow {
+            append(Row {
                 id: new_id().await,
                 columns: result,
             });
@@ -560,7 +558,7 @@ pub enum EditState {
 
 pub fn resolve_operation(
     operation: &Operation,
-    columns_map: &HashMap<Rc<str>, FrontendColumnValue>,
+    columns_map: &HashMap<Rc<str>, ColumnValue<Rc<str>>>,
 ) -> Option<f64> {
     fn get_op(op: &OperationKind) -> impl Fn(f64, f64) -> f64 {
         match op {
@@ -573,12 +571,12 @@ pub fn resolve_operation(
 
     fn resolve_hs(
         hs: &ValueType,
-        columns_map: &HashMap<Rc<str>, FrontendColumnValue>,
+        columns_map: &HashMap<Rc<str>, ColumnValue<Rc<str>>>,
     ) -> Option<f64> {
         match hs {
             ValueType::Const(hs) => Some(*hs),
             ValueType::Variable(hs) => match columns_map.get(&Rc::from(hs.as_str())) {
-                Some(FrontendColumnValue::Float(hs)) => Some(*hs),
+                Some(ColumnValue::Float(hs)) => Some(*hs),
                 _ => None,
             },
             ValueType::Operation(lhs) => {
@@ -601,60 +599,39 @@ pub fn resolve_operation(
 }
 
 pub fn merge_primary_row_headers(
-    primary_headers: Vec<Rc<str>>,
-    non_primary_headers: Vec<Rc<str>>,
-) -> Vec<(Rc<str>, Rc<str>)> {
+    primary_headers: Rc<[Rc<str>]>,
+    non_primary_headers: Rc<[Rc<str>]>,
+) -> Rc<[(Rc<str>, Rc<str>)]> {
     let space = non_primary_headers.len() as i32 - primary_headers.len() as i32;
 
     let mut primary_headers = primary_headers;
     let mut non_primary_headers = non_primary_headers;
 
+    let vaccume = |space| (0..space).map(|_| Rc::from("")).collect::<Rc<[Rc<str>]>>();
     match space.cmp(&0_i32) {
-        Ordering::Greater => primary_headers.extend((0..space).map(|_| Rc::from(""))),
+        Ordering::Greater => {
+            primary_headers = primary_headers
+                .iter()
+                .chain(vaccume(space).iter())
+                .cloned()
+                .collect::<Rc<[Rc<str>]>>();
+        }
         Ordering::Less => {
             let space = -space;
-            non_primary_headers.extend((0..space).map(|_| Rc::from("")));
+            non_primary_headers = non_primary_headers
+                .iter()
+                .chain(vaccume(space).iter())
+                .cloned()
+                .collect::<Rc<[Rc<str>]>>();
         }
         Ordering::Equal => (),
     }
 
     primary_headers
-        .into_iter()
-        .zip(non_primary_headers)
-        .collect::<Vec<_>>()
-}
-
-pub fn primary_row_on_value_input(column_value: RwSignal<FrontendColumnValue>, ev: Event) {
-    column_value.update(|x| match x {
-        FrontendColumnValue::String(_) => {
-            *x = FrontendColumnValue::String(Some(Rc::from(event_target_value(&ev))))
-        }
-        FrontendColumnValue::Date(_) => {
-            *x =
-                FrontendColumnValue::Date(Some(event_target_value(&ev).parse().unwrap_or_default()))
-        }
-        FrontendColumnValue::Float(_) => {
-            *x = FrontendColumnValue::Float(event_target_value(&ev).parse().unwrap_or_default())
-        }
-    })
-}
-
-pub fn primary_row_append_column(
-    new_columns: RwSignal<HashMap<Rc<str>, FrontendColumn>>,
-    add_what: RwSignal<Option<&str>>,
-    header: RwSignal<Rc<str>>,
-    column_value: RwSignal<FrontendColumnValue>,
-) {
-    new_columns.update(|map| {
-        map.insert(
-            header.get(),
-            FrontendColumn {
-                is_basic: true,
-                value: column_value.get(),
-            },
-        );
-    });
-    add_what.set(None);
+        .iter()
+        .cloned()
+        .zip(non_primary_headers.iter().cloned())
+        .collect::<Rc<[_]>>()
 }
 
 #[component]
@@ -663,11 +640,11 @@ pub fn PrimaryRowContent<F1, F2, F3, F4>(
     is_in_edit_mode: F2,
     is_deleted: F3,
     delete_fun: F4,
-    columns: Memo<HashMap<Rc<str>, FrontendColumn>>,
-    new_columns: RwSignal<HashMap<Rc<str>, FrontendColumn>>,
+    columns: Memo<HashMap<Rc<str>, Column<Rc<str>>>>,
+    new_columns: RwSignal<HashMap<Rc<str>, Column<Rc<str>>>>,
 ) -> impl IntoView
 where
-    F1: Fn() -> Vec<(Rc<str>, Rc<str>)> + 'static + Clone + Copy,
+    F1: Fn() -> Rc<[(Rc<str>, Rc<str>)]> + 'static + Clone + Copy,
     F2: Fn() -> bool + 'static + Clone + Copy,
     F3: Fn(Rc<str>) -> bool + 'static + Clone + Copy,
     F4: Fn(Rc<str>) + 'static + Clone + Copy,
@@ -692,16 +669,18 @@ where
             })
         }
     };
+
+    let each_head = move || headers().iter().cloned().collect::<Vec<_>>();
     view! {
     <table>
         <For
-        each=headers
+        each=each_head
         key=|x| x.0.to_string() + x.1.as_ref()
         view=move |(primary,non_primary)| view!{
             <tr>
             <td>{let a = primary.clone();move || a.to_string()}</td>
             <td class="shapeless">" "</td>
-            <td>{primary_value_and_transition(primary.clone())}
+            <td>{let p = primary.clone();move || primary_value_and_transition(p.clone())}
             </td>
             <Show when=is_in_edit_mode fallback=|| view! {<></>}>
                 <td><button
@@ -727,5 +706,94 @@ where
         }
         />
     </table>
+    }
+}
+
+#[component]
+pub fn PrimaryRowEditor(new_columns: RwSignal<HashMap<Rc<str>, Column<Rc<str>>>>) -> impl IntoView {
+    let add_what = RwSignal::from(None::<&str>);
+    let header = RwSignal::from(Rc::from(""));
+    let column_value = RwSignal::from(ColumnValue::Float(0.0));
+
+    let on_value_input = move |ev| {
+        column_value.update(|x| match x {
+            ColumnValue::String(_) => {
+                *x = ColumnValue::String(Some(Rc::from(event_target_value(&ev))))
+            }
+            ColumnValue::Date(_) => {
+                *x = ColumnValue::Date(Some(event_target_value(&ev).parse().unwrap_or_default()))
+            }
+            ColumnValue::Float(_) => {
+                *x = ColumnValue::Float(event_target_value(&ev).parse().unwrap_or_default())
+            }
+        })
+    };
+
+    let append_column = move |_| {
+        new_columns.update(|map| {
+            map.insert(
+                header.get(),
+                Column {
+                    is_basic: true,
+                    value: column_value.get(),
+                },
+            );
+        });
+        add_what.set(None);
+    };
+
+    view! {
+        <Show
+        when=move || add_what.get().is_some()
+        fallback=move|| view!{
+        <>
+            <button
+            class="centered-button"
+            on:click=move |_| {
+            add_what.set(Some("date"));
+            column_value.set(ColumnValue::Date(Some(Local::now().date_naive())))
+            }
+            >"+ تاريخ"</button>
+            <button
+            class="centered-button"
+            on:click=move |_| {
+            add_what.set(Some("number"));
+            column_value.set(ColumnValue::Float(0.0));
+            }
+            >"+ رقم"</button>
+            <button
+            class="centered-button"
+            on:click=move |_| {
+            add_what.set(Some("text"));
+            column_value.set(ColumnValue::String(Some(Rc::from(""))));
+            }
+            >"+ نص"</button>
+        </>
+        }
+        >
+            <div>
+            <input
+            style="width:40%; height:30px;"
+            type="text"
+            placeholder="العنوان"
+                on:input=move |ev| header.set(Rc::from(event_target_value(&ev)))
+            />
+            <input
+            style="width:40%; height:30px;"
+            type=add_what.get().unwrap_or_default()
+            placeholder="القيمة"
+                on:input=on_value_input
+            />
+            </div>
+            <br/>
+        <button
+            on:click=append_column
+        class="centered-button"
+        >"تاكيد"</button>
+        <button
+        class="centered-button"
+           on:click=move |_| add_what.set(None)
+        >"الغاء"</button>
+        </Show>
     }
 }

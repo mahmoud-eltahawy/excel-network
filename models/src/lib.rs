@@ -1,6 +1,7 @@
 use chrono::NaiveDate;
 use ciborium_io::Write;
 use serde::{Deserialize, Serialize};
+use std::hash::Hash;
 use std::{cmp::Ordering, collections::HashMap, io::Cursor, marker::Sized, rc::Rc, str::FromStr};
 use uuid::Uuid;
 
@@ -20,13 +21,13 @@ where
     fn to_serial(self) -> T;
 }
 
-impl ToSerial<String> for Uuid {
-    fn to_serial(self) -> String {
-        self.to_string()
+impl ToSerial<Arc<str>> for Uuid {
+    fn to_serial(self) -> Arc<str> {
+        Arc::from(self.to_string())
     }
 }
 
-impl ToOrigin<Uuid> for String {
+impl ToOrigin<Uuid> for Arc<str> {
     fn to_origin(self) -> Result<Uuid, Box<dyn std::error::Error>> {
         Ok(Uuid::from_str(&self)?)
     }
@@ -34,8 +35,8 @@ impl ToOrigin<Uuid> for String {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct ColumnIdSerial {
-    pub sheet_id: String,
-    pub row_id: String,
+    pub sheet_id: Arc<str>,
+    pub row_id: Arc<str>,
     pub header: String,
 }
 
@@ -89,9 +90,9 @@ pub struct SearchSheetParams {
     pub sheet_type_name: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NameSerial {
-    pub id: String,
+    pub id: Arc<str>,
     pub the_name: String,
 }
 
@@ -118,38 +119,19 @@ impl ToSerial<NameSerial> for Name {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub enum ColumnValue {
-    String(Option<String>),
+pub enum ColumnValue<RC>
+where
+    RC: Eq + Hash + ToString,
+{
+    String(Option<RC>),
     Float(f64),
     Date(Option<NaiveDate>),
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub enum FrontendColumnValue {
-    String(Option<Rc<str>>),
-    Float(f64),
-    Date(Option<NaiveDate>),
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub enum BackendColumnValue {
-    String(Option<Arc<str>>),
-    Float(f64),
-    Date(Option<NaiveDate>),
-}
-
-impl ToString for ColumnValue {
-    fn to_string(&self) -> String {
-        match self {
-            Self::String(Some(v)) => v.to_owned(),
-            Self::Float(v) => format!("{:.2}", v),
-            Self::Date(Some(v)) => v.to_string(),
-            _ => String::from(""),
-        }
-    }
-}
-
-impl ToString for FrontendColumnValue {
+impl<T> ToString for ColumnValue<T>
+where
+    T: Eq + Hash + ToString,
+{
     fn to_string(&self) -> String {
         match self {
             Self::String(Some(v)) => v.to_string(),
@@ -161,52 +143,45 @@ impl ToString for FrontendColumnValue {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct Column {
+pub struct Column<RC>
+where
+    RC: Eq + Hash + ToString,
+{
     pub is_basic: bool,
-    pub value: ColumnValue,
+    pub value: ColumnValue<RC>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct FrontendColumn {
-    pub is_basic: bool,
-    pub value: FrontendColumnValue,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct BackendColumn {
-    pub is_basic: bool,
-    pub value: BackendColumnValue,
-}
-
-impl FrontendColumn {
-    fn compare(&self, other: &FrontendColumn) -> Option<Ordering> {
+impl<T> Column<T>
+where
+    T: Eq + Hash + ToString + Ord + Clone,
+{
+    fn compare(&self, other: &Column<T>) -> Option<Ordering> {
         match (self.value.clone(), other.value.clone()) {
-            (FrontendColumnValue::Float(n1), FrontendColumnValue::Float(n2)) => Some(if n1 > n2 {
+            (ColumnValue::Float(n1), ColumnValue::Float(n2)) => Some(if n1 > n2 {
                 Ordering::Greater
             } else if n1 < n2 {
                 Ordering::Less
             } else {
                 Ordering::Equal
             }),
-            (FrontendColumnValue::String(Some(s1)), FrontendColumnValue::String(Some(s2))) => {
-                Some(s1.cmp(&s2))
-            }
-            (FrontendColumnValue::Date(Some(b1)), FrontendColumnValue::Date(Some(b2))) => {
-                Some(b1.cmp(&b2))
-            }
+            (ColumnValue::String(Some(s1)), ColumnValue::String(Some(s2))) => Some(s1.cmp(&s2)),
+            (ColumnValue::Date(Some(b1)), ColumnValue::Date(Some(b2))) => Some(b1.cmp(&b2)),
             _ => None,
         }
     }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct RowSerial {
-    pub id: String,
-    pub columns: HashMap<String, Column>,
+pub struct RowSerial<RC>
+where
+    RC: Eq + Hash + ToString,
+{
+    pub id: Arc<str>,
+    pub columns: HashMap<RC, Column<RC>>,
 }
 
-impl ToOrigin<Row> for RowSerial {
-    fn to_origin(self) -> Result<Row, Box<dyn std::error::Error>> {
+impl ToOrigin<Row<Arc<str>>> for RowSerial<Arc<str>> {
+    fn to_origin(self) -> Result<Row<Arc<str>>, Box<dyn std::error::Error>> {
         let RowSerial { id, columns } = self;
         let id = id.to_origin()?;
         Ok(Row { id, columns })
@@ -214,25 +189,16 @@ impl ToOrigin<Row> for RowSerial {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct Row {
+pub struct Row<RC>
+where
+    RC: Eq + Hash + ToString,
+{
     pub id: Uuid,
-    pub columns: HashMap<String, Column>,
+    pub columns: HashMap<RC, Column<RC>>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct FrontendRow {
-    pub id: Uuid,
-    pub columns: HashMap<Rc<str>, FrontendColumn>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct BackendRow {
-    pub id: Uuid,
-    pub columns: HashMap<Arc<str>, BackendColumn>,
-}
-
-impl ToSerial<RowSerial> for Row {
-    fn to_serial(self) -> RowSerial {
+impl ToSerial<RowSerial<Arc<str>>> for Row<Arc<str>> {
+    fn to_serial(self) -> RowSerial<Arc<str>> {
         let Row { id, columns } = self;
         let id = id.to_serial();
         RowSerial { id, columns }
@@ -243,7 +209,7 @@ pub trait RowsSort {
     fn sort_rows(&mut self, keys: Rc<[Rc<str>]>);
 }
 
-impl RowsSort for Vec<FrontendRow> {
+impl RowsSort for Vec<Row<Rc<str>>> {
     fn sort_rows(&mut self, keys: Rc<[Rc<str>]>) {
         self.sort_by(|row_one, row_two| {
             let mut result = Ordering::Equal;
@@ -264,17 +230,20 @@ impl RowsSort for Vec<FrontendRow> {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
-pub struct SheetSerial {
-    pub id: String,
-    pub sheet_name: String,
-    pub type_name: String,
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
+pub struct SheetSerial<RC>
+where
+    RC: Eq + Hash + ToString,
+{
+    pub id: Arc<str>,
+    pub sheet_name: RC,
+    pub type_name: RC,
     pub insert_date: NaiveDate,
-    pub rows: Vec<RowSerial>,
+    pub rows: Vec<RowSerial<Arc<str>>>,
 }
 
-impl ToOrigin<Sheet> for SheetSerial {
-    fn to_origin(self) -> Result<Sheet, Box<dyn std::error::Error>> {
+impl ToOrigin<Sheet<Arc<str>>> for SheetSerial<Arc<str>> {
+    fn to_origin(self) -> Result<Sheet<Arc<str>>, Box<dyn std::error::Error>> {
         let SheetSerial {
             id,
             sheet_name,
@@ -298,36 +267,21 @@ impl ToOrigin<Sheet> for SheetSerial {
 }
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
-pub struct Sheet {
+pub struct Sheet<RC>
+where
+    RC: Eq + Hash + ToString,
+{
     pub id: Uuid,
-    pub sheet_name: String,
-    pub type_name: String,
+    pub sheet_name: RC,
+    pub type_name: RC,
     pub insert_date: NaiveDate,
-    pub rows: Vec<Row>,
+    pub rows: Vec<Row<RC>>,
 }
 
 use std::sync::Arc;
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct BackendSheet {
-    pub id: Uuid,
-    pub sheet_name: Arc<str>,
-    pub type_name: Arc<str>,
-    pub insert_date: NaiveDate,
-    pub rows: Vec<BackendRow>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
-pub struct FrontendSheet {
-    pub id: Uuid,
-    pub sheet_name: Rc<str>,
-    pub type_name: Rc<str>,
-    pub insert_date: NaiveDate,
-    pub rows: Vec<FrontendRow>,
-}
-
-impl ToSerial<SheetSerial> for Sheet {
-    fn to_serial(self) -> SheetSerial {
+impl ToSerial<SheetSerial<Arc<str>>> for Sheet<Arc<str>> {
+    fn to_serial(self) -> SheetSerial<Arc<str>> {
         let Sheet {
             id,
             sheet_name,

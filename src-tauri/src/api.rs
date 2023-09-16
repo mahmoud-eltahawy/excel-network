@@ -7,11 +7,13 @@ use uuid::Uuid;
 
 use std::io::Cursor;
 
+use std::sync::Arc;
+
 use crate::AppState;
 
 pub async fn save_sheet(
     app_state: &AppState,
-    sheet: Sheet,
+    sheet: Sheet<Arc<str>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = vec![];
     let sheet = sheet.to_serial();
@@ -63,7 +65,7 @@ pub async fn update_sheet_name(
 
 pub async fn update_columns(
     app_state: &AppState,
-    args: Vec<(ColumnId, ColumnValue)>,
+    args: Vec<(ColumnId, ColumnValue<Arc<str>>)>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = vec![];
     let args = args
@@ -90,7 +92,7 @@ pub async fn update_columns(
 
 pub async fn save_columns(
     app_state: &AppState,
-    args: Vec<(ColumnId, ColumnValue)>,
+    args: Vec<(ColumnId, ColumnValue<Arc<str>>)>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = vec![];
     let args = args
@@ -145,7 +147,7 @@ pub async fn delete_columns(
 pub async fn add_rows_to_sheet(
     app_state: &AppState,
     sheet_id: Uuid,
-    rows: Vec<Row>,
+    rows: Vec<Row<Arc<str>>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = vec![];
     let rows = rows
@@ -216,16 +218,14 @@ pub async fn search_for_5_sheets(
         let body = res.bytes().await.unwrap_or_default();
         let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body))
             .map(|body| {
-                let body = body
-                    .deserialized::<Vec<NameSerial>>()
+                body.deserialized::<Vec<NameSerial>>()
                     .map(|names| {
                         names
                             .into_iter()
                             .flat_map(|name| name.to_origin())
                             .collect::<Vec<_>>()
                     })
-                    .unwrap_or_default();
-                body
+                    .unwrap_or_default()
             })
             .unwrap_or_default();
         Ok(body)
@@ -240,7 +240,7 @@ pub async fn get_custom_sheet_by_id(
     app_state: &AppState,
     id: &Uuid,
     limit: i64,
-) -> Result<(Sheet, i64), Box<dyn std::error::Error>> {
+) -> Result<(Sheet<Arc<str>>, i64), Box<dyn std::error::Error>> {
     let origin = &app_state.origin;
     let res = reqwest::Client::new()
         .get(format!("{origin}/sheet/{id}/{limit}"))
@@ -250,7 +250,7 @@ pub async fn get_custom_sheet_by_id(
     if res.status() == StatusCode::OK {
         let body = res.bytes().await.unwrap_or_default();
         let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body)).map(|body| {
-            body.deserialized::<(SheetSerial, i64)>()
+            body.deserialized::<(SheetSerial<Arc<str>>, i64)>()
                 .map(|(sheet, len)| (sheet.to_origin(), len))
         });
 
@@ -272,7 +272,7 @@ pub async fn get_sheet_rows_between(
     id: &Uuid,
     offset: i64,
     limit: i64,
-) -> Result<Vec<Row>, Box<dyn std::error::Error>> {
+) -> Result<Vec<Row<Arc<str>>>, Box<dyn std::error::Error>> {
     let origin = &app_state.origin;
     let res = reqwest::Client::new()
         .get(format!("{origin}/sheet/{id}/{offset}/{limit}"))
@@ -282,7 +282,7 @@ pub async fn get_sheet_rows_between(
     if res.status() == StatusCode::OK {
         let body = res.bytes().await.unwrap_or_default();
         let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body)).map(|body| {
-            body.deserialized::<Vec<RowSerial>>().map(|rows| {
+            body.deserialized::<Vec<RowSerial<Arc<str>>>>().map(|rows| {
                 rows.into_iter()
                     .flat_map(|x| x.to_origin())
                     .collect::<Vec<_>>()

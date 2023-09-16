@@ -6,8 +6,8 @@ mod api;
 use chrono::{Local, NaiveDate};
 use dotenv::dotenv;
 use models::{
-    BackendColumnValue, BackendSheet, Column, ColumnId, ColumnValue, Config, ConfigValue,
-    ImportConfig, Name, Row, RowIdentity, SearchSheetParams, Sheet, SheetConfig,
+    Column, ColumnId, ColumnValue, Config, ConfigValue, ImportConfig, Name, Row, RowIdentity,
+    SearchSheetParams, Sheet, SheetConfig,
 };
 use std::{
     collections::HashMap,
@@ -62,10 +62,10 @@ fn sheet_primary_headers(
         Some(name) => sheet_import
             .0
             .get(&name)
-            .expect(&format!("expected name ({}) to exist", name))
+            .unwrap_or_else(|| panic!("expected name ({}) to exist", name))
             .primary
             .keys()
-            .map(|x| x.clone())
+            .cloned()
             .collect::<Vec<_>>(),
         None => vec![],
     }
@@ -80,7 +80,7 @@ fn sheet_headers(
         Some(name) => sheets_rows
             .0
             .get(&name)
-            .expect(&format!("expected name ({}) to exist", name))
+            .unwrap_or_else(|| panic!("expected name ({}) to exist", name))
             .to_vec(),
         None => vec![],
     }
@@ -90,9 +90,9 @@ fn sheet_headers(
 async fn save_sheet(
     app_state: tauri::State<'_, AppState>,
     sheetid: Uuid,
-    sheetname: String,
-    typename: String,
-    rows: Vec<Row>,
+    sheetname: Arc<str>,
+    typename: Arc<str>,
+    rows: Vec<Row<Arc<str>>>,
 ) -> Result<(), String> {
     if sheetname.is_empty() {
         return Err("اسم الشيت مطلوب".to_string());
@@ -125,7 +125,7 @@ async fn top_5_sheets(
 async fn get_sheet(
     app_state: tauri::State<'_, AppState>,
     id: Option<Uuid>,
-) -> Result<(Sheet, i64), String> {
+) -> Result<(Sheet<Arc<str>>, i64), String> {
     match id {
         Some(id) => match api::get_custom_sheet_by_id(&app_state, &id, 10).await {
             Ok((sheet, len)) => Ok((sheet, len)),
@@ -141,7 +141,7 @@ async fn get_sheet_rows(
     id: Option<Uuid>,
     offset: i64,
     limit: i64,
-) -> Result<Vec<Row>, String> {
+) -> Result<Vec<Row<Arc<str>>>, String> {
     match id {
         Some(id) => match api::get_sheet_rows_between(&app_state, &id, offset, limit).await {
             Ok(rows) => Ok(rows),
@@ -165,9 +165,11 @@ async fn get_rows_ids(
     }
 }
 
+type PrioritiesParam = HashMap<Arc<str>, Arc<[Arc<str>]>>;
+
 #[tauri::command]
 async fn get_priorities(
-    priorities: tauri::State<'_, HashMap<Arc<str>, Arc<[Arc<str>]>>>,
+    priorities: tauri::State<'_, PrioritiesParam>,
     name: Option<Arc<str>>,
 ) -> Result<Arc<[Arc<str>]>, String> {
     let Some(name) = name else {
@@ -194,7 +196,7 @@ async fn update_sheet_name(
 async fn add_rows_to_sheet(
     app_state: tauri::State<'_, AppState>,
     sheetid: Uuid,
-    rows: Vec<Row>,
+    rows: Vec<Row<Arc<str>>>,
 ) -> Result<(), String> {
     match api::add_rows_to_sheet(&app_state, sheetid, rows).await {
         Ok(_) => Ok(()),
@@ -238,7 +240,7 @@ async fn delete_columns(
 async fn save_columns(
     app_state: tauri::State<'_, AppState>,
     sheetid: Uuid,
-    columnsidentifiers: Vec<(Uuid, String, ColumnValue)>,
+    columnsidentifiers: Vec<(Uuid, String, ColumnValue<Arc<str>>)>,
 ) -> Result<(), String> {
     let columns_ids = columnsidentifiers
         .into_iter()
@@ -263,7 +265,7 @@ async fn save_columns(
 async fn update_columns(
     app_state: tauri::State<'_, AppState>,
     sheetid: Uuid,
-    columnsidentifiers: Vec<(Uuid, String, ColumnValue)>,
+    columnsidentifiers: Vec<(Uuid, String, ColumnValue<Arc<str>>)>,
 ) -> Result<(), String> {
     let columns_ids = columnsidentifiers
         .into_iter()
@@ -285,7 +287,7 @@ async fn update_columns(
 }
 
 #[tauri::command]
-async fn export_sheet(headers: Arc<[Arc<str>]>, sheet: BackendSheet) -> Result<(), String> {
+async fn export_sheet(headers: Arc<[Arc<str>]>, sheet: Sheet<Arc<str>>) -> Result<(), String> {
     match write_sheet(headers, sheet).await {
         Ok(_) => Ok(()),
         Err(err) => Err(err.to_string()),
@@ -297,13 +299,13 @@ fn get_main_json_entry<'a>(json: &'a Value, entry: &Vec<String>) -> &'a Value {
         return json;
     }
     let mut json = json;
-    for i in 0..entry.len() {
-        json = json.get(entry[i].clone()).unwrap_or(&Value::Null);
+    for i in entry {
+        json = json.get(i.clone()).unwrap_or(&Value::Null);
     }
     json
 }
 
-fn column_from_value(value: &Value) -> Column {
+fn column_from_value(value: &Value) -> Column<Arc<str>> {
     Column {
         is_basic: true,
         value: match value {
@@ -318,10 +320,10 @@ fn column_from_value(value: &Value) -> Column {
                     .parse::<NaiveDate>()
                 {
                     Ok(v) => ColumnValue::Date(Some(v)),
-                    Err(_) => ColumnValue::String(Some(v.to_owned())),
+                    Err(_) => ColumnValue::String(Some(Arc::from(v.to_owned()))),
                 },
             },
-            _ => ColumnValue::String(Some("".to_string())),
+            _ => ColumnValue::String(Some(Arc::from("".to_string()))),
         },
     }
 }
@@ -332,7 +334,7 @@ async fn import_sheet(
     sheettype: Arc<str>,
     sheetid: Uuid,
     filepath: String,
-) -> Result<Vec<Row>, String> {
+) -> Result<Vec<Row<Arc<str>>>, String> {
     let ImportConfig {
         main_entry,
         repeated_entry,
@@ -356,22 +358,22 @@ async fn import_sheet(
         _ => main_json.clone(),
     };
     let mut unique_columns = HashMap::new();
-    for (header, entry) in unique.into_iter() {
+    for (header, entry) in unique.iter() {
         let value = get_main_json_entry(&main_json, entry);
         let column = column_from_value(value);
-        unique_columns.insert(header.to_owned(), column);
+        unique_columns.insert(Arc::from(header.to_owned()), column);
     }
     let repeated_json = get_main_json_entry(&main_json, repeated_entry);
     let Value::Array(list) = repeated_json else {
         return Ok(vec![]);
     };
     let mut result = Vec::new();
-    for value in list.into_iter() {
+    for value in list.iter() {
         let mut columns = unique_columns.clone();
-        for (header, entry) in repeated.into_iter() {
+        for (header, entry) in repeated.iter() {
             let value = get_main_json_entry(value, entry);
             let column = column_from_value(value);
-            columns.insert(header.to_owned(), column);
+            columns.insert(Arc::from(header.to_owned()), column);
         }
         result.push(Row {
             id: Uuid::new_v4(),
@@ -380,10 +382,10 @@ async fn import_sheet(
     }
 
     let mut primary_row = HashMap::new();
-    for (header, entry) in primary.into_iter() {
+    for (header, entry) in primary.iter() {
         let value = get_main_json_entry(&main_json, entry);
         let column = column_from_value(value);
-        primary_row.insert(header.to_owned(), column);
+        primary_row.insert(Arc::from(header.to_owned()), column);
     }
     result.push(Row {
         id: sheetid,
@@ -394,19 +396,18 @@ async fn import_sheet(
     let download_dir = dirs::home_dir().unwrap_or_default().join("Downloads");
     let new_path = download_dir
         .join(WORKDIR)
-        .join(&sheettype.to_string())
+        .join(sheettype.to_string())
         .join("الملفات المستوردة");
 
-    if !create_dir_all(new_path.clone()).is_ok() {
+    if create_dir_all(new_path.clone()).is_err() {
         println!("Directory already exists");
     }
 
     let new_path = new_path.join(old_path.file_name().unwrap_or_default());
 
-    if download_dir == old_path.parent().unwrap_or(old_path) {
-        if !rename(old_path, new_path).is_ok() {
-            println!("failed to move file");
-        };
+    if download_dir == old_path.parent().unwrap_or(old_path) && rename(old_path, new_path).is_err()
+    {
+        println!("failed to move file");
     };
 
     Ok(result)
@@ -503,9 +504,9 @@ impl Default for AppState {
 
 pub async fn write_sheet(
     headers: Arc<[Arc<str>]>,
-    sheet: BackendSheet,
+    sheet: Sheet<Arc<str>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let BackendSheet {
+    let Sheet {
         id,
         sheet_name,
         type_name,
@@ -541,15 +542,15 @@ pub async fn write_sheet(
         )?;
 
         match column.value {
-            BackendColumnValue::String(v) => {
+            ColumnValue::String(v) => {
                 worksheet.write_string(row, 1, header.to_string())?;
                 worksheet.write_string(row, 3, v.map(|x| x.to_string()).unwrap_or_default())?;
             }
-            BackendColumnValue::Float(v) => {
+            ColumnValue::Float(v) => {
                 worksheet.write_string(row, 1, header.to_string())?;
                 worksheet.write_number(row, 3, v)?;
             }
-            BackendColumnValue::Date(v) => {
+            ColumnValue::Date(v) => {
                 let v = v.map(|x| x.to_string()).unwrap_or_default();
                 worksheet.write_string(row, 1, header.to_string())?;
                 worksheet.write_string(row, 3, v)?;
@@ -569,14 +570,14 @@ pub async fn write_sheet(
             worksheet.set_row_height(row, 30)?;
             match &columns.get(header) {
                 Some(column) => match &column.value {
-                    BackendColumnValue::Date(Some(date)) => {
+                    ColumnValue::Date(Some(date)) => {
                         let string = date.to_string();
                         worksheet.write_string(row, col, string)?;
                     }
-                    BackendColumnValue::String(Some(string)) => {
+                    ColumnValue::String(Some(string)) => {
                         worksheet.write_string(row, col, string.to_string())?;
                     }
-                    BackendColumnValue::Float(number) => {
+                    ColumnValue::Float(number) => {
                         worksheet.write_number(row, col, *number)?;
                     }
                     _ => (),
@@ -609,18 +610,13 @@ pub async fn write_sheet(
         .join(type_name.to_string())
         .join("الشيتات المصدرة");
 
-    if !create_dir_all(file_path.clone()).is_ok() {
+    if create_dir_all(file_path.clone()).is_err() {
         println!("Directory already exists");
     }
 
     let file_name = format!(
         "_{}_{}_--_{}_{}_--_{}_{}.xlsx",
-        "شيت",
-        type_name,
-        "باسم",
-        sheet_name,
-        "بتاريخ",
-        insert_date.to_string(),
+        "شيت", type_name, "باسم", sheet_name, "بتاريخ", insert_date,
     );
 
     let path_name = file_path.join(file_name);

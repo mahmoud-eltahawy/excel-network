@@ -6,6 +6,8 @@ use uuid::Uuid;
 
 use std::io::Cursor;
 
+use std::sync::Arc;
+
 use crate::AppState;
 
 use models::{ColumnId, ColumnIdSerial, ColumnValue, ToOrigin};
@@ -48,7 +50,7 @@ async fn delete_columns(state: web::Data<AppState>, ids: web::Bytes) -> impl Res
 async fn update_columns(state: web::Data<AppState>, ids_and_values: web::Bytes) -> impl Responder {
     let ids_and_values =
         ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(ids_and_values)).map(|body| {
-            body.deserialized::<Vec<(ColumnIdSerial, ColumnValue)>>()
+            body.deserialized::<Vec<(ColumnIdSerial, ColumnValue<String>)>>()
                 .map(|xs| {
                     xs.into_iter()
                         .flat_map(|(col, val)| match col.to_origin() {
@@ -80,7 +82,7 @@ async fn update_columns(state: web::Data<AppState>, ids_and_values: web::Bytes) 
 async fn save_columns(state: web::Data<AppState>, ids_and_values: web::Bytes) -> impl Responder {
     let ids_and_values =
         ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(ids_and_values)).map(|body| {
-            body.deserialized::<Vec<(ColumnIdSerial, ColumnValue)>>()
+            body.deserialized::<Vec<(ColumnIdSerial, ColumnValue<Arc<str>>)>>()
                 .map(|xs| {
                     xs.into_iter()
                         .flat_map(|(col, val)| match col.to_origin() {
@@ -108,7 +110,7 @@ async fn save_columns(state: web::Data<AppState>, ids_and_values: web::Bytes) ->
             },
             value,
         ) = ids_and_value;
-        if let Err(err) = save_cloumn_value(&state, &row_id, header, value).await {
+        if let Err(err) = save_cloumn_value(&state, &row_id, header.into(), value).await {
             return HttpResponse::InternalServerError().body(err.to_string().into_bytes());
         }
     }
@@ -144,7 +146,7 @@ pub async fn delete_column_by_column_id(
 pub async fn update_column_by_column_id(
     state: &AppState,
     ids: ColumnId,
-    value: ColumnValue,
+    value: ColumnValue<String>,
 ) -> Result<(), Box<dyn Error>> {
     let ColumnId {
         sheet_id,
@@ -174,8 +176,8 @@ pub async fn update_column_by_column_id(
 pub async fn save_cloumn_value(
     state: &AppState,
     row_id: &Uuid,
-    header_name: String,
-    value: ColumnValue,
+    header_name: Arc<str>,
+    value: ColumnValue<Arc<str>>,
 ) -> Result<(), Box<dyn Error>> {
     let column_id = Uuid::new_v4();
     let value = serde_json::json!(value);
@@ -185,7 +187,7 @@ pub async fn save_cloumn_value(
 	VALUES($1,$2,$3,$4)"#,
         column_id,
         row_id,
-        header_name,
+        header_name.to_string(),
         value,
     )
     .execute(&state.db)
