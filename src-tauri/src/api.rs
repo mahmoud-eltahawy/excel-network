@@ -65,7 +65,7 @@ pub async fn update_sheet_name(
 
 pub async fn update_columns(
     app_state: &AppState,
-    args: Vec<(ColumnId, ColumnValue<Arc<str>>)>,
+    args: Vec<(ColumnId<Arc<str>>, ColumnValue<Arc<str>>)>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = vec![];
     let args = args
@@ -92,7 +92,7 @@ pub async fn update_columns(
 
 pub async fn save_columns(
     app_state: &AppState,
-    args: Vec<(ColumnId, ColumnValue<Arc<str>>)>,
+    args: Vec<(ColumnId<Arc<str>>, ColumnValue<Arc<str>>)>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = vec![];
     let args = args
@@ -119,7 +119,7 @@ pub async fn save_columns(
 
 pub async fn delete_columns(
     app_state: &AppState,
-    ids: Vec<ColumnId>,
+    ids: Vec<ColumnId<Arc<str>>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = vec![];
     let ids = ids
@@ -236,14 +236,13 @@ pub async fn search_for_5_sheets(
     }
 }
 
-pub async fn get_custom_sheet_by_id(
+pub async fn get_sheet_by_id(
     app_state: &AppState,
     id: &Uuid,
-    limit: i64,
 ) -> Result<(Sheet<Arc<str>>, i64), Box<dyn std::error::Error>> {
     let origin = &app_state.origin;
     let res = reqwest::Client::new()
-        .get(format!("{origin}/sheet/{id}/{limit}"))
+        .get(format!("{origin}/sheet/{id}"))
         .send()
         .await?;
 

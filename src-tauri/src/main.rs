@@ -127,7 +127,7 @@ async fn get_sheet(
     id: Option<Uuid>,
 ) -> Result<(Sheet<Arc<str>>, i64), String> {
     match id {
-        Some(id) => match api::get_custom_sheet_by_id(&app_state, &id, 10).await {
+        Some(id) => match api::get_sheet_by_id(&app_state, &id).await {
             Ok((sheet, len)) => Ok((sheet, len)),
             Err(err) => Err(err.to_string()),
         },
@@ -220,7 +220,7 @@ async fn delete_rows_from_sheet(
 async fn delete_columns(
     app_state: tauri::State<'_, AppState>,
     sheetid: Uuid,
-    rowsheaders: Vec<(Uuid, String)>,
+    rowsheaders: Vec<(Uuid, Arc<str>)>,
 ) -> Result<(), String> {
     let columns_ids = rowsheaders
         .into_iter()
@@ -240,7 +240,7 @@ async fn delete_columns(
 async fn save_columns(
     app_state: tauri::State<'_, AppState>,
     sheetid: Uuid,
-    columnsidentifiers: Vec<(Uuid, String, ColumnValue<Arc<str>>)>,
+    columnsidentifiers: Vec<(Uuid, Arc<str>, ColumnValue<Arc<str>>)>,
 ) -> Result<(), String> {
     let columns_ids = columnsidentifiers
         .into_iter()
@@ -265,7 +265,7 @@ async fn save_columns(
 async fn update_columns(
     app_state: tauri::State<'_, AppState>,
     sheetid: Uuid,
-    columnsidentifiers: Vec<(Uuid, String, ColumnValue<Arc<str>>)>,
+    columnsidentifiers: Vec<(Uuid, Arc<str>, ColumnValue<Arc<str>>)>,
 ) -> Result<(), String> {
     let columns_ids = columnsidentifiers
         .into_iter()

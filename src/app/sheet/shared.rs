@@ -153,7 +153,7 @@ where
     let top = RwSignal::from(None::<usize>);
     let down = RwSignal::from(None::<usize>);
     let on_input = move |ev| {
-        let value = event_target_value(&ev);
+        let value = event_target_value(&ev).trim().to_string();
         let value = match column_value.get() {
             Some(ColumnValue::Float(_)) => ColumnValue::Float(value.parse().unwrap_or_default()),
             Some(ColumnValue::Date(_)) => {
@@ -250,12 +250,12 @@ where
             <input
         type="number"
             placeholder="لاعلي"
-            on:input=move |ev| top.set(Some(event_target_value(&ev).parse().unwrap_or_default()))
+            on:input=move |ev| top.set(Some(event_target_value(&ev).trim().parse().unwrap_or_default()))
         />
             <input
         type="number"
             placeholder="لاسفل"
-            on:input=move |ev| down.set(Some(event_target_value(&ev).parse().unwrap_or_default()))
+            on:input=move |ev| down.set(Some(event_target_value(&ev).trim().parse().unwrap_or_default()))
         />
             <button on:click=move|_| cancel() class="centered-button">
                 "الغاء"
@@ -283,8 +283,8 @@ where
     FD: Fn(Uuid) + 'static + Clone + Copy,
     FI: Fn() -> Uuid + 'static + Clone + Copy,
 {
-    let edit_column =
-        RwSignal::from(None::<(Rc<str>, Uuid, Rc<HashMap<Rc<str>, Column<Rc<str>>>>)>);
+    type EditColumn = (Rc<str>, Uuid, Rc<HashMap<Rc<str>, Column<Rc<str>>>>);
+    let edit_column = RwSignal::from(None::<EditColumn>);
     let new_rows = Memo::new(move |_| {
         rows.get()
             .into_iter()
@@ -495,10 +495,11 @@ where
                 view=move | header| {
                     view! {
                         <td>
-                            {move || match calc_signals_map.get().get(&header) {
-                                Some(x) => format!("{:.2}",* x),
-                                None => format!("{:.2}", 0.0),
-                            }}
+                            {move || calc_signals_map
+                                .get()
+                                .get(&header)
+                                .map(|x| format!("{:.2}",* x))
+                            }
                         </td>
                     }
                 }
@@ -533,13 +534,13 @@ fn MyInput(
                 value=move || value.clone()
                 on:change=move |ev| match cmp_arg.get(&header) {
                     Some(ColumnSignal::String(write)) => {
-                        write.update(|x| x.0 = event_target_value(&ev))
+                        write.update(|x| x.0 = event_target_value(&ev).trim().to_string())
                     }
                     Some(ColumnSignal::Float(write)) => {
-                        write.update(|x| x.0 = event_target_value(&ev).parse().unwrap_or_default())
+                        write.update(|x| x.0 = event_target_value(&ev).trim().parse().unwrap_or_default())
                     }
                     Some(ColumnSignal::Date(write)) => {
-                        write.update(|x| x.0 = event_target_value(&ev).parse().unwrap_or_default())
+                        write.update(|x| x.0 = event_target_value(&ev).trim().parse().unwrap_or_default())
                     }
                     None => {}
                 }
@@ -718,13 +719,15 @@ pub fn PrimaryRowEditor(new_columns: RwSignal<HashMap<Rc<str>, Column<Rc<str>>>>
     let on_value_input = move |ev| {
         column_value.update(|x| match x {
             ColumnValue::String(_) => {
-                *x = ColumnValue::String(Some(Rc::from(event_target_value(&ev))))
+                *x = ColumnValue::String(Some(Rc::from(event_target_value(&ev).trim())))
             }
             ColumnValue::Date(_) => {
-                *x = ColumnValue::Date(Some(event_target_value(&ev).parse().unwrap_or_default()))
+                *x = ColumnValue::Date(Some(
+                    event_target_value(&ev).trim().parse().unwrap_or_default(),
+                ))
             }
             ColumnValue::Float(_) => {
-                *x = ColumnValue::Float(event_target_value(&ev).parse().unwrap_or_default())
+                *x = ColumnValue::Float(event_target_value(&ev).trim().parse().unwrap_or_default())
             }
         })
     };
@@ -776,7 +779,7 @@ pub fn PrimaryRowEditor(new_columns: RwSignal<HashMap<Rc<str>, Column<Rc<str>>>>
             style="width:40%; height:30px;"
             type="text"
             placeholder="العنوان"
-                on:input=move |ev| header.set(Rc::from(event_target_value(&ev)))
+                on:input=move |ev| header.set(Rc::from(event_target_value(&ev).trim()))
             />
             <input
             style="width:40%; height:30px;"

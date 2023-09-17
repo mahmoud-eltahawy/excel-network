@@ -11,8 +11,6 @@ use std::{collections::HashMap, rc::Rc};
 use tauri_sys::tauri::invoke;
 use uuid::Uuid;
 
-const SAVE_EDITS_TOTAL_TASKS: i32 = 6;
-
 use super::shared::{
     alert, confirm, import_sheet_rows, message, open_file, resolve_operation, EditState, InputRow,
     Name, NameArg, SheetHead, ShowNewRows,
@@ -71,7 +69,7 @@ where
 {
     let column_value = RwSignal::from(mode().value);
     let on_input = move |ev| {
-        let value = event_target_value(&ev);
+        let value = event_target_value(&ev).trim().to_string();
         let value = match column_value.get() {
             ColumnValue::Float(_) => ColumnValue::Float(value.parse().unwrap_or_default()),
             ColumnValue::Date(_) => ColumnValue::Date(Some(value.parse().unwrap_or_default())),
@@ -188,7 +186,7 @@ pub fn ShowSheet() -> impl IntoView {
             .ok()
     });
 
-    let rows_offset = RwSignal::from(OFFSET_LIMIT);
+    let rows_offset = RwSignal::from(0);
 
     let rows_number = Memo::new(move |_| {
         let default = OFFSET_LIMIT * 4;
@@ -198,7 +196,9 @@ pub fn ShowSheet() -> impl IntoView {
             .unwrap_or(default)
     });
 
-    let rows_accumalator = RwSignal::from(vec![]);
+    let rows_accumalator = RwSignal::from(Vec::new());
+
+    const RENDER_EVERY_CALLS_NUMBER: i64 = 3;
 
     let sheet_rows_resource = Resource::new(
         move || rows_offset.get(),
@@ -216,17 +216,20 @@ pub fn ShowSheet() -> impl IntoView {
             .unwrap_or_default();
             if offset <= rows_number {
                 rows_offset.update(|x| *x += OFFSET_LIMIT);
+            } else {
+                rows_accumalator.update(|xs| {
+                    xs.sort_rows(sheet_priorities_resource.get().unwrap_or(Rc::from([])))
+                });
             }
             if !v.is_empty() {
-                rows_accumalator.update(|xs| xs.extend(v));
+                if offset % RENDER_EVERY_CALLS_NUMBER == 0 || offset <= OFFSET_LIMIT {
+                    rows_accumalator.update(|xs| xs.extend(v));
+                } else {
+                    rows_accumalator.update_untracked(|xs| xs.extend(v));
+                }
             }
         },
     );
-
-    let get_accumalted_rows = move || {
-        sheet_rows_resource.get();
-        rows_accumalator.get()
-    };
 
     let sheet_init_memo = Memo::new(move |_| {
         let s = sheet_resource.get().map(|x| x.map(|x| x.0));
@@ -235,6 +238,11 @@ pub fn ShowSheet() -> impl IntoView {
             _ => None,
         }
     });
+
+    let get_accumalted_rows = move || {
+        sheet_rows_resource.get();
+        rows_accumalator.get()
+    };
 
     let sheet_headers_resource = Resource::new(
         move || sheet_type_name_resource.get(),
@@ -309,10 +317,8 @@ pub fn ShowSheet() -> impl IntoView {
                 }
             }
         };
-        sheet.rows = sheet
-            .rows
+        sheet.rows = get_accumalted_rows()
             .into_iter()
-            .chain(get_accumalted_rows())
             .map(|Row { id, columns }| Row {
                 id,
                 columns: {
@@ -353,7 +359,6 @@ pub fn ShowSheet() -> impl IntoView {
         sheet.rows = sheet
             .rows
             .into_iter()
-            .chain(get_accumalted_rows())
             .filter(|x| x.id != sheet_init_memo.get().map(|x| x.id).unwrap_or_default())
             .collect::<Vec<_>>();
         sheet
@@ -373,7 +378,7 @@ pub fn ShowSheet() -> impl IntoView {
             )
             .await
             {
-                Ok(_) => message("نجح التصدير").await,
+                Ok(_) => message("🏹 👍").await,
                 Err(err) => alert(err.to_string().as_str()).await,
             }
         })
@@ -398,6 +403,16 @@ pub fn ShowSheet() -> impl IntoView {
             || !deleted_primary_columns.get().is_empty()
     };
 
+    let revert_all_edits = move || {
+        edit_mode.set(EditState::None);
+        sheet_name.set(Rc::from(""));
+        deleted_rows.set(Vec::new());
+        added_rows.set(Vec::new());
+        modified_columns.set(Vec::new());
+        modified_primary_columns.set(HashMap::new());
+        deleted_primary_columns.set(Vec::new());
+    };
+
     let cancel_edit = move || {
         spawn_local(async move {
             let reset = if has_anything_changed() {
@@ -406,15 +421,9 @@ pub fn ShowSheet() -> impl IntoView {
                 true
             };
             if reset {
-                edit_mode.set(EditState::None);
-                sheet_name.set(Rc::from(""));
-                deleted_rows.set(Vec::new());
-                added_rows.set(Vec::new());
-                modified_columns.set(Vec::new());
-                modified_primary_columns.set(HashMap::new());
-                deleted_primary_columns.set(Vec::new());
+                revert_all_edits();
             }
-        })
+        });
     };
     let append = move |row| {
         added_rows.update_untracked(|xs| xs.push(row));
@@ -422,25 +431,27 @@ pub fn ShowSheet() -> impl IntoView {
             .update(|xs| xs.sort_rows(sheet_priorities_resource.get().unwrap_or(Rc::from([]))));
     };
     let primary_row_columns = Memo::new(move |_| {
-        let Some(Sheet { id, rows, .. }) = sheet_init_memo.get() else {
+        let Some(id) = sheet_init_memo.get().map(|x| x.id) else {
             return HashMap::new();
         };
-        rows.into_iter()
-            .chain(get_accumalted_rows())
+        get_accumalted_rows()
+            .into_iter()
             .filter(|x| x.id == id)
             .collect::<Vec<_>>()
             .first()
             .map(|x| x.columns.clone())
             .unwrap_or_default()
     });
+
+    const SAVE_EDITS_TOTAL_TASKS: i32 = 6;
+
     let save_edits_successes = RwSignal::from(0);
     let save_edits_dones = RwSignal::from(0);
 
     let save_edits = move |_| {
-        let Some(sheet) = sheet_init_memo.get() else {
+        let Some((sheetid, sheetname)) = sheet_init_memo.get().map(|x| (x.id, x.sheet_name)) else {
             return;
         };
-        let sheetid = sheet.id;
         let the_sheet_name = sheet_name.get();
         let the_deleted_rows = deleted_rows.get();
         let the_added_rows = added_rows.get();
@@ -469,8 +480,7 @@ pub fn ShowSheet() -> impl IntoView {
             .get()
             .into_iter()
             .filter(|ColumnIdentity { row_id, header, .. }| {
-                sheet
-                    .rows
+                get_accumalted_rows()
                     .iter()
                     .filter(|x| x.id == *row_id)
                     .any(|x| x.columns.keys().any(|x| x != header))
@@ -483,8 +493,7 @@ pub fn ShowSheet() -> impl IntoView {
             .get()
             .into_iter()
             .filter(|ColumnIdentity { row_id, header, .. }| {
-                sheet
-                    .rows
+                get_accumalted_rows()
                     .iter()
                     .filter(|x| x.id == *row_id)
                     .any(|x| x.columns.keys().any(|x| x == header))
@@ -498,149 +507,91 @@ pub fn ShowSheet() -> impl IntoView {
             .into_iter()
             .map(|x| (sheetid, x))
             .collect::<Vec<_>>();
-        spawn_local(async move {
-            if !the_sheet_name.is_empty() && the_sheet_name != sheet.sheet_name {
-                match invoke::<_, ()>(
-                    "update_sheet_name",
-                    &SheetNameArg {
-                        name: Name {
-                            id: sheet.id,
-                            the_name: the_sheet_name,
-                        },
-                    },
-                )
-                .await
-                {
-                    Ok(_) => save_edits_successes.update(|x| *x += 1),
-                    Err(err) => {
-                        alert(err.to_string().as_str()).await;
-                        save_edits_successes.set(0);
-                    }
-                }
-            } else {
-                save_edits_successes.update(|x| *x += 1);
-            }
-            save_edits_dones.update(|x| *x += 1);
-        });
-        spawn_local(async move {
-            if !the_deleted_rows.is_empty() {
-                match invoke::<_, ()>(
-                    "delete_rows_from_sheet",
-                    &RowsDeleteArg {
-                        sheetid: sheet.id,
-                        rowsids: the_deleted_rows,
-                    },
-                )
-                .await
-                {
-                    Ok(_) => save_edits_successes.update(|x| *x += 1),
-                    Err(err) => {
-                        alert(err.to_string().as_str()).await;
-                        save_edits_successes.set(0);
-                    }
-                }
-            } else {
-                save_edits_successes.update(|x| *x += 1);
-            }
-            save_edits_dones.update(|x| *x += 1);
-        });
-        spawn_local(async move {
-            if !the_added_rows.is_empty() {
-                match invoke::<_, ()>(
-                    "add_rows_to_sheet",
-                    &RowsAddArg {
-                        sheetid: sheet.id,
-                        rows: the_added_rows,
-                    },
-                )
-                .await
-                {
-                    Ok(_) => save_edits_successes.update(|x| *x += 1),
-                    Err(err) => {
-                        alert(err.to_string().as_str()).await;
-                        save_edits_successes.set(0);
-                    }
-                }
-            } else {
-                save_edits_successes.update(|x| *x += 1);
-            }
-            save_edits_dones.update(|x| *x += 1);
-        });
-        spawn_local(async move {
-            if !primary_deleted_columnsidentifiers.is_empty() {
-                match invoke::<_, ()>(
-                    "delete_columns",
-                    &DeleteColumnsArgs {
-                        sheetid,
-                        rowsheaders: primary_deleted_columnsidentifiers,
-                    },
-                )
-                .await
-                {
-                    Ok(_) => save_edits_successes.update(|x| *x += 1),
-                    Err(err) => {
-                        alert(err.to_string().as_str()).await;
-                        save_edits_successes.set(0);
-                    }
-                }
-            } else {
-                save_edits_successes.update(|x| *x += 1);
-            }
-            save_edits_dones.update_untracked(|x| *x += 1);
-        });
-        spawn_local(async move {
-            if !updated_columnsidentifiers.is_empty() {
-                match invoke::<_, ()>(
-                    "update_columns",
-                    &UpdateColumnsArgs {
-                        sheetid,
-                        columnsidentifiers: updated_columnsidentifiers,
-                    },
-                )
-                .await
-                {
-                    Ok(_) => save_edits_successes.update_untracked(|x| *x += 1),
-                    Err(err) => {
-                        alert(err.to_string().as_str()).await;
-                        save_edits_successes.set(0);
-                    }
-                }
-            } else {
-                save_edits_successes.update(|x| *x += 1);
-            }
-            save_edits_dones.update(|x| *x += 1);
-        });
-        spawn_local(async move {
-            if !new_columnsidentifiers.is_empty() {
-                match invoke::<_, ()>(
-                    "save_columns",
-                    &UpdateColumnsArgs {
-                        sheetid,
-                        columnsidentifiers: new_columnsidentifiers,
-                    },
-                )
-                .await
-                {
-                    Ok(_) => save_edits_successes.update(|x| *x += 1),
-                    Err(err) => {
-                        alert(err.to_string().as_str()).await;
-                        save_edits_successes.set(0);
-                    }
-                }
-            } else {
-                save_edits_successes.update(|x| *x += 1);
-            }
-            save_edits_dones.update(|x| *x += 1);
-        });
 
-        edit_mode.set(EditState::None);
-        sheet_name.set(Rc::from(""));
-        deleted_rows.set(Vec::new());
-        added_rows.set(Vec::new());
-        modified_columns.set(Vec::new());
-        modified_primary_columns.set(HashMap::new());
-        deleted_primary_columns.set(Vec::new());
-        on_edit.set(false);
+        fn spawn_my_local_process<T: Serialize + 'static>(
+            it_worth_it: bool,
+            operation: &'static str,
+            args: T,
+            save_edits_successes: RwSignal<i32>,
+            save_edits_dones: RwSignal<i32>,
+        ) {
+            spawn_local(async move {
+                if it_worth_it {
+                    match invoke::<_, ()>(operation, &args).await {
+                        Ok(_) => save_edits_successes.update(|x| *x += 1),
+                        Err(err) => {
+                            alert(err.to_string().as_str()).await;
+                            save_edits_successes.set(0);
+                        }
+                    }
+                } else {
+                    save_edits_successes.update(|x| *x += 1);
+                }
+                save_edits_dones.update(|x| *x += 1);
+            });
+        }
+        spawn_my_local_process(
+            !the_sheet_name.is_empty() && the_sheet_name != sheetname,
+            "update_sheet_name",
+            SheetNameArg {
+                name: Name {
+                    id: sheetid,
+                    the_name: the_sheet_name,
+                },
+            },
+            save_edits_successes,
+            save_edits_dones,
+        );
+        spawn_my_local_process(
+            !the_deleted_rows.is_empty(),
+            "delete_rows_from_sheet",
+            RowsDeleteArg {
+                sheetid,
+                rowsids: the_deleted_rows,
+            },
+            save_edits_successes,
+            save_edits_dones,
+        );
+        spawn_my_local_process(
+            !the_added_rows.is_empty(),
+            "add_rows_to_sheet",
+            RowsAddArg {
+                sheetid,
+                rows: the_added_rows,
+            },
+            save_edits_successes,
+            save_edits_dones,
+        );
+        spawn_my_local_process(
+            !primary_deleted_columnsidentifiers.is_empty(),
+            "delete_columns",
+            DeleteColumnsArgs {
+                sheetid,
+                rowsheaders: primary_deleted_columnsidentifiers,
+            },
+            save_edits_successes,
+            save_edits_dones,
+        );
+        spawn_my_local_process(
+            !updated_columnsidentifiers.is_empty(),
+            "update_columns",
+            UpdateColumnsArgs {
+                sheetid,
+                columnsidentifiers: updated_columnsidentifiers,
+            },
+            save_edits_successes,
+            save_edits_dones,
+        );
+        spawn_my_local_process(
+            !new_columnsidentifiers.is_empty(),
+            "save_columns",
+            UpdateColumnsArgs {
+                sheetid,
+                columnsidentifiers: new_columnsidentifiers,
+            },
+            save_edits_successes,
+            save_edits_dones,
+        );
     };
 
     Effect::new(move |_| {
@@ -654,8 +605,10 @@ pub fn ShowSheet() -> impl IntoView {
 
     Effect::new(move |_| {
         if save_edits_dones.get() == SAVE_EDITS_TOTAL_TASKS {
-            sheet_resource.refetch();
+            revert_all_edits();
+            on_edit.set(false);
             save_edits_dones.set(0);
+            sheet_resource.refetch();
         }
     });
 
@@ -764,7 +717,7 @@ pub fn ShowSheet() -> impl IntoView {
                         )
                     }
                     value=move || sheet_name.get().to_string()
-                    on:input=move |ev| sheet_name.set(Rc::from(event_target_value(&ev)))
+                    on:input=move |ev| sheet_name.set(Rc::from(event_target_value(&ev).trim()))
                 />
             </Show>
         <PrimaryRow

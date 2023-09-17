@@ -19,7 +19,7 @@ use std::io::Cursor;
 
 pub fn scope() -> Scope {
     web::scope("/sheet")
-        .service(get_custom_sheet_by_id)
+        .service(ge_sheet_by_id)
         .service(search)
         .service(save)
         .service(update_name)
@@ -108,17 +108,14 @@ async fn update_name(state: Data<AppState>, name: web::Bytes) -> impl Responder 
     }
 }
 
-#[get("/{id}/{limit}")]
-async fn get_custom_sheet_by_id(
-    state: Data<AppState>,
-    path: web::Path<(Uuid, i64)>,
-) -> impl Responder {
-    let (id, limit) = path.into_inner();
+#[get("/{id}")]
+async fn ge_sheet_by_id(state: Data<AppState>, path: web::Path<Uuid>) -> impl Responder {
+    let id = path.into_inner();
     match (
+        fetch_custom_sheet_by_id(&state, id).await,
         fetch_sheet_rows_length(&state, &id).await,
-        fetch_custom_sheet_by_id(&state, id, limit).await,
     ) {
-        (Ok(len), Ok(sheet)) => {
+        (Ok(sheet), Ok(len)) => {
             let mut buf = vec![];
             let res = ciborium::ser::into_writer(&(sheet.to_serial(), len), Cursor::new(&mut buf))
                 .map(|_| HttpResponse::Ok().body(buf))
@@ -312,7 +309,6 @@ pub async fn delete_row_by_id(
 async fn fetch_custom_sheet_by_id(
     state: &AppState,
     id: Uuid,
-    limit: i64,
 ) -> Result<Sheet<Arc<str>>, Box<dyn Error>> {
     let record = query!(
         r#"
@@ -322,21 +318,12 @@ async fn fetch_custom_sheet_by_id(
     )
     .fetch_one(&state.db)
     .await?;
-    let id = record.id;
-    let mut rows = Vec::new();
-    for id in fetch_rows_ids_by_sheet_id_in_limit(state, &id, 0, limit)
-        .await?
-        .into_iter()
-    {
-        let columns = fetch_columns_by_row_id(state, &id).await?;
-        rows.push(Row { id, columns });
-    }
     Ok(Sheet {
         id,
         sheet_name: Arc::from(record.sheet_name),
         type_name: Arc::from(record.type_name),
         insert_date: record.insert_date,
-        rows,
+        rows: Vec::new(),
     })
 }
 

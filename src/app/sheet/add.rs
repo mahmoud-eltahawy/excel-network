@@ -154,9 +154,10 @@ pub fn AddSheet() -> impl IntoView {
             .await
             {
                 Ok(_) => {
-                    sheet_id_resource.refetch();
+                    message("👍").await;
                     rows.set(Vec::new());
-                    message("نجح الحفظ").await
+                    sheet_id_resource.refetch();
+                    sheet_name.set(Rc::from(""));
                 }
                 Err(err) => alert(err.to_string().as_str()).await,
             }
@@ -229,7 +230,7 @@ pub fn AddSheet() -> impl IntoView {
                     )
                 }
                 value=move || sheet_name.get()
-                on:input=move |ev| sheet_name.set(Rc::from(event_target_value(&ev)))
+                on:input=move |ev| sheet_name.set(Rc::from(event_target_value(&ev).trim()))
             />
             <PrimaryRow
               primary_headers=move || sheet_primary_headers_resource.get().unwrap_or(Rc::from([]))

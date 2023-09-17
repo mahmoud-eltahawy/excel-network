@@ -34,14 +34,20 @@ impl ToOrigin<Uuid> for Arc<str> {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct ColumnIdSerial {
+pub struct ColumnIdSerial<RC>
+where
+    RC: Eq + Hash + ToString,
+{
     pub sheet_id: Arc<str>,
     pub row_id: Arc<str>,
-    pub header: String,
+    pub header: RC,
 }
 
-impl ToOrigin<ColumnId> for ColumnIdSerial {
-    fn to_origin(self) -> Result<ColumnId, Box<dyn std::error::Error>> {
+impl<T> ToOrigin<ColumnId<T>> for ColumnIdSerial<T>
+where
+    T: Eq + Hash + ToString,
+{
+    fn to_origin(self) -> Result<ColumnId<T>, Box<dyn std::error::Error>> {
         let ColumnIdSerial {
             sheet_id,
             row_id,
@@ -58,14 +64,20 @@ impl ToOrigin<ColumnId> for ColumnIdSerial {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct ColumnId {
+pub struct ColumnId<RC>
+where
+    RC: Eq + Hash + ToString,
+{
     pub sheet_id: Uuid,
     pub row_id: Uuid,
-    pub header: String,
+    pub header: RC,
 }
 
-impl ToSerial<ColumnIdSerial> for ColumnId {
-    fn to_serial(self) -> ColumnIdSerial {
+impl<T> ToSerial<ColumnIdSerial<T>> for ColumnId<T>
+where
+    T: Eq + Hash + ToString,
+{
+    fn to_serial(self) -> ColumnIdSerial<T> {
         let ColumnId {
             sheet_id,
             row_id,
