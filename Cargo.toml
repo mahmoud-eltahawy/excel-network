@@ -42,5 +42,9 @@ js-sys = "0.3"
 tauri-sys = { git = "https://github.com/JonasKruckenberg/tauri-sys",features = ["tauri","event","dialog","path"] }
 futures = "0.3.28"
 
-[profile.release]
+[profile.wasm-release]
+inherits = "release"
 opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
