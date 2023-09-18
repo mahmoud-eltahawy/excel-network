@@ -302,22 +302,10 @@ pub fn ShowSheet() -> impl IntoView {
             .map(|x| Rc::from(x.header))
             .collect::<Vec<Rc<str>>>()
     };
-
-    let sheet_with_primary_row_with_calc_values = Memo::new(move |_| {
+    let sheet_rows_with_primary_row_with_calc_values = Memo::new(move |_| {
+        let sheet_id = sheet_init_memo.get().map(|x| x.id).unwrap_or_default();
         let c_cols = calc_columns.get();
-        let mut sheet = match sheet_init_memo.get() {
-            Some(x) => x,
-            None => {
-                return Sheet {
-                    id: Uuid::nil(),
-                    sheet_name: Rc::from(""),
-                    type_name: Rc::from(""),
-                    insert_date: NaiveDate::default(),
-                    rows: vec![],
-                }
-            }
-        };
-        sheet.rows = get_accumalted_rows()
+        get_accumalted_rows()
             .into_iter()
             .map(|Row { id, columns }| Row {
                 id,
@@ -335,7 +323,7 @@ pub fn ShowSheet() -> impl IntoView {
                             .collect::<Vec<_>>();
                         let value = value.first().unwrap();
 
-                        if id != sheet.id {
+                        if id != sheet_id {
                             columns.insert(
                                 header,
                                 Column {
@@ -350,26 +338,35 @@ pub fn ShowSheet() -> impl IntoView {
                     columns
                 },
             })
-            .collect::<Vec<_>>();
-        sheet
+            .collect::<Vec<_>>()
     });
 
-    let sheet_without_primary_row_with_calc_values = Memo::new(move |_| {
-        let mut sheet = sheet_with_primary_row_with_calc_values.get();
-        sheet.rows = sheet
-            .rows
+    let sheet_rows_without_primary_row_with_calc_values = Memo::new(move |_| {
+        let sheet_id = sheet_init_memo.get().map(|x| x.id).unwrap_or_default();
+        sheet_rows_with_primary_row_with_calc_values
+            .get()
             .into_iter()
-            .filter(|x| x.id != sheet_init_memo.get().map(|x| x.id).unwrap_or_default())
-            .collect::<Vec<_>>();
-        sheet
+            .filter(|x| x.id != sheet_id)
+            .collect::<Vec<_>>()
     });
 
     let export = move |_| {
+        let mut sheet = match sheet_init_memo.get() {
+            Some(x) => x,
+            None => Sheet {
+                id: Uuid::nil(),
+                sheet_name: Rc::from(""),
+                type_name: Rc::from(""),
+                insert_date: NaiveDate::default(),
+                rows: vec![],
+            },
+        };
+        sheet.rows = sheet_rows_with_primary_row_with_calc_values.get();
         spawn_local(async move {
             match invoke::<_, ()>(
                 "export_sheet",
                 &ExportSheetArg {
-                    sheet: sheet_with_primary_row_with_calc_values.get(),
+                    sheet,
                     headers: basic_headers()
                         .into_iter()
                         .chain(calc_headers())
@@ -740,7 +737,7 @@ pub fn ShowSheet() -> impl IntoView {
                         delete_row=delete_row
                         basic_headers=basic_headers
                         calc_headers=calc_headers
-                        rows=move || sheet_without_primary_row_with_calc_values.get().rows
+                        rows=move || sheet_rows_without_primary_row_with_calc_values.get()
                         edit_mode=edit_mode
                         is_deleted=is_deleted
                         modified_columns=modified_columns
