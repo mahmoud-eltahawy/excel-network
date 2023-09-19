@@ -600,12 +600,45 @@ pub fn ShowSheet() -> impl IntoView {
         }
     });
 
+    let patch_changes = move || {
+        let deleted = deleted_rows.get();
+        let added = added_rows.get();
+        let modified_columns = modified_columns.get();
+        // let modifedd_primary_columns = modified_primary_columns.get();
+        rows_accumalator.update_untracked(|xs| {
+            xs.extend(added);
+            xs.retain(|x| !deleted.contains(&x.id));
+            for ColumnIdentity {
+                row_id,
+                header,
+                value,
+            } in modified_columns
+            {
+                if let Some(row_position) = xs.iter().position(|x| x.id == row_id) {
+                    if let Some(row) = xs.get_mut(row_position) {
+                        if let Some(column_position) =
+                            row.columns.iter().position(|x| x.0.clone() == header)
+                        {
+                            let column_position = column_position as u64;
+                            if let Some(column) = row.columns.get_mut(column_position).cloned() {
+                                column.value = value;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        rows_accumalator
+            .update(|xs| xs.sort_rows(sheet_priorities_resource.get().unwrap_or(Rc::from([]))));
+    };
+
     Effect::new(move |_| {
         if save_edits_dones.get() == SAVE_EDITS_TOTAL_TASKS {
+            patch_changes();
+            sheet_resource.refetch();
             revert_all_edits();
             on_edit.set(false);
             save_edits_dones.set(0);
-            sheet_resource.refetch();
         }
     });
 
