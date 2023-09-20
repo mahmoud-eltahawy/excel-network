@@ -197,6 +197,7 @@ pub fn ShowSheet() -> impl IntoView {
     });
 
     let rows_accumalator = RwSignal::from(Vec::new());
+    let rows_updates = RwSignal::from(HashMap::<Uuid,i32>::new());
 
     const RENDER_EVERY_CALLS_NUMBER: i64 = 3;
 
@@ -608,24 +609,64 @@ pub fn ShowSheet() -> impl IntoView {
         rows_accumalator.update_untracked(|xs| {
             xs.extend(added);
             xs.retain(|x| !deleted.contains(&x.id));
-            for ColumnIdentity {
-                row_id,
-                header,
-                value,
-            } in modified_columns
-            {
-                if let Some(row_position) = xs.iter().position(|x| x.id == row_id) {
-                    if let Some(row) = xs.get_mut(row_position) {
-                        if let Some(column_position) =
-                            row.columns.iter().position(|x| x.0.clone() == header)
-                        {
-                            let column_position = column_position as u64;
-                            if let Some(column) = row.columns.get_mut(column_position).cloned() {
-                                column.value = value;
-                            }
-                        }
+            let rows: HashMap<Uuid, Vec<ColumnIdentity>> = {
+                let mut rows: HashMap<Uuid, Vec<ColumnIdentity>> = HashMap::new();
+                for column in modified_columns {
+                    let row_id = column.row_id.clone();
+                    if let Some(list) = rows.get(&column.row_id) {
+                        let list = list
+                            .iter()
+                            .chain(&vec![column])
+                            .cloned()
+                            .collect::<Vec<_>>();
+                        rows.insert(row_id, list);
+                    } else {
+                        rows.insert(row_id, vec![column]);
                     }
                 }
+                rows
+            };
+            for (id, columns) in rows {
+                if let Some(position) = xs.iter().position(|x| x.id == id) {
+                    if let Some(row) = xs.get_mut(position) {
+                        row.columns = row
+                            .columns
+                            .clone()
+                            .into_iter()
+                            .map(|(header, target_column)| {
+                                if let Some(position) =
+                                    columns.iter().position(|x| x.header == header)
+                                {
+                                    if let Some(column) = columns.get(position) {
+                                        if let Some(update) = rows_updates.get().get(&id) {
+                                            rows_updates
+                                            .update(|x| {
+                                                x.insert(id.clone(), update.to_owned() + 1);
+                                            });
+                                        } else {
+                                             rows_updates
+                                                .update(|x| {
+                                                    x.insert(id.clone(),1);
+                                                });
+                                        }
+                
+                                        (
+                                            header,
+                                            Column {
+                                                is_basic: true,
+                                                value: column.value.clone(),
+                                            },
+                                        )
+                                    } else {
+                                        (header, target_column)
+                                    }
+                                } else {
+                                    (header, target_column)
+                                }
+                            })
+                            .collect();
+                    };
+                };
             }
         });
         rows_accumalator
@@ -636,6 +677,9 @@ pub fn ShowSheet() -> impl IntoView {
         if save_edits_dones.get() == SAVE_EDITS_TOTAL_TASKS {
             patch_changes();
             sheet_resource.refetch();
+            rows_updates.update(|xs| *xs = xs
+                .into_iter().map(|(id,num)| (id.clone(),num.clone() + 1)).collect()
+            );
             revert_all_edits();
             on_edit.set(false);
             save_edits_dones.set(0);
@@ -770,12 +814,12 @@ pub fn ShowSheet() -> impl IntoView {
                         delete_row=delete_row
                         basic_headers=basic_headers
                         calc_headers=calc_headers
-                        rows=move || sheet_rows_without_primary_row_with_calc_values.get()
+                        rows_updates=rows_updates
+                        rows=sheet_rows_without_primary_row_with_calc_values
                         edit_mode=edit_mode
                         is_deleted=is_deleted
                         modified_columns=modified_columns
-                        sheet_id=move || sheet_init_memo.get().map(|x| x.id).unwrap_or_default()
-            />
+                    />
             <Show
             when=move || !added_rows.get().is_empty()
             fallback=move || view!{<></>}
@@ -855,32 +899,29 @@ where
 }
 
 #[component]
-fn ShowRows<BH, CH, FD, ID, FI, FR>(
+fn ShowRows<BH, CH, FD, ID>(
     basic_headers: BH,
     calc_headers: CH,
     delete_row: FD,
     is_deleted: ID,
-    sheet_id: FI,
-    rows: FR,
+    rows_updates: RwSignal<HashMap<Uuid,i32>>,
+    rows: Memo<Vec<Row<Rc<str>>>>, 
     edit_mode: RwSignal<EditState>,
     modified_columns: RwSignal<Vec<ColumnIdentity>>,
 ) -> impl IntoView
 where
     BH: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
     CH: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
-    FR: Fn() -> Vec<Row<Rc<str>>> + 'static + Clone + Copy,
     ID: Fn(Uuid) -> bool + 'static + Clone + Copy,
     FD: Fn(Uuid) + 'static + Clone + Copy,
-    FI: Fn() -> Uuid + 'static + Clone + Copy,
 {
     let edit_column = RwSignal::from(None::<ColumnIdentity>);
-    let new_rows = Memo::new(move |_| {
-        rows()
-            .into_iter()
-            .filter(|x| x.id != sheet_id())
-            .collect::<Vec<_>>()
-    });
 
+    let get_row_id =move |id : Uuid| id.to_string() + rows_updates
+                .get()
+                .get(&id)
+                .map(|x| x.to_string())
+                .unwrap_or_default().as_str();
     view! {
     <>
             <Show
@@ -896,8 +937,8 @@ where
                 />
             </Show>
         <For
-            each=move || new_rows.get()
-            key=|row| row.id
+            each=move || rows.get()
+            key=move |row| get_row_id(row.id)
             view=move | Row { columns, id }| {
                 let columns = std::rc::Rc::new(columns);
                 view! {
