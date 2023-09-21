@@ -197,7 +197,7 @@ pub fn ShowSheet() -> impl IntoView {
     });
 
     let rows_accumalator = RwSignal::from(Vec::new());
-    let rows_updates = RwSignal::from(HashMap::<Uuid,i32>::new());
+    let rows_updates = RwSignal::from(HashMap::<Uuid, i32>::new());
 
     const RENDER_EVERY_CALLS_NUMBER: i64 = 3;
 
@@ -602,17 +602,29 @@ pub fn ShowSheet() -> impl IntoView {
     });
 
     let patch_changes = move || {
-        let deleted = deleted_rows.get();
-        let added = added_rows.get();
-        let modified_columns = modified_columns.get();
-        // let modifedd_primary_columns = modified_primary_columns.get();
+        let sheet_id = sheet_resource
+            .get()
+            .map(|x| x.map(|x| x.0.id).unwrap_or_default())
+            .unwrap_or_default();
         rows_accumalator.update_untracked(|xs| {
-            xs.extend(added);
+            xs.extend(added_rows.get());
+            let deleted = deleted_rows.get();
             xs.retain(|x| !deleted.contains(&x.id));
             let rows: HashMap<Uuid, Vec<ColumnIdentity>> = {
+                let modified_columns = modified_columns.get().into_iter().chain(
+                    modified_primary_columns
+                        .get()
+                        .into_iter()
+                        .map(|(header, column)| ColumnIdentity {
+                            row_id: sheet_id,
+                            header,
+                            value: column.value,
+                        })
+                        .collect::<Vec<_>>(),
+                );
                 let mut rows: HashMap<Uuid, Vec<ColumnIdentity>> = HashMap::new();
                 for column in modified_columns {
-                    let row_id = column.row_id.clone();
+                    let row_id = column.row_id;
                     if let Some(list) = rows.get(&column.row_id) {
                         let list = list
                             .iter()
@@ -639,17 +651,15 @@ pub fn ShowSheet() -> impl IntoView {
                                 {
                                     if let Some(column) = columns.get(position) {
                                         if let Some(update) = rows_updates.get().get(&id) {
-                                            rows_updates
-                                            .update(|x| {
-                                                x.insert(id.clone(), update.to_owned() + 1);
+                                            rows_updates.update(|x| {
+                                                x.insert(id, update.to_owned() + 1);
                                             });
                                         } else {
-                                             rows_updates
-                                                .update(|x| {
-                                                    x.insert(id.clone(),1);
-                                                });
+                                            rows_updates.update(|x| {
+                                                x.insert(id, 1);
+                                            });
                                         }
-                
+
                                         (
                                             header,
                                             Column {
@@ -677,9 +687,7 @@ pub fn ShowSheet() -> impl IntoView {
         if save_edits_dones.get() == SAVE_EDITS_TOTAL_TASKS {
             patch_changes();
             sheet_resource.refetch();
-            rows_updates.update(|xs| *xs = xs
-                .into_iter().map(|(id,num)| (id.clone(),num.clone() + 1)).collect()
-            );
+            rows_updates.update(|xs| *xs = xs.iter().map(|(id, num)| (*id, *num + 1)).collect());
             revert_all_edits();
             on_edit.set(false);
             save_edits_dones.set(0);
@@ -904,8 +912,8 @@ fn ShowRows<BH, CH, FD, ID>(
     calc_headers: CH,
     delete_row: FD,
     is_deleted: ID,
-    rows_updates: RwSignal<HashMap<Uuid,i32>>,
-    rows: Memo<Vec<Row<Rc<str>>>>, 
+    rows_updates: RwSignal<HashMap<Uuid, i32>>,
+    rows: Memo<Vec<Row<Rc<str>>>>,
     edit_mode: RwSignal<EditState>,
     modified_columns: RwSignal<Vec<ColumnIdentity>>,
 ) -> impl IntoView
@@ -917,11 +925,15 @@ where
 {
     let edit_column = RwSignal::from(None::<ColumnIdentity>);
 
-    let get_row_id =move |id : Uuid| id.to_string() + rows_updates
+    let get_row_id = move |id: Uuid| {
+        id.to_string()
+            + rows_updates
                 .get()
                 .get(&id)
                 .map(|x| x.to_string())
-                .unwrap_or_default().as_str();
+                .unwrap_or_default()
+                .as_str()
+    };
     view! {
     <>
             <Show
