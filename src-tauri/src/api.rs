@@ -1,7 +1,4 @@
-use models::{
-    ColumnId, ColumnValue, Name, NameSerial, Row, RowSerial, SearchSheetParams, Sheet, SheetSerial,
-    ToOrigin, ToSerial,
-};
+use models::{ColumnId, ColumnValue, Name, Row, SearchSheetParams, Sheet, ToSerial};
 use reqwest::StatusCode;
 use uuid::Uuid;
 
@@ -217,16 +214,7 @@ pub async fn search_for_5_sheets(
     if res.status() == StatusCode::OK {
         let body = res.bytes().await.unwrap_or_default();
         let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body))
-            .map(|body| {
-                body.deserialized::<Vec<NameSerial>>()
-                    .map(|names| {
-                        names
-                            .into_iter()
-                            .flat_map(|name| name.to_origin())
-                            .collect::<Vec<_>>()
-                    })
-                    .unwrap_or_default()
-            })
+            .map(|body| body.deserialized::<Vec<Name>>().unwrap_or_default())
             .unwrap_or_default();
         Ok(body)
     } else {
@@ -248,14 +236,11 @@ pub async fn get_sheet_by_id(
 
     if res.status() == StatusCode::OK {
         let body = res.bytes().await.unwrap_or_default();
-        let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body)).map(|body| {
-            body.deserialized::<(SheetSerial<Arc<str>>, i64)>()
-                .map(|(sheet, len)| (sheet.to_origin(), len))
-        });
+        let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body))
+            .map(|body| body.deserialized::<(Sheet<Arc<str>>, i64)>());
 
         match body {
-            Ok(Ok((Ok(sheet), len))) => Ok((sheet, len)),
-            Ok(Ok((Err(err), _))) => Err(err.to_string().into()),
+            Ok(Ok(v)) => Ok(v),
             Ok(Err(err)) => Err(err.to_string().into()),
             Err(err) => Err(err.to_string().into()),
         }
@@ -280,13 +265,8 @@ pub async fn get_sheet_rows_between(
 
     if res.status() == StatusCode::OK {
         let body = res.bytes().await.unwrap_or_default();
-        let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body)).map(|body| {
-            body.deserialized::<Vec<RowSerial<Arc<str>>>>().map(|rows| {
-                rows.into_iter()
-                    .flat_map(|x| x.to_origin())
-                    .collect::<Vec<_>>()
-            })
-        });
+        let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body))
+            .map(|body| body.deserialized::<Vec<Row<Arc<str>>>>());
 
         match body {
             Ok(Ok(rows)) => Ok(rows),

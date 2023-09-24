@@ -165,9 +165,12 @@ pub fn ShowSheet() -> impl IntoView {
     let rows_ids_resource = Resource::new(
         move || sheet_type_name_resource.get(),
         move |name| async move {
-            invoke::<NameArg, RowIdentity>("get_rows_ids", &NameArg { name })
+            invoke::<NameArg, RowIdentity<Rc<str>>>("get_rows_ids", &NameArg { name })
                 .await
-                .unwrap_or_default()
+                .unwrap_or(RowIdentity {
+                    id: vec![],
+                    diff_ops: vec![],
+                })
         },
     );
 
@@ -197,6 +200,8 @@ pub fn ShowSheet() -> impl IntoView {
     });
 
     let rows_accumalator = RwSignal::from(Vec::new());
+    // let rows_packets =
+    //     RwSignal::from(HashMap::<HashMap<Rc<str>, Column<Rc<str>>>, Vec<Uuid>>::new());
     let rows_updates = RwSignal::from(HashMap::<Uuid, i32>::new());
 
     const RENDER_EVERY_CALLS_NUMBER: i64 = 3;
@@ -218,6 +223,20 @@ pub fn ShowSheet() -> impl IntoView {
             if offset <= rows_number {
                 rows_offset.update(|x| *x += OFFSET_LIMIT);
             } else {
+                // fn compare_two_rows(
+                //     standard: &Vec<Rc<str>>,
+                //     row1: &Row<Rc<str>>,
+                //     row2: &Row<Rc<str>>,
+                // ) -> bool {
+                //     let mut result = true;
+                //     for key in standard {
+                //         if row1.columns.get(key) != row2.columns.get(key) {
+                //             result = false;
+                //             break;
+                //         }
+                //     }
+                //     return result;
+                // }
                 rows_accumalator.update(|xs| {
                     xs.sort_rows(sheet_priorities_resource.get().unwrap_or(Rc::from([])))
                 });

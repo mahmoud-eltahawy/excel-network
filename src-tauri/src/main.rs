@@ -155,7 +155,7 @@ async fn get_sheet_rows(
 async fn get_rows_ids(
     sheet_rows_ids: tauri::State<'_, SheetRowsIds>,
     name: Option<Arc<str>>,
-) -> Result<RowIdentity, String> {
+) -> Result<RowIdentity<Arc<str>>, String> {
     let Some(name) = name else {
         return Err("id does not exist".to_string());
     };
@@ -416,7 +416,7 @@ async fn import_sheet(
 struct SheetsTypesNames(Vec<Name>);
 struct SheetsRows(HashMap<Arc<str>, Vec<ConfigValue>>);
 struct SheetImport(HashMap<Arc<str>, ImportConfig>);
-struct SheetRowsIds(HashMap<Arc<str>, RowIdentity>);
+struct SheetRowsIds(HashMap<Arc<str>, RowIdentity<Arc<str>>>);
 
 use std::io::{BufReader, Cursor};
 

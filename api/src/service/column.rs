@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use crate::AppState;
 
-use models::{ColumnId, ColumnIdSerial, ColumnValue, ToOrigin};
+use models::{ColumnId, ColumnValue};
 
 pub fn scope() -> Scope {
     web::scope("/columns")
@@ -21,14 +21,8 @@ pub fn scope() -> Scope {
 
 #[post("/delete")]
 async fn delete_columns(state: web::Data<AppState>, ids: web::Bytes) -> impl Responder {
-    let ids = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(ids)).map(|body| {
-        body.deserialized::<Vec<ColumnIdSerial<Arc<str>>>>()
-            .map(|xs| {
-                xs.into_iter()
-                    .flat_map(|col| col.to_origin())
-                    .collect::<Vec<_>>()
-            })
-    });
+    let ids = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(ids))
+        .map(|body| body.deserialized::<Vec<ColumnId<Arc<str>>>>());
 
     let ids = match ids {
         Ok(Ok(ids)) => ids,
@@ -50,17 +44,8 @@ async fn delete_columns(state: web::Data<AppState>, ids: web::Bytes) -> impl Res
 #[put("/")]
 async fn update_columns(state: web::Data<AppState>, ids_and_values: web::Bytes) -> impl Responder {
     let ids_and_values =
-        ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(ids_and_values)).map(|body| {
-            body.deserialized::<Vec<(ColumnIdSerial<Arc<str>>, ColumnValue<Arc<str>>)>>()
-                .map(|xs| {
-                    xs.into_iter()
-                        .flat_map(|(col, val)| match col.to_origin() {
-                            Ok(col) => Some((col, val)),
-                            Err(_) => None,
-                        })
-                        .collect::<Vec<_>>()
-                })
-        });
+        ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(ids_and_values))
+            .map(|body| body.deserialized::<Vec<(ColumnId<Arc<str>>, ColumnValue<Arc<str>>)>>());
 
     let ids_and_values = match ids_and_values {
         Ok(Ok(ids_and_values)) => ids_and_values,
@@ -82,17 +67,8 @@ async fn update_columns(state: web::Data<AppState>, ids_and_values: web::Bytes) 
 #[post("/")]
 async fn save_columns(state: web::Data<AppState>, ids_and_values: web::Bytes) -> impl Responder {
     let ids_and_values =
-        ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(ids_and_values)).map(|body| {
-            body.deserialized::<Vec<(ColumnIdSerial<Arc<str>>, ColumnValue<Arc<str>>)>>()
-                .map(|xs| {
-                    xs.into_iter()
-                        .flat_map(|(col, val)| match col.to_origin() {
-                            Ok(col) => Some((col, val)),
-                            Err(_) => None,
-                        })
-                        .collect::<Vec<_>>()
-                })
-        });
+        ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(ids_and_values))
+            .map(|body| body.deserialized::<Vec<(ColumnId<Arc<str>>, ColumnValue<Arc<str>>)>>());
 
     let ids_and_values = match ids_and_values {
         Ok(Ok(ids_and_values)) => ids_and_values,

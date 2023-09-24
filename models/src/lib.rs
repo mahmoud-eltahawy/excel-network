@@ -2,34 +2,18 @@ use chrono::NaiveDate;
 use ciborium_io::Write;
 use serde::{Deserialize, Serialize};
 use std::hash::Hash;
-use std::{cmp::Ordering, collections::HashMap, io::Cursor, marker::Sized, rc::Rc, str::FromStr};
+use std::{cmp::Ordering, collections::HashMap, io::Cursor, marker::Sized, rc::Rc};
 use uuid::Uuid;
 
 use std::fs::File;
 
-pub trait ToOrigin<T>: Sized
-where
-    T: ToSerial<Self>,
-{
-    fn to_origin(self) -> Result<T, Box<dyn std::error::Error>>;
-}
-
-pub trait ToSerial<T>: Sized
-where
-    T: ToOrigin<Self>,
-{
+pub trait ToSerial<T>: Sized {
     fn to_serial(self) -> T;
 }
 
 impl ToSerial<Arc<str>> for Uuid {
     fn to_serial(self) -> Arc<str> {
         Arc::from(self.to_string())
-    }
-}
-
-impl ToOrigin<Uuid> for Arc<str> {
-    fn to_origin(self) -> Result<Uuid, Box<dyn std::error::Error>> {
-        Ok(Uuid::from_str(&self)?)
     }
 }
 
@@ -41,26 +25,6 @@ where
     pub sheet_id: Arc<str>,
     pub row_id: Arc<str>,
     pub header: RC,
-}
-
-impl<T> ToOrigin<ColumnId<T>> for ColumnIdSerial<T>
-where
-    T: Eq + Hash + ToString,
-{
-    fn to_origin(self) -> Result<ColumnId<T>, Box<dyn std::error::Error>> {
-        let ColumnIdSerial {
-            sheet_id,
-            row_id,
-            header,
-        } = self;
-        let sheet_id = sheet_id.to_origin()?;
-        let row_id = row_id.to_origin()?;
-        Ok(ColumnId {
-            sheet_id,
-            row_id,
-            header,
-        })
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -106,14 +70,6 @@ pub struct SearchSheetParams {
 pub struct NameSerial {
     pub id: Arc<str>,
     pub the_name: String,
-}
-
-impl ToOrigin<Name> for NameSerial {
-    fn to_origin(self) -> Result<Name, Box<dyn std::error::Error>> {
-        let NameSerial { id, the_name } = self;
-        let id = id.to_origin()?;
-        Ok(Name { id, the_name })
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -192,14 +148,6 @@ where
     pub columns: HashMap<RC, Column<RC>>,
 }
 
-impl ToOrigin<Row<Arc<str>>> for RowSerial<Arc<str>> {
-    fn to_origin(self) -> Result<Row<Arc<str>>, Box<dyn std::error::Error>> {
-        let RowSerial { id, columns } = self;
-        let id = id.to_origin()?;
-        Ok(Row { id, columns })
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
 pub struct Row<RC>
 where
@@ -252,30 +200,6 @@ where
     pub type_name: RC,
     pub insert_date: NaiveDate,
     pub rows: Vec<RowSerial<Arc<str>>>,
-}
-
-impl ToOrigin<Sheet<Arc<str>>> for SheetSerial<Arc<str>> {
-    fn to_origin(self) -> Result<Sheet<Arc<str>>, Box<dyn std::error::Error>> {
-        let SheetSerial {
-            id,
-            sheet_name,
-            type_name,
-            insert_date,
-            rows,
-        } = self;
-        let id = id.to_origin()?;
-        let rows = rows
-            .into_iter()
-            .flat_map(|row| row.to_origin())
-            .collect::<Vec<_>>();
-        Ok(Sheet {
-            id,
-            sheet_name,
-            type_name,
-            insert_date,
-            rows,
-        })
-    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone, PartialEq)]
@@ -404,23 +328,23 @@ pub enum IdentityDiffsOps {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
-pub struct RowIdentity {
-    pub id: Vec<String>,
-    pub diff_ops: Vec<(String, IdentityDiffsOps)>,
+pub struct RowIdentity<RC> {
+    pub id: Vec<RC>,
+    pub diff_ops: Vec<(RC, IdentityDiffsOps)>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct SheetConfig {
-    pub sheet_type_name: Arc<str>,
+pub struct SheetConfig<RC> {
+    pub sheet_type_name: RC,
     pub importing: ImportConfig,
     pub row: Vec<ConfigValue>,
-    pub row_identity: RowIdentity,
+    pub row_identity: RowIdentity<RC>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
     pub priorities: HashMap<Arc<str>, Arc<[Arc<str>]>>,
-    pub sheets: Vec<SheetConfig>,
+    pub sheets: Vec<SheetConfig<Arc<str>>>,
 }
 
 pub fn get_config_example() {
@@ -445,12 +369,12 @@ pub fn get_config_example() {
             SheetConfig {
                 row_identity: RowIdentity {
                     id: vec![
-                        "رقم الفاتورة".to_string(),
-                        "التاريخ".to_string(),
-                        "رقم التسجيل الضريبي".to_string(),
-                        "اسم العميل".to_string(),
+                        Arc::from("رقم الفاتورة"),
+                        Arc::from("التاريخ"),
+                        Arc::from("رقم التسجيل الضريبي"),
+                        Arc::from("اسم العميل"),
                     ],
-                    diff_ops: vec![("القيمة".to_string(), IdentityDiffsOps::Sum)],
+                    diff_ops: vec![(Arc::from("القيمة"), IdentityDiffsOps::Sum)],
                 },
                 sheet_type_name: Arc::from("مبيعات"),
                 importing: ImportConfig {

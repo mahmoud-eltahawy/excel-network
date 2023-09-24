@@ -10,10 +10,7 @@ use uuid::Uuid;
 
 use std::sync::Arc;
 
-use models::{
-    Column, Name, NameSerial, Row, RowSerial, SearchSheetParams, Sheet, SheetSerial, ToOrigin,
-    ToSerial,
-};
+use models::{Column, Name, Row, SearchSheetParams, Sheet, ToSerial};
 
 use std::io::Cursor;
 
@@ -63,16 +60,11 @@ async fn search(state: Data<AppState>, params: web::Bytes) -> impl Responder {
 
 #[post("/")]
 async fn save(state: Data<AppState>, sheet: web::Bytes) -> impl Responder {
-    let sheet = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(sheet)).map(|body| {
-        body.deserialized::<SheetSerial<Arc<str>>>()
-            .map(|sheet| sheet.to_origin())
-    });
+    let sheet = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(sheet))
+        .map(|body| body.deserialized::<Sheet<Arc<str>>>());
 
     let sheet = match sheet {
-        Ok(Ok(Ok(sheet))) => sheet,
-        Ok(Ok(Err(err))) => {
-            return HttpResponse::InternalServerError().body(err.to_string().into_bytes())
-        }
+        Ok(Ok(sheet)) => sheet,
         Ok(Err(err)) => {
             return HttpResponse::InternalServerError().body(err.to_string().into_bytes())
         }
@@ -86,16 +78,11 @@ async fn save(state: Data<AppState>, sheet: web::Bytes) -> impl Responder {
 
 #[put("/name")]
 async fn update_name(state: Data<AppState>, name: web::Bytes) -> impl Responder {
-    let name = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(name)).map(|body| {
-        body.deserialized::<NameSerial>()
-            .map(|name| name.to_origin())
-    });
+    let name = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(name))
+        .map(|body| body.deserialized::<Name>());
 
     let name = match name {
-        Ok(Ok(Ok(name))) => name,
-        Ok(Ok(Err(err))) => {
-            return HttpResponse::InternalServerError().body(err.to_string().into_bytes())
-        }
+        Ok(Ok(name)) => name,
         Ok(Err(err)) => {
             return HttpResponse::InternalServerError().body(err.to_string().into_bytes())
         }
@@ -178,13 +165,8 @@ async fn add_rows_to_sheet(
 ) -> impl Responder {
     let sheet_id = sheet_id.into_inner();
 
-    let rows = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(rows)).map(|body| {
-        body.deserialized::<Vec<RowSerial<Arc<str>>>>().map(|rows| {
-            rows.into_iter()
-                .flat_map(|x| x.to_origin())
-                .collect::<Vec<_>>()
-        })
-    });
+    let rows = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(rows))
+        .map(|body| body.deserialized::<Vec<Row<Arc<str>>>>());
 
     let rows = match rows {
         Ok(Ok(rows)) => rows,
@@ -209,13 +191,8 @@ async fn delete_sheet_rows(
     rows: web::Bytes,
 ) -> impl Responder {
     let sheet_id = sheet_id.into_inner();
-    let rows = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(rows)).map(|body| {
-        body.deserialized::<Vec<Arc<str>>>().map(|rows| {
-            rows.into_iter()
-                .flat_map(|x| x.to_origin())
-                .collect::<Vec<_>>()
-        })
-    });
+    let rows = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(rows))
+        .map(|body| body.deserialized::<Vec<Uuid>>());
 
     let rows = match rows {
         Ok(Ok(rows)) => rows,
