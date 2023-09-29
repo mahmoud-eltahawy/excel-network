@@ -383,7 +383,7 @@ pub fn get_config_example() {
                         (Arc::from("اسم العميل"), IdentityDiffsOps::Nth(1)),
                         (Arc::from("رقم التسجيل الضريبي"), IdentityDiffsOps::Nth(1)),
                         (Arc::from("تبع"), IdentityDiffsOps::Nth(1)),
-                        (Arc::from("الخصم"), IdentityDiffsOps::Nth(1)),
+                        (Arc::from("الخصم"), IdentityDiffsOps::Sum),
                     ]),
                 },
                 sheet_type_name: Arc::from("مبيعات"),

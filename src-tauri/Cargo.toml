@@ -13,7 +13,7 @@ repository = ""
 tauri-build = { version = "1.4", features = [] }
 
 [dependencies]
-tauri = { version = "1.4", features = [ "api-all"] }
+tauri = { version = "^1.5", features = [ "api-all"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 models = { workspace = true }
@@ -22,11 +22,11 @@ uuid = { workspace = true,features = ["serde", "v4"] }
 chrono = {workspace = true , features = ["serde"] }
 dotenv = { workspace = true }
 bigdecimal = { workspace = true }
-reqwest = { version = "^0.11", features = ["json"] }
-dirs = "^5"
-rust_xlsxwriter = "^0.42"
+reqwest = { version = "^0.11" }
+dirs = {workspace = true}
 ciborium = { workspace = true }
 ciborium-io = { workspace = true, features = ["std"] }
+rust_xlsxwriter = "^0.42"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem

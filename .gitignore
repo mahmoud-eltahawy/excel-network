@@ -2,6 +2,6 @@
 /target/
 /Cargo.lock
 *~
-/models/output.json
+/models/output
 /models/#*#
 /src-tauri/#*#

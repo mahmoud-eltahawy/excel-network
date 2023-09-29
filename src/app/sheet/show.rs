@@ -1,4 +1,6 @@
-use crate::app::sheet::shared::{merge_primary_row_headers, PrimaryRowContent, PrimaryRowEditor};
+use crate::app::sheet::shared::{
+    merge_primary_row_headers, new_id, PrimaryRowContent, PrimaryRowEditor,
+};
 use crate::Id;
 use chrono::NaiveDate;
 use leptos::spawn_local;
@@ -19,41 +21,6 @@ use super::shared::{
     Name, NameArg, SheetHead, ShowNewRows,
 };
 
-#[derive(Serialize, Deserialize)]
-struct ExportSheetArg {
-    headers: Vec<Rc<str>>,
-    sheet: Sheet<Rc<str>>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct SheetNameArg {
-    name: Name,
-}
-
-#[derive(Serialize, Deserialize)]
-struct UpdateColumnsArgs {
-    sheetid: Uuid,
-    columnsidentifiers: Vec<(Uuid, Rc<str>, ColumnValue<Rc<str>>)>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct DeleteColumnsArgs {
-    sheetid: Uuid,
-    rowsheaders: Vec<(Uuid, Rc<str>)>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct RowsDeleteArg {
-    sheetid: Uuid,
-    rowsids: Vec<Uuid>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct RowsAddArg {
-    sheetid: Uuid,
-    rows: Vec<Row<Rc<str>>>,
-}
-
 #[derive(Debug, Clone)]
 struct ColumnIdentity {
     row_id: Uuid,
@@ -61,128 +28,111 @@ struct ColumnIdentity {
     value: ColumnValue<Rc<str>>,
 }
 
-const OFFSET_LIMIT: i64 = 7;
+const FETCH_LIMIT: i64 = 7;
 
-fn collapse_rows(
+use itertools::Itertools;
+
+async fn collapse_rows(
     rows: Vec<Row<Rc<str>>>,
     row_identity: RowIdentity<Rc<str>>,
-) -> (Vec<Row<Rc<str>>>, HashMap<String, Vec<Uuid>>) {
-    fn stack_rows(
-        rows: Vec<Row<Rc<str>>>,
-        rows_ids_id: &Rc<str>,
-    ) -> HashMap<String, Vec<Row<Rc<str>>>> {
-        let mut map = HashMap::<String, Vec<Row<Rc<str>>>>::new();
-        for row in rows {
-            let main_value = row
-                .columns
+) -> (Vec<Row<Rc<str>>>, HashMap<Uuid, Vec<Uuid>>) {
+    fn stack_rows(rows: Vec<Row<Rc<str>>>, rows_ids_id: &Rc<str>) -> Vec<Vec<Row<Rc<str>>>> {
+        let key = |x: &Row<Rc<str>>| {
+            x.columns
                 .get(rows_ids_id)
-                .map(|x| x.value.clone())
-                .unwrap_or(ColumnValue::String(Some(Rc::from(""))));
-            match map.get_mut(&main_value.to_string()) {
-                Some(rows) => rows.push(row),
-                None => {
-                    map.insert(main_value.to_string(), vec![row]);
-                }
+                .map(|x| x.value.to_string())
+                .unwrap_or_default()
+        };
+        rows.into_iter()
+            .into_group_map_by(key)
+            .into_iter()
+            .map(|(_, group)| group)
+            .collect::<Vec<_>>()
+    }
+
+    fn column_value_from_identity(
+        value: &IdentityDiffsOps,
+        rows: &Vec<Row<Rc<str>>>,
+        title: &Rc<str>,
+    ) -> Option<ColumnValue<Rc<str>>> {
+        let row_main_column_value =
+            |x: &Row<Rc<str>>| x.columns.get(title).map(|x| x.value.clone());
+
+        let map_rows_to_columns = || rows.iter().map(row_main_column_value).flatten();
+
+        match value {
+            IdentityDiffsOps::Nth(n) => rows.iter().map(row_main_column_value).flatten().nth(*n),
+            IdentityDiffsOps::Sum => {
+                let r = map_rows_to_columns()
+                    .map(|x| {
+                        if let ColumnValue::Float(n) = x {
+                            n
+                        } else {
+                            0.0
+                        }
+                    })
+                    .sum::<f64>();
+                Some(ColumnValue::Float(r))
             }
+            IdentityDiffsOps::Prod => {
+                let r = map_rows_to_columns()
+                    .map(|x| {
+                        if let ColumnValue::Float(n) = x {
+                            n
+                        } else {
+                            1.0
+                        }
+                    })
+                    .product::<f64>();
+                Some(ColumnValue::Float(r))
+            }
+            IdentityDiffsOps::Max => map_rows_to_columns()
+                .map(|x| {
+                    if let ColumnValue::Float(n) = x {
+                        Some(n as i64)
+                    } else {
+                        None
+                    }
+                })
+                .flatten()
+                .max()
+                .map(|x| ColumnValue::Float(x as f64)),
+            IdentityDiffsOps::Min => map_rows_to_columns()
+                .map(|x| {
+                    if let ColumnValue::Float(n) = x {
+                        Some(n as i64)
+                    } else {
+                        None
+                    }
+                })
+                .flatten()
+                .min()
+                .map(|x| ColumnValue::Float(x as f64)),
         }
-        map
     }
 
     let mut collapsed_rows = Vec::<Row<Rc<str>>>::new();
-    let mut collapsed_rows_ids = HashMap::<String, Vec<Uuid>>::new();
-    for (title, rows) in stack_rows(rows, &row_identity.id) {
+    let mut collapsed_rows_ids = HashMap::<Uuid, Vec<Uuid>>::new();
+    for rows in stack_rows(rows, &row_identity.id) {
         let columns = row_identity
             .diff_ops
             .iter()
-            .map(|(title, value)| {
-                let value = match value {
-                    IdentityDiffsOps::Nth(n) => rows
-                        .iter()
-                        .map(|x| x.columns.get(title).map(|x| x.value.clone()))
-                        .flatten()
-                        .nth(*n)
-                        .unwrap_or(ColumnValue::String(Some(Rc::from("")))),
-                    IdentityDiffsOps::Sum => {
-                        let r = rows
-                            .iter()
-                            .map(|x| x.columns.get(title).map(|x| x.value.clone()))
-                            .flatten()
-                            .map(|x| {
-                                if let ColumnValue::Float(n) = x {
-                                    Some(n)
-                                } else {
-                                    None
-                                }
-                            })
-                            .flatten()
-                            .sum::<f64>();
-                        ColumnValue::Float(r)
-                    }
-                    IdentityDiffsOps::Prod => {
-                        let r = rows
-                            .iter()
-                            .map(|x| x.columns.get(title).map(|x| x.value.clone()))
-                            .flatten()
-                            .map(|x| {
-                                if let ColumnValue::Float(n) = x {
-                                    Some(n)
-                                } else {
-                                    None
-                                }
-                            })
-                            .flatten()
-                            .product::<f64>();
-                        ColumnValue::Float(r)
-                    }
-                    IdentityDiffsOps::Max => {
-                        let r = rows
-                            .iter()
-                            .map(|x| x.columns.get(title).map(|x| x.value.clone()))
-                            .flatten()
-                            .map(|x| {
-                                if let ColumnValue::Float(n) = x {
-                                    Some(n as i64)
-                                } else {
-                                    None
-                                }
-                            })
-                            .flatten()
-                            .max()
-                            .unwrap_or_default() as f64;
-                        ColumnValue::Float(r)
-                    }
-                    IdentityDiffsOps::Min => {
-                        let r = rows
-                            .iter()
-                            .map(|x| x.columns.get(title).map(|x| x.value.clone()))
-                            .flatten()
-                            .map(|x| {
-                                if let ColumnValue::Float(n) = x {
-                                    Some(n as i64)
-                                } else {
-                                    None
-                                }
-                            })
-                            .flatten()
-                            .min()
-                            .unwrap_or_default() as f64;
-                        ColumnValue::Float(r)
-                    }
-                };
-                (
-                    title.clone(),
-                    Column {
-                        is_basic: true,
-                        value,
-                    },
-                )
-            })
+            .flat_map(
+                |(title, value)| match column_value_from_identity(value, &rows, title) {
+                    Some(value) => Some((
+                        title.clone(),
+                        Column {
+                            is_basic: true,
+                            value,
+                        },
+                    )),
+                    None => None,
+                },
+            )
             .collect::<HashMap<_, _>>();
-        collapsed_rows.push(Row {
-            id: Uuid::nil(),
-            columns,
-        });
-        collapsed_rows_ids.insert(title, rows.iter().map(|x| x.id).collect::<Vec<_>>());
+        let id = new_id().await;
+        collapsed_rows.push(Row { id, columns });
+        collapsed_rows_ids.insert(id, rows.iter().map(|x| x.id).collect::<Vec<_>>());
     }
     (collapsed_rows, collapsed_rows_ids)
 }
@@ -243,13 +193,6 @@ where
     }
 }
 
-#[derive(Serialize, Deserialize)]
-struct LimitedId {
-    id: Option<Uuid>,
-    offset: i64,
-    limit: i64,
-}
-
 #[component]
 pub fn ShowSheet() -> impl IntoView {
     let edit_mode = RwSignal::from(EditState::None);
@@ -300,8 +243,6 @@ pub fn ShowSheet() -> impl IntoView {
         },
     );
 
-    Effect::new(move |_| logging::log!("{:#?}", rows_ids_resource.get()));
-
     let sheet_id = move || {
         params.with(|params| match params.get("sheet_id") {
             Some(id) => Uuid::from_str(id).ok(),
@@ -318,7 +259,7 @@ pub fn ShowSheet() -> impl IntoView {
     let rows_offset = RwSignal::from(0);
 
     let rows_number = Memo::new(move |_| {
-        let default = OFFSET_LIMIT * 4;
+        let default = FETCH_LIMIT * 4;
         sheet_resource
             .get()
             .map(|x| x.map(|x| x.1).unwrap_or(default))
@@ -327,27 +268,43 @@ pub fn ShowSheet() -> impl IntoView {
 
     let rows_accumalator = RwSignal::from(Vec::<Row<Rc<str>>>::new());
     let rows_collapser = RwSignal::from(Vec::<Row<Rc<str>>>::new());
-    let rows_collapsed_ids = RwSignal::from(HashMap::<String, Vec<Uuid>>::new());
+    let rows_collapsed_ids = RwSignal::from(HashMap::<Uuid, Vec<Uuid>>::new());
     let rows_updates = RwSignal::from(HashMap::<Uuid, i32>::new());
 
     const RENDER_EVERY_CALLS_NUMBER: i64 = 3;
 
+    let is_collapsable = move || {
+        !rows_ids_resource
+            .get()
+            .map(|x| x.id)
+            .unwrap_or(Rc::from(""))
+            .is_empty()
+    };
+
     let sheet_rows_resource = Resource::new(
         move || rows_offset.get(),
         move |offset| async move {
+            #[derive(Serialize, Deserialize)]
+            struct LimitedId {
+                id: Option<Uuid>,
+                offset: i64,
+                limit: i64,
+            }
+
             let rows_number = rows_number.get();
-            let v = invoke::<_, Vec<Row<Rc<str>>>>(
+            let new_rows = invoke::<_, Vec<Row<Rc<str>>>>(
                 "get_sheet_rows",
                 &LimitedId {
                     id: sheet_id(),
                     offset,
-                    limit: OFFSET_LIMIT,
+                    limit: FETCH_LIMIT,
                 },
             )
             .await
             .unwrap_or_default();
+
             if offset <= rows_number {
-                rows_offset.update(|x| *x += OFFSET_LIMIT);
+                rows_offset.update(|x| *x += FETCH_LIMIT);
             } else {
                 let row_identity = rows_ids_resource.get().unwrap_or(RowIdentity {
                     id: Rc::from(""),
@@ -356,46 +313,76 @@ pub fn ShowSheet() -> impl IntoView {
 
                 let sheet_priorities = sheet_priorities_resource.get().unwrap_or(Rc::from([]));
 
-                if !row_identity.id.is_empty() {
+                if is_collapsable() {
                     let (mut collapsed_rows, collapsed_rows_ids) =
-                        collapse_rows(rows_accumalator.get(), row_identity);
-                    collapsed_rows.sort_rows(sheet_priorities);
+                        collapse_rows(rows_accumalator.get(), row_identity).await;
+                    collapsed_rows.sort_rows(sheet_priorities.clone());
                     rows_collapser.set(collapsed_rows);
                     rows_collapsed_ids.set(collapsed_rows_ids);
                 }
-                rows_accumalator.update(|xs| {
-                    xs.sort_rows(sheet_priorities_resource.get().unwrap_or(Rc::from([])))
-                });
+                rows_accumalator.update(|xs| xs.sort_rows(sheet_priorities));
             }
-            if !v.is_empty() {
-                if offset % RENDER_EVERY_CALLS_NUMBER == 0 || offset <= OFFSET_LIMIT {
-                    rows_accumalator.update(|xs| xs.extend(v));
+            if !new_rows.is_empty() {
+                if offset % RENDER_EVERY_CALLS_NUMBER == 0 || offset <= FETCH_LIMIT {
+                    rows_accumalator.update(|xs| xs.extend(new_rows));
                 } else {
-                    rows_accumalator.update_untracked(|xs| xs.extend(v));
+                    rows_accumalator.update_untracked(|xs| xs.extend(new_rows));
                 }
             }
         },
     );
 
-    let sheet_init_memo = Memo::new(move |_| {
+    let get_initial_sheet = move || {
         let s = sheet_resource.get().map(|x| x.map(|x| x.0));
         match s {
             Some(Some(s)) => Some(s),
             _ => None,
         }
-    });
+    };
+
+    #[derive(Clone)]
+    enum RenderMode {
+        Accumalate,
+        Collapse,
+        None,
+    }
+    let render_mode = RwSignal::new(RenderMode::None);
+
+    #[component]
+    fn CollapseButton<F>(render_mode: RwSignal<RenderMode>, is_collapsble: F) -> impl IntoView
+    where
+        F: Fn() -> bool + 'static,
+    {
+        let toggle = move |_| match render_mode.get() {
+            RenderMode::None | RenderMode::Accumalate => render_mode.set(RenderMode::Collapse),
+            RenderMode::Collapse => render_mode.set(RenderMode::Accumalate),
+        };
+        view! {
+            <Show when=is_collapsble fallback=|| view! {<></>}>
+                <button on:click=toggle>"<>"</button>
+            </Show>
+        }
+    }
 
     let get_rendered_rows = move || {
         sheet_rows_resource.get();
-        let row_identity = rows_ids_resource.get().unwrap_or(RowIdentity {
-            id: Rc::from(""),
-            diff_ops: HashMap::new(),
-        });
+        let offset = rows_offset.get();
+        let rows_number = rows_number.get();
 
-        if row_identity.id.is_empty() {
-            rows_accumalator.get()
-        } else {
+        match render_mode.get() {
+            RenderMode::None => (),
+            RenderMode::Accumalate => return rows_accumalator.get(),
+            RenderMode::Collapse => return rows_collapser.get(),
+        }
+
+        if offset <= rows_number {
+            return rows_accumalator.get();
+        }
+
+        if is_collapsable() {
             rows_collapser.get()
+        } else {
+            rows_accumalator.get()
         }
     };
 
@@ -458,7 +445,7 @@ pub fn ShowSheet() -> impl IntoView {
             .collect::<Vec<Rc<str>>>()
     };
     let sheet_rows_with_primary_row_with_calc_values = Memo::new(move |_| {
-        let sheet_id = sheet_init_memo.get().map(|x| x.id).unwrap_or_default();
+        let sheet_id = get_initial_sheet().map(|x| x.id).unwrap_or_default();
         let c_cols = calc_columns.get();
         get_rendered_rows()
             .into_iter()
@@ -497,7 +484,7 @@ pub fn ShowSheet() -> impl IntoView {
     });
 
     let sheet_rows_without_primary_row_with_calc_values = Memo::new(move |_| {
-        let sheet_id = sheet_init_memo.get().map(|x| x.id).unwrap_or_default();
+        let sheet_id = get_initial_sheet().map(|x| x.id).unwrap_or_default();
         sheet_rows_with_primary_row_with_calc_values
             .get()
             .into_iter()
@@ -506,7 +493,7 @@ pub fn ShowSheet() -> impl IntoView {
     });
 
     let export = move |_| {
-        let mut sheet = match sheet_init_memo.get() {
+        let mut sheet = match get_initial_sheet() {
             Some(x) => x,
             None => Sheet {
                 id: Uuid::nil(),
@@ -518,9 +505,14 @@ pub fn ShowSheet() -> impl IntoView {
         };
         sheet.rows = sheet_rows_with_primary_row_with_calc_values.get();
         spawn_local(async move {
+            #[derive(Serialize, Deserialize)]
+            struct Args {
+                headers: Vec<Rc<str>>,
+                sheet: Sheet<Rc<str>>,
+            }
             match invoke::<_, ()>(
                 "export_sheet",
-                &ExportSheetArg {
+                &Args {
                     sheet,
                     headers: basic_headers()
                         .into_iter()
@@ -583,7 +575,7 @@ pub fn ShowSheet() -> impl IntoView {
             .update(|xs| xs.sort_rows(sheet_priorities_resource.get().unwrap_or(Rc::from([]))));
     };
     let primary_row_columns = Memo::new(move |_| {
-        let Some(id) = sheet_init_memo.get().map(|x| x.id) else {
+        let Some(id) = get_initial_sheet().map(|x| x.id) else {
             return HashMap::new();
         };
         get_rendered_rows()
@@ -601,7 +593,7 @@ pub fn ShowSheet() -> impl IntoView {
     let save_edits_dones = RwSignal::from(0);
 
     let save_edits = move |_| {
-        let Some((sheetid, sheetname)) = sheet_init_memo.get().map(|x| (x.id, x.sheet_name)) else {
+        let Some((sheetid, sheetname)) = get_initial_sheet().map(|x| (x.id, x.sheet_name)) else {
             return;
         };
         let the_sheet_name = sheet_name.get();
@@ -682,6 +674,11 @@ pub fn ShowSheet() -> impl IntoView {
                 save_edits_dones.update(|x| *x += 1);
             });
         }
+
+        #[derive(Serialize, Deserialize)]
+        struct SheetNameArg {
+            name: Name,
+        }
         spawn_my_local_process(
             !the_sheet_name.is_empty() && the_sheet_name != sheetname,
             "update_sheet_name",
@@ -694,6 +691,12 @@ pub fn ShowSheet() -> impl IntoView {
             save_edits_successes,
             save_edits_dones,
         );
+
+        #[derive(Serialize, Deserialize)]
+        struct RowsDeleteArg {
+            sheetid: Uuid,
+            rowsids: Vec<Uuid>,
+        }
         spawn_my_local_process(
             !the_deleted_rows.is_empty(),
             "delete_rows_from_sheet",
@@ -704,6 +707,12 @@ pub fn ShowSheet() -> impl IntoView {
             save_edits_successes,
             save_edits_dones,
         );
+
+        #[derive(Serialize, Deserialize)]
+        struct RowsAddArg {
+            sheetid: Uuid,
+            rows: Vec<Row<Rc<str>>>,
+        }
         spawn_my_local_process(
             !the_added_rows.is_empty(),
             "add_rows_to_sheet",
@@ -714,6 +723,11 @@ pub fn ShowSheet() -> impl IntoView {
             save_edits_successes,
             save_edits_dones,
         );
+        #[derive(Serialize, Deserialize)]
+        struct DeleteColumnsArgs {
+            sheetid: Uuid,
+            rowsheaders: Vec<(Uuid, Rc<str>)>,
+        }
         spawn_my_local_process(
             !primary_deleted_columnsidentifiers.is_empty(),
             "delete_columns",
@@ -724,6 +738,13 @@ pub fn ShowSheet() -> impl IntoView {
             save_edits_successes,
             save_edits_dones,
         );
+
+        #[derive(Serialize, Deserialize)]
+        struct UpdateColumnsArgs {
+            sheetid: Uuid,
+            columnsidentifiers: Vec<(Uuid, Rc<str>, ColumnValue<Rc<str>>)>,
+        }
+
         spawn_my_local_process(
             !updated_columnsidentifiers.is_empty(),
             "update_columns",
@@ -855,7 +876,7 @@ pub fn ShowSheet() -> impl IntoView {
             let Some(filepath) = open_file().await else {
                 return;
             };
-            let sheet_id = sheet_init_memo.get().map(|x| x.id).unwrap_or_default();
+            let sheet_id = get_initial_sheet().map(|x| x.id).unwrap_or_default();
             let rows = import_sheet_rows(sheet_id, sheettype, filepath).await;
 
             let primary_row = rows.iter().filter(|x| x.id == sheet_id).collect::<Vec<_>>();
@@ -917,6 +938,7 @@ pub fn ShowSheet() -> impl IntoView {
             <button class="right-corner" on:click=export>
                 "🏹"
             </button>
+            <CollapseButton render_mode=render_mode is_collapsble=is_collapsable/>
             <button on:click=toggle_edit_mode class="right-corner-left">
                 {
                     move || if on_edit.get() {
@@ -940,7 +962,7 @@ pub fn ShowSheet() -> impl IntoView {
             <Show
                 when=move || matches!(edit_mode.get(),EditState::Primary)
                 fallback=move || {
-                    view! {<h1>{move || sheet_init_memo.get().map(|x| x.sheet_name.to_string())}</h1> }
+                    view! {<h1>{move || get_initial_sheet().map(|x| x.sheet_name.to_string())}</h1> }
                 }
             >
                 <input
@@ -948,8 +970,7 @@ pub fn ShowSheet() -> impl IntoView {
                     class="centered-input"
                     placeholder=move || {
                         format!(
-                            "{} ({})", "اسم الشيت", sheet_init_memo
-                                .get().map(|x| x.sheet_name.to_string()).unwrap_or_default()
+                            "{} ({})", "اسم الشيت", get_initial_sheet().map(|x| x.sheet_name.to_string()).unwrap_or_default()
                         )
                     }
                     value=move || sheet_name.get().to_string()
@@ -995,8 +1016,8 @@ pub fn ShowSheet() -> impl IntoView {
                         basic_headers=basic_headers
                         calc_headers=calc_headers
                         rows=added_rows
-                    sheet_id=move ||sheet_init_memo.get().map(|x| x.id).unwrap_or_default()
-                    priorities=move || sheet_priorities_resource.get().unwrap_or(Rc::from([]))
+                        sheet_id=move ||get_initial_sheet().map(|x| x.id).unwrap_or_default()
+                        priorities=move || sheet_priorities_resource.get().unwrap_or(Rc::from([]))
                     />
                     <Show
                         when=move || matches!(edit_mode.get(),EditState::NonePrimary)
@@ -1101,7 +1122,7 @@ where
                 <ColumnEdit
                     mode=move || edit_column.get().unwrap()
                     cancel=move || edit_column.set(None)
-                push_to_modified=move |col| modified_columns.update(|xs| xs.push(col))
+                    push_to_modified=move |col| modified_columns.update(|xs| xs.push(col))
                 />
             </Show>
         <For
@@ -1117,12 +1138,12 @@ where
                                 <For
                                     each=basic_headers
                                     key=|key| key.clone()
-                                    view=move |column| {
-                        let header1 = column.clone();
-                        let header2 = header1.clone();
-                        let header3 = header2.clone();
-                        let columns1 = columns.clone();
-                        let columns2 = columns1.clone();
+                                    view=move |header0| {
+                            let header1 = header0.clone();
+                            let header2 = header1.clone();
+                            let header3 = header2.clone();
+                            let columns1 = columns.clone();
+                            let columns2 = columns1.clone();
                         view! { <td
                                 style="cursor: pointer"
                                  on:dblclick=move |_| if matches!(edit_mode.get(),EditState::NonePrimary) {
@@ -1137,14 +1158,14 @@ where
                          }
                          >{
                         move || columns2
-                        .get(&column)
+                        .get(&header0)
                         .map(|x| x.value.to_string())
                         } {
                         move || modified_columns.get()
                         .into_iter().filter(|x| x.row_id == id && x.header ==header3)
                         .collect::<Vec<_>>()
                         .first()
-                        .map(|x| format!(" => {}",x.value.to_string()))
+                        .map(|x| format!(" > {}",x.value.to_string()))
                         }</td>
                     }
                                     }
