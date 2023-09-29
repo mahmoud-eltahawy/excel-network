@@ -325,16 +325,23 @@ pub enum IdentityDiffsOps {
     Prod,
     Max,
     Min,
+    Nth(usize),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
-pub struct RowIdentity<RC> {
-    pub id: Vec<RC>,
-    pub diff_ops: Vec<(RC, IdentityDiffsOps)>,
+pub struct RowIdentity<RC>
+where
+    RC: Hash + Eq,
+{
+    pub id: RC,
+    pub diff_ops: HashMap<RC, IdentityDiffsOps>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct SheetConfig<RC> {
+pub struct SheetConfig<RC>
+where
+    RC: Hash + Eq,
+{
     pub sheet_type_name: RC,
     pub importing: ImportConfig,
     pub row: Vec<ConfigValue>,
@@ -368,13 +375,16 @@ pub fn get_config_example() {
         sheets: vec![
             SheetConfig {
                 row_identity: RowIdentity {
-                    id: vec![
-                        Arc::from("رقم الفاتورة"),
-                        Arc::from("التاريخ"),
-                        Arc::from("رقم التسجيل الضريبي"),
-                        Arc::from("اسم العميل"),
-                    ],
-                    diff_ops: vec![(Arc::from("القيمة"), IdentityDiffsOps::Sum)],
+                    id: Arc::from("رقم الفاتورة"),
+                    diff_ops: HashMap::from([
+                        (Arc::from("القيمة"), IdentityDiffsOps::Sum),
+                        (Arc::from("رقم الفاتورة"), IdentityDiffsOps::Nth(1)),
+                        (Arc::from("التاريخ"), IdentityDiffsOps::Nth(1)),
+                        (Arc::from("اسم العميل"), IdentityDiffsOps::Nth(1)),
+                        (Arc::from("رقم التسجيل الضريبي"), IdentityDiffsOps::Nth(1)),
+                        (Arc::from("تبع"), IdentityDiffsOps::Nth(1)),
+                        (Arc::from("الخصم"), IdentityDiffsOps::Nth(1)),
+                    ]),
                 },
                 sheet_type_name: Arc::from("مبيعات"),
                 importing: ImportConfig {
@@ -437,8 +447,8 @@ pub fn get_config_example() {
             },
             SheetConfig {
                 row_identity: RowIdentity {
-                    id: vec![],
-                    diff_ops: vec![],
+                    id: Arc::from(""),
+                    diff_ops: HashMap::new(),
                 },
                 sheet_type_name: Arc::from("مشتريات"),
                 importing: ImportConfig {
@@ -480,8 +490,8 @@ pub fn get_config_example() {
             },
             SheetConfig {
                 row_identity: RowIdentity {
-                    id: vec![],
-                    diff_ops: vec![],
+                    id: Arc::from(""),
+                    diff_ops: HashMap::new(),
                 },
                 sheet_type_name: Arc::from("كارت صنف"),
                 importing: ImportConfig {

@@ -481,6 +481,7 @@ where
 
     view! {
         <>
+        <tr>
             <For
                 each=move || basic_headers().clone()
                 key=|x| x.clone()
@@ -504,13 +505,14 @@ where
                     }
                 }
             />
-            <tr class="spanA">
-                <td>
-                    <button on:click=on_click class="centered-button">
-                        "اضافة"
-                    </button>
-                </td>
-            </tr>
+        </tr>
+        <tr>
+            <td>
+                <button on:click=on_click class="centered-button">
+                    "اضافة"
+                </button>
+            </td>
+        </tr>
         </>
     }
 }
