@@ -119,7 +119,7 @@ where
                 <For
                     each=basic_headers
                     key=move |x| x.clone()
-                    view=move | x| {
+                    children=move | x| {
                         view! {  <th>{x.to_string()}</th> }
                     }
                 />
@@ -127,7 +127,7 @@ where
                 <For
                     each=calc_headers
                     key=move |x| x.clone()
-                    view=move | x| {
+                    children=move | x| {
                         view! {  <th>{x.to_string()}</th> }
                     }
                 />
@@ -309,7 +309,7 @@ where
             <For
                 each=move || new_rows.get()
                 key=|row| row.id
-                view=move | Row { columns, id }| {
+                children=move | Row { columns, id }| {
                     let columns = Rc::new(columns);
                     view! {
                         <tr>
@@ -319,7 +319,7 @@ where
                                     <For
                                         each=basic_headers
                                         key=|key| key.clone()
-                                        view=move | column| {
+                                        children=move | column| {
                                             let columns1 = columns.clone();
                                             let columns2 = columns1.clone();
                                             let col_name1 = column;
@@ -341,7 +341,7 @@ where
                                     <For
                                         each=calc_headers
                                         key=|key| key.clone()
-                                        view=move | column| {
+                                        children=move | column| {
                                             let columns = columns.clone();
                                             view! {  <td>{move || columns.get(&column).map(|x| x.value.to_string())}</td> }
                                         }
@@ -485,7 +485,7 @@ where
             <For
                 each=move || basic_headers().clone()
                 key=|x| x.clone()
-                view=move | header| {
+                children=move | header| {
                     view! {  <MyInput header=header basic_signals_map=basic_signals_map/> }
                 }
             />
@@ -493,7 +493,7 @@ where
             <For
                 each=move || calc_headers().clone()
                 key=|x| x.clone()
-                view=move | header| {
+                children=move | header| {
                     view! {
                         <td>
                             {move || calc_signals_map
@@ -679,7 +679,7 @@ where
         <For
         each=each_head
         key=|x| x.0.to_string() + x.1.as_ref()
-        view=move |(primary,non_primary)| view!{
+        children=move |(primary,non_primary)| view!{
             <tr>
             <td>{let a = primary.clone();move || a.to_string()}</td>
             <td class="shapeless">" "</td>

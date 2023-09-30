@@ -73,7 +73,7 @@ pub fn Home() -> impl IntoView {
             <For
                 each=move || sheets_types_names.get().unwrap_or(Rc::from(vec![])).to_vec()
                 key=|s| s.id
-                view=move | s| {
+                children=move | s| {
                     view! {
                         <A class="button" href=format!("sheet/{}", s.id)>
                             <h1>{s.the_name}</h1>

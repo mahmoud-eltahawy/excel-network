@@ -112,7 +112,7 @@ pub fn SheetHome() -> impl IntoView {
             <For
                 each=move || bills.get().unwrap_or(Rc::from(vec![])).to_vec()
                 key=|s| s.id
-                view=move |s| {
+                children=move |s| {
                     view! {
                         <A class="button" href=format!("show/{}", s.id)>
                             {s.the_name}

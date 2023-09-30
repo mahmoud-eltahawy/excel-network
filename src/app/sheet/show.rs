@@ -1128,7 +1128,7 @@ where
         <For
             each=move || rows.get()
             key=move |row| get_row_id(row.id)
-            view=move | Row { columns, id }| {
+            children=move | Row { columns, id }| {
                 let columns = std::rc::Rc::new(columns);
                 view! {
                     <tr>
@@ -1138,7 +1138,7 @@ where
                                 <For
                                     each=basic_headers
                                     key=|key| key.clone()
-                                    view=move |header0| {
+                                    children=move |header0| {
                             let header1 = header0.clone();
                             let header2 = header1.clone();
                             let header3 = header2.clone();
@@ -1177,7 +1177,7 @@ where
                                 <For
                                     each=calc_headers
                                     key=|key| key.clone()
-                                    view=move | column| {
+                                    children=move | column| {
                                         let columns = columns.clone();
                                         view! {  <td>{move || columns.get(&column).map(|x| x.value.to_string())}</td> }
                                     }
