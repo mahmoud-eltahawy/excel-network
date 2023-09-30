@@ -119,18 +119,18 @@ where
                 <For
                     each=basic_headers
                     key=move |x| x.clone()
-                    children=move | x| {
-                        view! {  <th>{x.to_string()}</th> }
-                    }
-                />
+                    let:x
+                >
+                    <th>{x.to_string()}</th>
+                </For>
                 <th class="shapeless">"  "</th>
                 <For
                     each=calc_headers
                     key=move |x| x.clone()
-                    children=move | x| {
-                        view! {  <th>{x.to_string()}</th> }
-                    }
-                />
+                    let:x
+                >
+                    <th>{x.to_string()}</th>
+                </For>
             </tr>
         </thead>
     }
@@ -485,26 +485,24 @@ where
             <For
                 each=move || basic_headers().clone()
                 key=|x| x.clone()
-                children=move | header| {
-                    view! {  <MyInput header=header basic_signals_map=basic_signals_map/> }
-                }
-            />
+                let:header
+            >
+                <MyInput header=header basic_signals_map=basic_signals_map/>
+            </For>
             <td class="shapeless">"  "</td>
             <For
                 each=move || calc_headers().clone()
                 key=|x| x.clone()
-                children=move | header| {
-                    view! {
-                        <td>
-                            {move || calc_signals_map
-                                .get()
-                                .get(&header)
-                                .map(|x| format!("{:.2}",* x))
-                            }
-                        </td>
+                let:header
+            >
+                <td>
+                    {move || calc_signals_map
+                        .get()
+                        .get(&header)
+                        .map(|x| format!("{:.2}",* x))
                     }
-                }
-            />
+                </td>
+            </For>
         </tr>
         <tr>
             <td>
