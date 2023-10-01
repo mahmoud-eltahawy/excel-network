@@ -11,6 +11,7 @@ use models::{
     Sheet,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::str::FromStr;
 use std::{collections::HashMap, rc::Rc};
 use tauri_sys::tauri::invoke;
@@ -36,6 +37,12 @@ async fn collapse_rows(
     rows: Vec<Row<Rc<str>>>,
     row_identity: RowIdentity<Rc<str>>,
 ) -> (Vec<Row<Rc<str>>>, HashMap<Uuid, Vec<Uuid>>) {
+    let row_to_key = |x: &Row<Rc<str>>| {
+        x.columns
+            .get(&row_identity.id)
+            .map(|x| Rc::from(x.value.to_string()))
+            .unwrap_or(Rc::from(""))
+    };
     fn stack_rows(rows: Vec<Row<Rc<str>>>, rows_ids_id: &Rc<str>) -> Vec<Vec<Row<Rc<str>>>> {
         let key = |x: &Row<Rc<str>>| {
             x.columns
@@ -111,9 +118,23 @@ async fn collapse_rows(
         }
     }
 
+    let (repeated, unique): (Vec<_>, Vec<_>) = {
+        let mut unique_tester = HashSet::<Rc<str>>::new();
+        let repeated = rows
+            .iter()
+            .map(row_to_key)
+            .collect::<Vec<Rc<str>>>()
+            .into_iter()
+            .filter(|x| !unique_tester.insert(x.clone()))
+            .collect::<Vec<_>>();
+        rows.into_iter()
+            .partition(|x| repeated.contains(&row_to_key(x)))
+    };
+
     let mut collapsed_rows = Vec::<Row<Rc<str>>>::new();
     let mut collapsed_rows_ids = HashMap::<Uuid, Vec<Uuid>>::new();
-    for rows in stack_rows(rows, &row_identity.id) {
+    let stacked_rows = stack_rows(repeated, &row_identity.id);
+    for rows in stacked_rows {
         let columns = row_identity
             .diff_ops
             .iter()
@@ -134,7 +155,10 @@ async fn collapse_rows(
         collapsed_rows.push(Row { id, columns });
         collapsed_rows_ids.insert(id, rows.iter().map(|x| x.id).collect::<Vec<_>>());
     }
-    (collapsed_rows, collapsed_rows_ids)
+    (
+        collapsed_rows.into_iter().chain(unique).collect(),
+        collapsed_rows_ids,
+    )
 }
 #[component]
 fn ColumnEdit<F1, F2, F3>(mode: F1, cancel: F2, push_to_modified: F3) -> impl IntoView
