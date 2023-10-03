@@ -36,6 +36,7 @@ use itertools::Itertools;
 async fn collapse_rows(
     rows: Vec<Row<Rc<str>>>,
     row_identity: RowIdentity<Rc<str>>,
+    priorities: Rc<[Rc<str>]>,
 ) -> (Vec<Row<Rc<str>>>, HashMap<Uuid, Vec<Uuid>>) {
     let row_to_key = |x: &Row<Rc<str>>| {
         x.columns
@@ -155,6 +156,7 @@ async fn collapse_rows(
         collapsed_rows.push(Row { id, columns });
         collapsed_rows_ids.insert(id, rows.iter().map(|x| x.id).collect::<Vec<_>>());
     }
+    collapsed_rows.sort_rows(priorities);
     (
         collapsed_rows.into_iter().chain(unique).collect(),
         collapsed_rows_ids,
@@ -330,20 +332,8 @@ pub fn ShowSheet() -> impl IntoView {
             if offset <= rows_number {
                 rows_offset.update(|x| *x += FETCH_LIMIT);
             } else {
-                let row_identity = rows_ids_resource.get().unwrap_or(RowIdentity {
-                    id: Rc::from(""),
-                    diff_ops: HashMap::new(),
-                });
-
                 let sheet_priorities = sheet_priorities_resource.get().unwrap_or(Rc::from([]));
 
-                if is_collapsable() {
-                    let (mut collapsed_rows, collapsed_rows_ids) =
-                        collapse_rows(rows_accumalator.get(), row_identity).await;
-                    collapsed_rows.sort_rows(sheet_priorities.clone());
-                    rows_collapser.set(collapsed_rows);
-                    rows_collapsed_ids.set(collapsed_rows_ids);
-                }
                 rows_accumalator.update(|xs| xs.sort_rows(sheet_priorities));
             }
             if !new_rows.is_empty() {
@@ -355,6 +345,28 @@ pub fn ShowSheet() -> impl IntoView {
             }
         },
     );
+
+    Effect::new(move |_| {
+        logging::log!("ran");
+        if is_collapsable() && rows_offset.get() > rows_number.get() {
+            logging::log!("ran and done");
+            let sheet_priorities = sheet_priorities_resource.get().unwrap_or(Rc::from([]));
+            let row_identity = rows_ids_resource.get().unwrap_or(RowIdentity {
+                id: Rc::from(""),
+                diff_ops: HashMap::new(),
+            });
+            spawn_local(async move {
+                let (collapsed_rows, collapsed_rows_ids) = collapse_rows(
+                    rows_accumalator.get(),
+                    row_identity,
+                    sheet_priorities.clone(),
+                )
+                .await;
+                rows_collapser.set(collapsed_rows);
+                rows_collapsed_ids.set(collapsed_rows_ids);
+            });
+        }
+    });
 
     let get_initial_sheet = move || {
         let s = sheet_resource.get().map(|x| x.map(|x| x.0));
