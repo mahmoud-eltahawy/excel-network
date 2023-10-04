@@ -640,18 +640,9 @@ pub fn ShowSheet() -> impl IntoView {
             .unwrap_or_default()
     });
 
-    const SAVE_EDITS_TOTAL_TASKS: i32 = 6;
-
-    let save_edits_successes = RwSignal::from(0);
-    let save_edits_dones = RwSignal::from(0);
-
-    let save_edits = move |_| {
-        let Some((sheetid, sheetname)) = get_initial_sheet().map(|x| (x.id, x.sheet_name)) else {
-            return;
-        };
-        let the_sheet_name = sheet_name.get();
+    let merge_collapse_and_expanded_deleted_rows = move || {
         let rows_collapsed_ids = rows_collapsed_ids.get();
-        let the_deleted_rows = expanded_deleted_rows
+        expanded_deleted_rows
             .get()
             .into_iter()
             .chain(
@@ -664,7 +655,20 @@ pub fn ShowSheet() -> impl IntoView {
                     .into_iter()
                     .collect::<Vec<_>>(),
             )
-            .collect::<HashSet<_>>();
+            .collect::<HashSet<_>>()
+    };
+
+    const SAVE_EDITS_TOTAL_TASKS: i32 = 6;
+
+    let save_edits_successes = RwSignal::from(0);
+    let save_edits_dones = RwSignal::from(0);
+
+    let save_edits = move |_| {
+        let Some((sheetid, sheetname)) = get_initial_sheet().map(|x| (x.id, x.sheet_name)) else {
+            return;
+        };
+        let the_sheet_name = sheet_name.get();
+        let the_deleted_rows = merge_collapse_and_expanded_deleted_rows();
         let the_added_rows = added_rows.get();
         let new_row_primary_columns = modified_primary_columns
             .get()
@@ -850,7 +854,7 @@ pub fn ShowSheet() -> impl IntoView {
             .unwrap_or_default();
         rows_accumalator.update_untracked(|xs| {
             xs.extend(added_rows.get());
-            let deleted = expanded_deleted_rows.get();
+            let deleted = merge_collapse_and_expanded_deleted_rows();
             xs.retain(|x| !deleted.contains(&x.id));
             let rows: HashMap<Uuid, Vec<ColumnIdentity>> = {
                 let modified_columns = modified_columns.get().into_iter().chain(
