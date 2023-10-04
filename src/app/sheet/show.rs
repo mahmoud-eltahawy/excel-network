@@ -1147,8 +1147,13 @@ where
                 .unwrap_or_default()
                 .as_str()
     };
-    view! {
-    <>
+    #[inline(always)]
+    #[component]
+    fn ShowColumnEditor(
+        edit_column: RwSignal<Option<ColumnIdentity>>,
+        modified_columns: RwSignal<Vec<ColumnIdentity>>,
+    ) -> impl IntoView {
+        view! {
             <Show
                 when=move || edit_column.get().is_some()
                 fallback=|| {
@@ -1161,89 +1166,184 @@ where
                     push_to_modified=move |col| modified_columns.update(|xs| xs.push(col))
                 />
             </Show>
+        }
+    }
+    #[inline(always)]
+    #[component]
+    fn BasicColumns<BH>(
+        basic_headers: BH,
+        modified_columns: RwSignal<Vec<ColumnIdentity>>,
+        row: Row<Rc<str>>,
+        edit_mode: RwSignal<EditState>,
+        edit_column: RwSignal<Option<ColumnIdentity>>,
+    ) -> impl IntoView
+    where
+        BH: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
+    {
+        let Row { id, columns } = row;
+        let columns = Rc::from(columns);
+
+        let original = |header: Rc<str>, columns: Rc<HashMap<Rc<str>, Column<Rc<str>>>>| {
+            let header = header.clone();
+            let columns = columns.clone();
+            move || columns.get(&header).map(|x| x.value.to_string())
+        };
+
+        let on_dbl_click = move |header: Rc<str>,
+                                 columns: Rc<HashMap<Rc<str>, Column<Rc<str>>>>,
+                                 edit_column: RwSignal<Option<ColumnIdentity>>,
+                                 edit_mode: RwSignal<EditState>| {
+            let header = header.clone();
+            let columns = columns.clone();
+            move |_| {
+                if matches!(edit_mode.get(), EditState::NonePrimary) {
+                    edit_column.set(Some(ColumnIdentity {
+                        row_id: id,
+                        header: header.clone(),
+                        value: columns
+                            .get(&header)
+                            .map(|x| x.value.clone())
+                            .unwrap_or(ColumnValue::String(Some(Rc::from("Empty")))),
+                    }))
+                }
+            }
+        };
+
+        let edited =
+            |header: Rc<str>, modified_columns: RwSignal<Vec<ColumnIdentity>>, id: Uuid| {
+                let header = header.clone();
+                move || {
+                    modified_columns
+                        .get()
+                        .into_iter()
+                        .filter(|x| x.row_id == id && x.header == header)
+                        .collect::<Vec<_>>()
+                        .first()
+                        .map(|x| format!(" > {}", x.value.to_string()))
+                }
+            };
+
+        view! {
+        <For
+            each=basic_headers
+            key=|key| key.clone()
+            children=move |header| {
+                let on_dbl_click = on_dbl_click(header.clone(),columns.clone(),edit_column,edit_mode);
+                view! { <td
+                        style="cursor: pointer"
+                        on:dblclick=on_dbl_click
+                     >{
+                        original(header.clone(),columns.clone())
+                    }" "{
+                        edited(header.clone(),modified_columns,id)
+                    }</td>
+                }
+            }
+        />
+        }
+    }
+
+    #[inline(always)]
+    #[component]
+    fn CalcColumns<CH>(
+        calc_headers: CH,
+        columns: Rc<HashMap<Rc<str>, Column<Rc<str>>>>,
+    ) -> impl IntoView
+    where
+        CH: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
+    {
+        let get_column = {
+            let columns = columns.clone();
+            move |header: &Rc<str>| columns.get(header).map(|x| x.value.to_string())
+        };
+        view! {
+            <For
+                each=calc_headers
+                key=|key| key.clone()
+                children=move |header| view! {
+                    <td>{get_column(&header)}</td>
+                }
+            />
+        }
+    }
+
+    #[inline(always)]
+    #[component]
+    fn RowEditor<FD, ID>(
+        modified_columns: RwSignal<Vec<ColumnIdentity>>,
+        edit_mode: RwSignal<EditState>,
+        id: Uuid,
+        delete_row: FD,
+        is_deleted: ID,
+    ) -> impl IntoView
+    where
+        FD: Fn(Uuid) + 'static + Clone + Copy,
+        ID: Fn(Uuid) -> bool + 'static + Clone + Copy,
+    {
+        let deleted = move || match is_deleted(id) {
+            true => "P",
+            false => "X",
+        };
+        let on_click = move |_| {
+            if modified_columns.get().iter().any(|x| x.row_id == id) {
+                modified_columns.update(|xs| xs.retain(|x| x.row_id != id))
+            } else {
+                delete_row(id)
+            }
+        };
+        view! {
+
+            <Show
+                when=move || matches!(edit_mode.get(),EditState::NonePrimary)
+                fallback=|| view! {}
+            >
+                <td>
+                    <button on:click=on_click>
+                        {deleted}
+                    </button>
+                </td>
+            </Show>
+
+        }
+    }
+
+    let children = move |Row { columns, id }| {
+        let columns0 = columns.clone().into_iter().collect();
+        let columns = Rc::new(columns);
+        view! {
+            <tr>
+                <BasicColumns
+                    basic_headers=basic_headers
+                    modified_columns=modified_columns
+                    row=Row{columns:columns0,id}
+                    edit_mode=edit_mode
+                    edit_column=edit_column
+                />
+                <td class="shapeless">"  "</td>
+                <CalcColumns
+                    calc_headers=calc_headers
+                    columns=columns
+                />
+                <RowEditor
+                    modified_columns=modified_columns
+                    is_deleted=is_deleted
+                    delete_row=delete_row
+                    id=id
+                    edit_mode=edit_mode
+                 />
+            </tr>
+        }
+    };
+    view! {
+    <>
+        <ShowColumnEditor
+            modified_columns=modified_columns
+            edit_column=edit_column
+        />
         <For
             each=move || rows.get()
             key=move |row| get_row_id(row.id)
-            children=move | Row { columns, id }| {
-                let columns = std::rc::Rc::new(columns);
-                view! {
-                    <tr>
-                        {
-                            let columns = columns.clone();
-                            view! {
-                                <For
-                                    each=basic_headers
-                                    key=|key| key.clone()
-                                    children=move |header0| {
-                            let header1 = header0.clone();
-                            let header2 = header1.clone();
-                            let header3 = header2.clone();
-                            let columns1 = columns.clone();
-                            let columns2 = columns1.clone();
-                        view! { <td
-                                style="cursor: pointer"
-                                 on:dblclick=move |_| if matches!(edit_mode.get(),EditState::NonePrimary) {
-                            edit_column.set(Some(ColumnIdentity{
-                            row_id:id,
-                            header:header1.clone(),
-                            value :columns1
-                                .get(&header2)
-                                        .map(|x| x.value.clone())
-                                        .unwrap_or(ColumnValue::String(Some(Rc::from("Empty"))))
-                            }))
-                         }
-                         >{
-                        move || columns2
-                        .get(&header0)
-                        .map(|x| x.value.to_string())
-                        } {
-                        move || modified_columns.get()
-                        .into_iter().filter(|x| x.row_id == id && x.header ==header3)
-                        .collect::<Vec<_>>()
-                        .first()
-                        .map(|x| format!(" > {}",x.value.to_string()))
-                        }</td>
-                    }
-                                    }
-                                />
-                            }
-                        } <td class="shapeless">"  "</td> {
-                            let columns = columns.clone();
-                            view! {
-                                <For
-                                    each=calc_headers
-                                    key=|key| key.clone()
-                                    children=move | column| {
-                                        let columns = columns.clone();
-                                        view! {  <td>{move || columns.get(&column).map(|x| x.value.to_string())}</td> }
-                                    }
-                                />
-                            }
-                        }
-                        <Show
-                            when=move || matches!(edit_mode.get(),EditState::NonePrimary)
-                            fallback=|| {
-                                view! {  <></> }
-                            }
-                        >
-                            <td>
-                <button on:click=move |_| {
-                    if modified_columns
-                    .get()
-                    .iter()
-                    .any(|x| x.row_id == id) {
-                    modified_columns.update(|xs| xs.retain(|x| x.row_id != id))
-                    } else {
-                    delete_row(id)
-                    }
-                }>
-                                    {move || if is_deleted(id) { "P" } else { "X" }}
-                                </button>
-                            </td>
-                        </Show>
-                    </tr>
-                }
-            }
+            children=children
         />
     </>
     }
