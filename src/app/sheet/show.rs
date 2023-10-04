@@ -2,13 +2,13 @@ use crate::app::sheet::shared::{
     merge_primary_row_headers, new_id, PrimaryRowContent, PrimaryRowEditor,
 };
 use crate::Id;
-use chrono::NaiveDate;
+use chrono::{Local, NaiveDate};
 use leptos::spawn_local;
 use leptos::{ev::MouseEvent, *};
 use leptos_router::*;
 use models::{
-    Column, ColumnValue, ConfigValue, HeaderGetter, IdentityDiffsOps, Row, RowIdentity, RowsSort,
-    Sheet,
+    Column, ColumnConfig, ColumnValue, ConfigValue, HeaderGetter, IdentityDiffsOps, Row,
+    RowIdentity, RowsSort, Sheet,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -452,6 +452,19 @@ pub fn ShowSheet() -> impl IntoView {
             .cloned()
             .collect::<Vec<_>>()
     });
+
+    let get_header_type = move |header: String| {
+        let list = basic_columns
+            .get()
+            .into_iter()
+            .filter(|x| match x {
+                ColumnConfig::String(v) | ColumnConfig::Float(v) | ColumnConfig::Date(v) => {
+                    v.header == header
+                }
+            })
+            .collect::<Vec<_>>();
+        list.first().cloned()
+    };
 
     let calc_columns = Memo::new(move |_| {
         sheet_headers_resource
@@ -1075,6 +1088,7 @@ pub fn ShowSheet() -> impl IntoView {
                         edit_mode=edit_mode
                         is_deleted=is_deleted
                         modified_columns=modified_columns
+                        get_column_type=get_header_type
                     />
             <Show
             when=move || !added_rows.get().is_empty()
@@ -1155,7 +1169,7 @@ where
 }
 
 #[component]
-fn ShowRows<BH, CH, FD, ID>(
+fn ShowRows<BH, CH, FD, ID, BT>(
     basic_headers: BH,
     calc_headers: CH,
     delete_row: FD,
@@ -1164,12 +1178,14 @@ fn ShowRows<BH, CH, FD, ID>(
     rows: Memo<Vec<Row<Rc<str>>>>,
     edit_mode: RwSignal<EditState>,
     modified_columns: RwSignal<Vec<ColumnIdentity>>,
+    get_column_type: BT,
 ) -> impl IntoView
 where
     BH: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
     CH: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
     ID: Fn(Uuid) -> bool + 'static + Clone + Copy,
     FD: Fn(Uuid) + 'static + Clone + Copy,
+    BT: Fn(String) -> Option<ColumnConfig> + 'static + Clone + Copy,
 {
     let edit_column = RwSignal::from(None::<ColumnIdentity>);
 
@@ -1205,8 +1221,9 @@ where
     }
     #[inline(always)]
     #[component]
-    fn BasicColumns<BH>(
+    fn BasicColumns<BH, BT>(
         basic_headers: BH,
+        get_column_type: BT,
         modified_columns: RwSignal<Vec<ColumnIdentity>>,
         row: Row<Rc<str>>,
         edit_mode: RwSignal<EditState>,
@@ -1214,6 +1231,7 @@ where
     ) -> impl IntoView
     where
         BH: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
+        BT: Fn(String) -> Option<ColumnConfig> + 'static + Clone + Copy,
     {
         let Row { id, columns } = row;
         let columns = Rc::from(columns);
@@ -1231,14 +1249,19 @@ where
             let header = header.clone();
             let columns = columns.clone();
             move |_| {
+                let or: ColumnValue<Rc<str>> = match get_column_type(header.to_string()) {
+                    Some(ColumnConfig::String(_)) => ColumnValue::String(Some(Rc::from("empty"))),
+                    Some(ColumnConfig::Float(_)) => ColumnValue::Float(0.0),
+                    Some(ColumnConfig::Date(_)) => {
+                        ColumnValue::Date(Some(Local::now().date_naive()))
+                    }
+                    _ => ColumnValue::String(Some(Rc::from("EMPTY"))),
+                };
                 if matches!(edit_mode.get(), EditState::NonePrimary) {
                     edit_column.set(Some(ColumnIdentity {
                         row_id: id,
                         header: header.clone(),
-                        value: columns
-                            .get(&header)
-                            .map(|x| x.value.clone())
-                            .unwrap_or(ColumnValue::String(Some(Rc::from("Empty")))),
+                        value: columns.get(&header).map(|x| x.value.clone()).unwrap_or(or),
                     }))
                 }
             }
@@ -1353,6 +1376,7 @@ where
                     row=Row{columns:columns0,id}
                     edit_mode=edit_mode
                     edit_column=edit_column
+                    get_column_type=get_column_type
                 />
                 <td class="shapeless">"  "</td>
                 <CalcColumns
