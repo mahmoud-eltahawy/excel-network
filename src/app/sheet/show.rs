@@ -223,7 +223,8 @@ where
 pub fn ShowSheet() -> impl IntoView {
     let edit_mode = RwSignal::from(EditState::None);
     let sheet_name = RwSignal::<Rc<str>>::from(Rc::from(""));
-    let deleted_rows = RwSignal::from(Vec::<Uuid>::new());
+    let expanded_deleted_rows = RwSignal::from(Vec::<Uuid>::new());
+    let collapsed_deleted_rows = RwSignal::from(Vec::<Uuid>::new());
     let added_rows = RwSignal::from(Vec::<Row<Rc<str>>>::new());
     let modified_columns = RwSignal::from(Vec::<ColumnIdentity>::new());
     let modified_primary_columns = RwSignal::from(HashMap::<Rc<str>, Column<Rc<str>>>::new());
@@ -564,19 +565,34 @@ pub fn ShowSheet() -> impl IntoView {
         })
     };
 
-    let is_deleted = move |id| deleted_rows.get().contains(&id);
-    let delete_row = move |id| {
-        if deleted_rows.get().contains(&id) {
-            deleted_rows.update(|xs| xs.retain(|x| *x != id));
+    let is_deleted = move |id| {
+        if rows_collapsed_ids.get().get(&id).is_some() {
+            collapsed_deleted_rows.get().contains(&id)
         } else {
-            deleted_rows.update(|xs| xs.push(id));
+            expanded_deleted_rows.get().contains(&id)
+        }
+    };
+    let delete_row = move |id| {
+        if rows_collapsed_ids.get().get(&id).is_some() {
+            if collapsed_deleted_rows.get().contains(&id) {
+                collapsed_deleted_rows.update(|xs| xs.retain(|x| *x != id));
+            } else {
+                collapsed_deleted_rows.update(|xs| xs.push(id));
+            }
+        } else {
+            if expanded_deleted_rows.get().contains(&id) {
+                expanded_deleted_rows.update(|xs| xs.retain(|x| *x != id));
+            } else {
+                expanded_deleted_rows.update(|xs| xs.push(id));
+            }
         }
     };
     let delete_new_row = move |id| added_rows.update(|xs| xs.retain(|x| x.id != id));
 
     let has_anything_changed = move || {
         !sheet_name.get().is_empty()
-            || !deleted_rows.get().is_empty()
+            || !expanded_deleted_rows.get().is_empty()
+            || !collapsed_deleted_rows.get().is_empty()
             || !added_rows.get().is_empty()
             || !modified_columns.get().is_empty()
             || !modified_primary_columns.get().is_empty()
@@ -586,7 +602,8 @@ pub fn ShowSheet() -> impl IntoView {
     let revert_all_edits = move || {
         edit_mode.set(EditState::None);
         sheet_name.set(Rc::from(""));
-        deleted_rows.set(Vec::new());
+        expanded_deleted_rows.set(Vec::new());
+        collapsed_deleted_rows.set(Vec::new());
         added_rows.set(Vec::new());
         modified_columns.set(Vec::new());
         modified_primary_columns.set(HashMap::new());
@@ -633,7 +650,21 @@ pub fn ShowSheet() -> impl IntoView {
             return;
         };
         let the_sheet_name = sheet_name.get();
-        let the_deleted_rows = deleted_rows.get();
+        let rows_collapsed_ids = rows_collapsed_ids.get();
+        let the_deleted_rows = expanded_deleted_rows
+            .get()
+            .into_iter()
+            .chain(
+                collapsed_deleted_rows
+                    .get()
+                    .into_iter()
+                    .flat_map(|id| rows_collapsed_ids.get(&id))
+                    .cloned()
+                    .fold(Vec::new(), |acc, ids| acc.into_iter().chain(ids).collect())
+                    .into_iter()
+                    .collect::<Vec<_>>(),
+            )
+            .collect::<HashSet<_>>();
         let the_added_rows = added_rows.get();
         let new_row_primary_columns = modified_primary_columns
             .get()
@@ -731,7 +762,7 @@ pub fn ShowSheet() -> impl IntoView {
         #[derive(Serialize, Deserialize)]
         struct RowsDeleteArg {
             sheetid: Uuid,
-            rowsids: Vec<Uuid>,
+            rowsids: HashSet<Uuid>,
         }
         spawn_my_local_process(
             !the_deleted_rows.is_empty(),
@@ -819,7 +850,7 @@ pub fn ShowSheet() -> impl IntoView {
             .unwrap_or_default();
         rows_accumalator.update_untracked(|xs| {
             xs.extend(added_rows.get());
-            let deleted = deleted_rows.get();
+            let deleted = expanded_deleted_rows.get();
             xs.retain(|x| !deleted.contains(&x.id));
             let rows: HashMap<Uuid, Vec<ColumnIdentity>> = {
                 let modified_columns = modified_columns.get().into_iter().chain(
