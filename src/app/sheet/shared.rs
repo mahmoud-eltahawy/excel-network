@@ -291,13 +291,21 @@ where
             .filter(|x| x.id != sheet_id())
             .collect::<Vec<_>>()
     });
-    view! {
-        <>
+
+    #[inline(always)]
+    #[component]
+    fn ShowColumnEdit<FP>(
+        edit_column: RwSignal<Option<EditColumn>>,
+        rows: RwSignal<Vec<Row<Rc<str>>>>,
+        priorities: FP,
+    ) -> impl IntoView
+    where
+        FP: Fn() -> Rc<[Rc<str>]> + 'static + Clone + Copy,
+    {
+        view! {
             <Show
                 when=move || edit_column.get().is_some()
-                fallback=|| {
-                    view! {  <></> }
-                }
+                fallback=|| view! {}
             >
                 <ColumnEdit
                     mode=move || edit_column.get().unwrap()
@@ -306,53 +314,105 @@ where
                     priorities=priorities
                 />
             </Show>
+        }
+    }
+
+    #[inline(always)]
+    #[component]
+    fn BasicColumns<BH>(
+        basic_headers: BH,
+        columns: Rc<HashMap<Rc<str>, Column<Rc<str>>>>,
+        edit_column: RwSignal<Option<EditColumn>>,
+        id: Uuid,
+    ) -> impl IntoView
+    where
+        BH: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
+    {
+        let children = move |header: Rc<str>| {
+            let on_dblclick = {
+                let columns = columns.clone();
+                let header = header.clone();
+                move |_| edit_column.set(Some((header.clone(), id, columns.clone())))
+            };
+            let content = {
+                let columns = columns.clone();
+                let header = header.clone();
+                move || columns.get(&header).map(|x| x.value.to_string())
+            };
+            view! {
+                <td
+                    style="cursor: pointer"
+                    on:dblclick=on_dblclick
+                >
+                    {content}
+                </td>
+            }
+        };
+
+        view! {
+            <For
+                each=basic_headers
+                key=|key| key.clone()
+                children=children
+            />
+        }
+    }
+
+    #[inline(always)]
+    #[component]
+    fn CalcColumn<CH>(
+        calc_headers: CH,
+        columns: Rc<HashMap<Rc<str>, Column<Rc<str>>>>,
+    ) -> impl IntoView
+    where
+        CH: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
+    {
+        let children = move |column| {
+            let columns = columns.clone();
+            let content = move || columns.get(&column).map(|x| x.value.to_string());
+            view! {  <td>{content}</td> }
+        };
+        view! {
+            <For
+                each=calc_headers
+                key=|key| key.clone()
+                children=children
+            />
+        }
+    }
+    let children = move |Row { columns, id }| {
+        let columns = Rc::new(columns);
+        view! {
+            <tr>
+                <BasicColumns
+                    basic_headers=basic_headers
+                    columns=columns.clone()
+                    edit_column=edit_column
+                    id=id
+                />
+                <td class="shapeless">"  "</td>
+                <CalcColumn
+                    calc_headers=calc_headers
+                    columns=columns
+                />
+                <td>
+                    <button on:click=move |_| delete_row(id)>"X"</button>
+                </td>
+            </tr>
+        }
+    };
+
+    view! {
+        <>
+            <ShowColumnEdit
+                edit_column=edit_column
+                rows=rows
+                priorities=priorities
+            />
             <For
                 each=move || new_rows.get()
                 key=|row| row.id
-                children=move | Row { columns, id }| {
-                    let columns = Rc::new(columns);
-                    view! {
-                        <tr>
-                            {
-                                let columns = columns.clone();
-                                view! {
-                                    <For
-                                        each=basic_headers
-                                        key=|key| key.clone()
-                                        children=move | column| {
-                                            let columns1 = columns.clone();
-                                            let columns2 = columns1.clone();
-                                            let col_name1 = column;
-                                            let col_name2 = col_name1.clone();
-                                            view! {
-                                                <td
-                                                    style="cursor: pointer"
-                                                    on:dblclick=move |_| edit_column.set(Some((col_name1.clone(), id, columns1.clone())))
-                                                >
-                                                    {move || columns2.get(&col_name2).map(|x| x.value.to_string())}
-                                                </td>
-                                            }
-                                        }
-                                    />
-                                }
-                            } <td class="shapeless">"  "</td> {
-                                let columns = columns.clone();
-                                view! {
-                                    <For
-                                        each=calc_headers
-                                        key=|key| key.clone()
-                                        children=move | column| {
-                                            let columns = columns.clone();
-                                            view! {  <td>{move || columns.get(&column).map(|x| x.value.to_string())}</td> }
-                                        }
-                                    />
-                                }
-                            } <td>
-                                <button on:click=move |_| delete_row(id)>"X"</button>
-                            </td>
-                        </tr>
-                    }
-                }
+                children=children
             />
         </>
     }
