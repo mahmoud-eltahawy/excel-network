@@ -1103,6 +1103,7 @@ pub fn ShowSheet() -> impl IntoView {
                         rows=added_rows
                         sheet_id=move ||get_initial_sheet().map(|x| x.id).unwrap_or_default()
                         priorities=move || sheet_priorities_resource.get().unwrap_or(Rc::from([]))
+                        get_column_type=get_header_type
                     />
                     <Show
                         when=move || matches!(edit_mode.get(),EditState::NonePrimary)

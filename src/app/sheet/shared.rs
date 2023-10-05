@@ -137,18 +137,21 @@ where
 }
 
 #[component]
-fn ColumnEdit<F1, F2, F3>(
+fn ColumnEdit<F1, F2, F3, F4>(
     mode: F1,
     cancel: F2,
     priorities: F3,
+    get_column_type: F4,
     rows: RwSignal<Vec<Row<Rc<str>>>>,
 ) -> impl IntoView
 where
     F1: Fn() -> (Rc<str>, Uuid, Rc<HashMap<Rc<str>, Column<Rc<str>>>>) + 'static,
     F2: Fn() + 'static + Clone + Copy,
     F3: Fn() -> Rc<[Rc<str>]> + 'static + Clone + Copy,
+    F4: Fn(String) -> Option<ColumnConfig> + 'static + Clone + Copy,
 {
     let (header, id, map) = mode();
+
     let column_value = RwSignal::from(map.clone().get(&header).map(|x| x.value.clone()));
     let top = RwSignal::from(None::<usize>);
     let down = RwSignal::from(None::<usize>);
@@ -231,14 +234,16 @@ where
         top.set(None);
         cancel()
     };
+    let input_type = match get_column_type(header.to_string()) {
+        Some(ColumnConfig::Float(_)) => "number",
+        Some(ColumnConfig::Date(_)) => "date",
+        _ => "text",
+    };
+
     view! {
         <div class="popup">
             <input
-                type=move || match column_value.get() {
-                    Some(ColumnValue::Float(_)) => "number",
-                    Some(ColumnValue::Date(_)) => "date",
-                    _ => "text",
-                }
+                type=input_type
                 placeholder=move || {
                     format!(
                         "{} ({})", "القيمة الحالية", column_value.get().map(| x | x
@@ -268,12 +273,13 @@ where
 }
 
 #[component]
-pub fn ShowNewRows<BH, CH, FD, FP, FI>(
+pub fn ShowNewRows<BH, CH, FD, FP, FI, BT>(
     basic_headers: BH,
     calc_headers: CH,
     delete_row: FD,
     priorities: FP,
     sheet_id: FI,
+    get_column_type: BT,
     rows: RwSignal<Vec<Row<Rc<str>>>>,
 ) -> impl IntoView
 where
@@ -282,6 +288,7 @@ where
     FP: Fn() -> Rc<[Rc<str>]> + 'static + Clone + Copy,
     FD: Fn(Uuid) + 'static + Clone + Copy,
     FI: Fn() -> Uuid + 'static + Clone + Copy,
+    BT: Fn(String) -> Option<ColumnConfig> + 'static + Clone + Copy,
 {
     type EditColumn = (Rc<str>, Uuid, Rc<HashMap<Rc<str>, Column<Rc<str>>>>);
     let edit_column = RwSignal::from(None::<EditColumn>);
@@ -294,13 +301,15 @@ where
 
     #[inline(always)]
     #[component]
-    fn ShowColumnEdit<FP>(
+    fn ShowColumnEdit<FP, BT>(
         edit_column: RwSignal<Option<EditColumn>>,
         rows: RwSignal<Vec<Row<Rc<str>>>>,
         priorities: FP,
+        get_column_type: BT,
     ) -> impl IntoView
     where
         FP: Fn() -> Rc<[Rc<str>]> + 'static + Clone + Copy,
+        BT: Fn(String) -> Option<ColumnConfig> + 'static + Clone + Copy,
     {
         view! {
             <Show
@@ -312,6 +321,7 @@ where
                     cancel=move || edit_column.set(None)
                     rows=rows
                     priorities=priorities
+                    get_column_type=get_column_type
                 />
             </Show>
         }
@@ -408,6 +418,7 @@ where
                 edit_column=edit_column
                 rows=rows
                 priorities=priorities
+                get_column_type=get_column_type
             />
             <For
                 each=move || new_rows.get()

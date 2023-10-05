@@ -1,6 +1,6 @@
 use leptos::*;
 use leptos_router::*;
-use models::{Column, ConfigValue, HeaderGetter, Row, RowsSort};
+use models::{Column, ColumnConfig, ConfigValue, HeaderGetter, Row, RowsSort};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
@@ -79,6 +79,19 @@ pub fn AddSheet() -> impl IntoView {
             })
             .collect::<Vec<_>>()
     });
+
+    let get_header_type = move |header: String| {
+        let list = basic_columns
+            .get()
+            .into_iter()
+            .filter(|x| match x {
+                ColumnConfig::String(v) | ColumnConfig::Float(v) | ColumnConfig::Date(v) => {
+                    v.header == header
+                }
+            })
+            .collect::<Vec<_>>();
+        list.first().cloned()
+    };
 
     let calc_columns = Memo::new(move |_| {
         sheet_headers_resource
@@ -248,6 +261,7 @@ pub fn AddSheet() -> impl IntoView {
                         rows=rows
                         sheet_id=move || sheet_id_resource.get().unwrap_or_default()
                         priorities=move || sheet_priorities_resource.get().unwrap_or(Rc::from([]))
+                        get_column_type=get_header_type
                     />
                     <InputRow
                         basic_headers=basic_headers
