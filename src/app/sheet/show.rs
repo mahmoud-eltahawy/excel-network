@@ -33,6 +33,7 @@ const FETCH_LIMIT: i64 = 7;
 
 use itertools::Itertools;
 
+#[inline(always)]
 async fn collapse_rows(
     rows: Vec<Row<Rc<str>>>,
     row_identity: RowIdentity<Rc<str>>,
@@ -44,6 +45,7 @@ async fn collapse_rows(
             .map(|x| Rc::from(x.value.to_string()))
             .unwrap_or(Rc::from(""))
     };
+    #[inline(always)]
     fn stack_rows(rows: Vec<Row<Rc<str>>>, rows_ids_id: &Rc<str>) -> Vec<Vec<Row<Rc<str>>>> {
         let key = |x: &Row<Rc<str>>| {
             x.columns
@@ -159,6 +161,7 @@ async fn collapse_rows(
     )
 }
 
+#[inline(always)]
 #[component]
 pub fn ShowSheet() -> impl IntoView {
     let edit_mode = RwSignal::from(EditState::None);
@@ -212,6 +215,16 @@ pub fn ShowSheet() -> impl IntoView {
         },
     );
 
+    let get_row_identity = move || {
+        rows_ids_resource.get().unwrap_or(RowIdentity {
+            id: Rc::from(""),
+            diff_ops: HashMap::new(),
+        })
+    };
+
+    let get_column_collapse_pattern =
+        move |header: Rc<str>| get_row_identity().diff_ops.get(&header).cloned();
+
     let sheet_id = move || {
         params.with(|params| match params.get("sheet_id") {
             Some(id) => Uuid::from_str(id).ok(),
@@ -242,13 +255,7 @@ pub fn ShowSheet() -> impl IntoView {
 
     const RENDER_EVERY_CALLS_NUMBER: i64 = 3;
 
-    let is_collapsable = move || {
-        !rows_ids_resource
-            .get()
-            .map(|x| x.id)
-            .unwrap_or(Rc::from(""))
-            .is_empty()
-    };
+    let is_collapsable = move || !get_row_identity().id.is_empty();
 
     let sheet_rows_resource = Resource::new(
         move || rows_offset.get(),
@@ -292,10 +299,7 @@ pub fn ShowSheet() -> impl IntoView {
     Effect::new(move |_| {
         if is_collapsable() && rows_offset.get() > rows_number.get() {
             let sheet_priorities = sheet_priorities_resource.get().unwrap_or(Rc::from([]));
-            let row_identity = rows_ids_resource.get().unwrap_or(RowIdentity {
-                id: Rc::from(""),
-                diff_ops: HashMap::new(),
-            });
+            let row_identity = get_row_identity();
             spawn_local(async move {
                 let (collapsed_rows, collapsed_rows_ids) = collapse_rows(
                     rows_accumalator.get(),
@@ -334,9 +338,14 @@ pub fn ShowSheet() -> impl IntoView {
             RenderMode::None | RenderMode::Accumalate => render_mode.set(RenderMode::Collapse),
             RenderMode::Collapse => render_mode.set(RenderMode::Accumalate),
         };
+        let content = move || match render_mode.get() {
+            RenderMode::None => "(O)",
+            RenderMode::Accumalate => "><",
+            RenderMode::Collapse => "<>",
+        };
         view! {
             <Show when=is_collapsble>
-                <button on:click=toggle>"<>"</button>
+                <button on:click=toggle>{content}</button>
             </Show>
         }
     }
@@ -647,7 +656,8 @@ pub fn ShowSheet() -> impl IntoView {
             .get()
             .into_iter()
             .filter(|ColumnIdentity { row_id, header, .. }| {
-                get_rendered_rows()
+                rows_accumalator
+                    .get()
                     .iter()
                     .filter(|x| x.id == *row_id)
                     .any(|x| x.columns.keys().any(|x| x != header))
@@ -660,7 +670,8 @@ pub fn ShowSheet() -> impl IntoView {
             .get()
             .into_iter()
             .filter(|ColumnIdentity { row_id, header, .. }| {
-                get_rendered_rows()
+                rows_accumalator
+                    .get()
                     .iter()
                     .filter(|x| x.id == *row_id)
                     .any(|x| x.columns.keys().any(|x| x == header))
@@ -1026,6 +1037,7 @@ pub fn ShowSheet() -> impl IntoView {
                         modified_columns=modified_columns
                         get_column_type=get_header_type
                         expand_collapse_id=expand_collapsed_id
+                        get_collapse_pattern=get_column_collapse_pattern
                     />
             <Show
             when=move || !added_rows.get().is_empty()
@@ -1064,6 +1076,7 @@ pub fn ShowSheet() -> impl IntoView {
     }
 }
 
+#[inline(always)]
 #[component]
 fn EditButtons<FL>(
     edit_mode: RwSignal<EditState>,
@@ -1103,7 +1116,7 @@ where
 
 #[inline(always)]
 #[component]
-fn ShowRows<BH, CH, FD, ID, BT, EX>(
+fn ShowRows<BH, CH, FD, ID, BT, EX, CL>(
     basic_headers: BH,
     calc_headers: CH,
     delete_row: FD,
@@ -1114,6 +1127,7 @@ fn ShowRows<BH, CH, FD, ID, BT, EX>(
     rows: Memo<Vec<Row<Rc<str>>>>,
     edit_mode: RwSignal<EditState>,
     modified_columns: RwSignal<Vec<ColumnIdentity>>,
+    get_collapse_pattern: CL,
 ) -> impl IntoView
 where
     BH: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
@@ -1122,6 +1136,7 @@ where
     FD: Fn(Uuid) + 'static + Clone + Copy,
     BT: Fn(String) -> Option<ColumnConfig> + 'static + Clone + Copy,
     EX: Fn(Uuid) -> Option<Vec<Uuid>> + 'static + Clone + Copy,
+    CL: Fn(Rc<str>) -> Option<IdentityDiffsOps> + 'static + Clone + Copy,
 {
     let edit_column = RwSignal::from(None::<ColumnIdentity>);
 
@@ -1137,22 +1152,25 @@ where
 
     #[inline(always)]
     #[component]
-    fn ShowColumnEditor<EX>(
+    fn ShowColumnEditor<EX, CL>(
         edit_column: RwSignal<Option<ColumnIdentity>>,
         modified_columns: RwSignal<Vec<ColumnIdentity>>,
         expand_collapse_id: EX,
+        get_collapse_pattern: CL,
     ) -> impl IntoView
     where
         EX: Fn(Uuid) -> Option<Vec<Uuid>> + 'static + Clone + Copy,
+        CL: Fn(Rc<str>) -> Option<IdentityDiffsOps> + 'static + Clone + Copy,
     {
         #[inline(always)]
         #[component]
-        fn ColumnEdit<F1, F2, F3, F4, EX>(
+        fn ColumnEdit<F1, F2, F3, F4, EX, CL>(
             column_identity: F1,
             cancel: F2,
             push_to_modified: F3,
             push_list_to_modified: F4,
             expand_collapse_id: EX,
+            get_collapse_pattern: CL,
         ) -> impl IntoView
         where
             F1: Fn() -> ColumnIdentity + 'static,
@@ -1160,6 +1178,7 @@ where
             F3: Fn(ColumnIdentity) + 'static,
             F4: Fn(Vec<ColumnIdentity>) + 'static,
             EX: Fn(Uuid) -> Option<Vec<Uuid>> + 'static + Clone + Copy,
+            CL: Fn(Rc<str>) -> Option<IdentityDiffsOps> + 'static + Clone + Copy,
         {
             let column_value = RwSignal::from(column_identity().value);
             let on_input = move |ev| {
@@ -1188,12 +1207,20 @@ where
                     })
                 };
                 let push_list = |ids: Vec<Uuid>| {
+                    let len = ids.len() as f64;
+                    let value = match get_collapse_pattern(header.clone()) {
+                        Some(IdentityDiffsOps::Sum) => match column_value.get() {
+                            ColumnValue::Float(num) => ColumnValue::Float(num / len),
+                            _ => column_value.get(),
+                        },
+                        _ => column_value.get(),
+                    };
                     push_list_to_modified(
                         ids.into_iter()
                             .map(|row_id| ColumnIdentity {
                                 row_id,
                                 header: header.clone(),
-                                value: column_value.get(),
+                                value: value.clone(),
                             })
                             .collect(),
                     );
@@ -1249,13 +1276,14 @@ where
                     push_to_modified=move |col| modified_columns.update(|xs| xs.push(col))
                     push_list_to_modified=push_list_to_modified
                     expand_collapse_id=expand_collapse_id
+                    get_collapse_pattern=get_collapse_pattern
                 />
             </Show>
         }
     }
     #[inline(always)]
     #[component]
-    fn BasicColumns<BH, BT, EX>(
+    fn BasicColumns<BH, BT, EX, CL>(
         basic_headers: BH,
         get_column_type: BT,
         modified_columns: RwSignal<Vec<ColumnIdentity>>,
@@ -1263,11 +1291,13 @@ where
         edit_mode: RwSignal<EditState>,
         edit_column: RwSignal<Option<ColumnIdentity>>,
         expand_collapse_id: EX,
+        get_collapse_pattern: CL,
     ) -> impl IntoView
     where
         BH: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
         BT: Fn(String) -> Option<ColumnConfig> + 'static + Clone + Copy,
         EX: Fn(Uuid) -> Option<Vec<Uuid>> + 'static + Clone + Copy,
+        CL: Fn(Rc<str>) -> Option<IdentityDiffsOps> + 'static + Clone + Copy,
     {
         let Row { id, columns } = row;
         let columns = Rc::from(columns);
@@ -1303,23 +1333,45 @@ where
             }
         };
 
-        let edited =
-            move |header: Rc<str>, modified_columns: RwSignal<Vec<ColumnIdentity>>, id: Uuid| {
-                let header = header.clone();
-                let id = match expand_collapse_id(id) {
-                    Some(ids) => ids.first().cloned().unwrap_or(id),
-                    None => id,
-                };
-                move || {
-                    modified_columns
-                        .get()
-                        .into_iter()
-                        .filter(|x| x.row_id == id && x.header == header)
-                        .collect::<Vec<_>>()
-                        .first()
-                        .map(|x| format!(" > {}", x.value.to_string()))
+        let get_sum = move |header| {
+            if let Some(ids) = expand_collapse_id(id) {
+                let result = modified_columns
+                    .get()
+                    .into_iter()
+                    .filter(|x| ids.contains(&x.row_id) && x.header == header)
+                    .map(|x| match x.value {
+                        ColumnValue::Float(v) => v,
+                        _ => 1.0,
+                    })
+                    .sum::<f64>();
+                if result != 0.0 {
+                    Some(format!(" > {}", result))
+                } else {
+                    None
                 }
+            } else {
+                None
+            }
+        };
+
+        let get_first = move |header| {
+            let id = match expand_collapse_id(id) {
+                Some(ids) => ids.first().cloned().unwrap_or(id),
+                None => id,
             };
+            modified_columns
+                .get()
+                .into_iter()
+                .filter(|x| x.row_id == id && x.header == header)
+                .collect::<Vec<_>>()
+                .first()
+                .map(|x| x.value.to_string())
+        };
+
+        let edited = move |header: Rc<str>| match get_collapse_pattern(header.clone()) {
+            Some(IdentityDiffsOps::Sum) => get_sum(header.clone()),
+            _ => get_first(header.clone()),
+        };
 
         view! {
         <For
@@ -1333,7 +1385,7 @@ where
                      >{
                         original(header.clone(),columns.clone())
                     }" "{
-                        edited(header.clone(),modified_columns,id)
+                        move || edited(header.clone())
                     }</td>
                 }
             }
@@ -1417,6 +1469,7 @@ where
                     edit_column=edit_column
                     get_column_type=get_column_type
                     expand_collapse_id=expand_collapse_id
+                    get_collapse_pattern=get_collapse_pattern
                 />
                 <td class="shapeless">"  "</td>
                 <CalcColumns
@@ -1439,6 +1492,7 @@ where
             modified_columns=modified_columns
             edit_column=edit_column
             expand_collapse_id=expand_collapse_id
+            get_collapse_pattern=get_collapse_pattern
         />
         <For
             each=move || rows.get()
@@ -1449,6 +1503,7 @@ where
     }
 }
 
+#[inline(always)]
 #[component]
 fn PrimaryRow<FP, FN>(
     primary_headers: FP,

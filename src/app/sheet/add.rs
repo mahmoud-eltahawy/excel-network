@@ -27,6 +27,7 @@ struct SaveSheetArgs {
 
 use std::rc::Rc;
 
+#[inline(always)]
 #[component]
 pub fn AddSheet() -> impl IntoView {
     let sheet_name = RwSignal::from(Rc::from(""));
@@ -283,6 +284,7 @@ pub fn AddSheet() -> impl IntoView {
     }
 }
 
+#[inline(always)]
 #[component]
 fn PrimaryRow<FP, FN>(
     primary_headers: FP,

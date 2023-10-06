@@ -23,6 +23,7 @@ use models::{
 
 use std::rc::Rc;
 
+#[inline(always)]
 pub async fn new_id() -> Uuid {
     invoke::<_, Uuid>("new_id", &Non {}).await.unwrap()
 }
@@ -45,6 +46,7 @@ pub struct Name {
     pub the_name: Rc<str>,
 }
 
+#[inline(always)]
 pub async fn import_sheet_rows(
     sheetid: Uuid,
     sheettype: Rc<str>,
@@ -62,6 +64,7 @@ pub async fn import_sheet_rows(
     .unwrap_or_default()
 }
 
+#[inline(always)]
 pub async fn alert(message: &str) {
     let mut builder = MessageDialogBuilder::new();
     builder.set_title("تحذير");
@@ -70,6 +73,7 @@ pub async fn alert(message: &str) {
     builder.message(message).await.unwrap_or_default();
 }
 
+#[inline(always)]
 pub async fn message(message: &str) {
     let mut builder = MessageDialogBuilder::new();
     builder.set_title("رسالة");
@@ -78,12 +82,14 @@ pub async fn message(message: &str) {
     builder.message(message).await.unwrap_or_default();
 }
 
+#[inline(always)]
 pub async fn confirm(message: &str) -> bool {
     let mut builder = MessageDialogBuilder::new();
     builder.set_title("تاكيد");
     builder.confirm(message).await.unwrap_or_default()
 }
 
+#[inline(always)]
 pub async fn open_file() -> Option<String> {
     let mut builder = FileDialogBuilder::new();
     builder.add_filter("Serialized", &["json"]);
@@ -107,6 +113,7 @@ pub async fn open_file() -> Option<String> {
     Some(path.display().to_string())
 }
 
+#[inline(always)]
 #[component]
 pub fn SheetHead<Fa, Fb>(basic_headers: Fa, calc_headers: Fb) -> impl IntoView
 where
@@ -136,6 +143,7 @@ where
     }
 }
 
+#[inline(always)]
 #[component]
 fn ColumnEdit<F1, F2, F3, F4>(
     mode: F1,
@@ -297,6 +305,7 @@ where
     }
 }
 
+#[inline(always)]
 #[component]
 pub fn ShowNewRows<BH, CH, FD, FP, FI, BT>(
     basic_headers: BH,
@@ -462,6 +471,7 @@ enum ColumnSignal {
     Date(GetterSetter<NaiveDate>),
 }
 
+#[inline(always)]
 #[component]
 pub fn InputRow<F, BH, CH>(
     basic_headers: BH,
@@ -610,6 +620,7 @@ where
     }
 }
 
+#[inline(always)]
 #[component]
 fn MyInput(
     header: Rc<str>,
@@ -652,6 +663,7 @@ pub enum EditState {
     None,
 }
 
+#[inline(always)]
 pub fn resolve_operation(
     operation: &Operation,
     columns_map: &HashMap<Rc<str>, ColumnValue<Rc<str>>>,
@@ -665,6 +677,7 @@ pub fn resolve_operation(
         }
     }
 
+    #[inline(always)]
     fn resolve_hs(
         hs: &ValueType,
         columns_map: &HashMap<Rc<str>, ColumnValue<Rc<str>>>,
@@ -691,6 +704,7 @@ pub fn resolve_operation(
     }
 }
 
+#[inline(always)]
 pub fn merge_primary_row_headers(
     primary_headers: Rc<[Rc<str>]>,
     non_primary_headers: Rc<[Rc<str>]>,
@@ -727,6 +741,7 @@ pub fn merge_primary_row_headers(
         .collect::<Rc<[_]>>()
 }
 
+#[inline(always)]
 #[component]
 pub fn PrimaryRowContent<F1, F2, F3, F4>(
     headers: F1,
@@ -802,6 +817,7 @@ where
     }
 }
 
+#[inline(always)]
 #[component]
 pub fn PrimaryRowEditor(new_columns: RwSignal<HashMap<Rc<str>, Column<Rc<str>>>>) -> impl IntoView {
     let add_what = RwSignal::from(None::<&str>);
