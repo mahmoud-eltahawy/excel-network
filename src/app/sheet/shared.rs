@@ -155,17 +155,6 @@ where
     let column_value = RwSignal::from(map.clone().get(&header).map(|x| x.value.clone()));
     let top = RwSignal::from(None::<usize>);
     let down = RwSignal::from(None::<usize>);
-    let on_input = move |ev| {
-        let value = event_target_value(&ev).trim().to_string();
-        let value = match column_value.get() {
-            Some(ColumnValue::Float(_)) => ColumnValue::Float(value.parse().unwrap_or_default()),
-            Some(ColumnValue::Date(_)) => {
-                ColumnValue::Date(Some(value.parse().unwrap_or_default()))
-            }
-            _ => ColumnValue::String(Some(Rc::from(value))),
-        };
-        column_value.set(Some(value));
-    };
 
     let save = move |_| {
         let Some(value) = column_value.get() else {
@@ -234,34 +223,70 @@ where
         top.set(None);
         cancel()
     };
-    let input_type = match get_column_type(header.to_string()) {
-        Some(ColumnConfig::Float(_)) => "number",
-        Some(ColumnConfig::Date(_)) => "date",
-        _ => "text",
-    };
+    #[component]
+    fn MainInput<F4>(
+        column_value: RwSignal<Option<ColumnValue<Rc<str>>>>,
+        get_column_type: F4,
+        header: Rc<str>,
+    ) -> impl IntoView
+    where
+        F4: Fn(String) -> Option<ColumnConfig> + 'static + Clone + Copy,
+    {
+        let on_input = move |ev| {
+            let value = event_target_value(&ev).trim().to_string();
+            let value = match column_value.get() {
+                Some(ColumnValue::Float(_)) => {
+                    ColumnValue::Float(value.parse().unwrap_or_default())
+                }
+                Some(ColumnValue::Date(_)) => {
+                    ColumnValue::Date(Some(value.parse().unwrap_or_default()))
+                }
+                _ => ColumnValue::String(Some(Rc::from(value))),
+            };
+            column_value.set(Some(value));
+        };
+
+        let input_type = match get_column_type(header.to_string()) {
+            Some(ColumnConfig::Float(_)) => "number",
+            Some(ColumnConfig::Date(_)) => "date",
+            _ => "text",
+        };
+        let placeholder = move || {
+            format!(
+                "{} ({})",
+                "القيمة الحالية",
+                column_value
+                    .get()
+                    .map(|x| x.to_string())
+                    .unwrap_or_default()
+            )
+        };
+        view! {
+            <input
+                type=input_type
+                placeholder=placeholder
+                on:input=on_input
+            />
+        }
+    }
 
     view! {
         <div class="popup">
-            <input
-                type=input_type
-                placeholder=move || {
-                    format!(
-                        "{} ({})", "القيمة الحالية", column_value.get().map(| x | x
-                        .to_string()).unwrap_or_default()
-                    )
-                }
-                on:input=on_input
+            <MainInput
+                get_column_type=get_column_type
+                header=header
+                column_value=column_value
             />
             <input
-        type="number"
+            type="number"
             placeholder="لاعلي"
             on:input=move |ev| top.set(Some(event_target_value(&ev).trim().parse().unwrap_or_default()))
-        />
+            />
             <input
-        type="number"
+            type="number"
             placeholder="لاسفل"
             on:input=move |ev| down.set(Some(event_target_value(&ev).trim().parse().unwrap_or_default()))
-        />
+            />
             <button on:click=move|_| cancel() class="centered-button">
                 "الغاء"
             </button>
@@ -314,7 +339,6 @@ where
         view! {
             <Show
                 when=move || edit_column.get().is_some()
-                fallback=|| view! {}
             >
                 <ColumnEdit
                     mode=move || edit_column.get().unwrap()
@@ -651,10 +675,7 @@ pub fn resolve_operation(
                 Some(ColumnValue::Float(hs)) => Some(*hs),
                 _ => None,
             },
-            ValueType::Operation(lhs) => {
-                let lhs = lhs;
-                resolve_operation(lhs, columns_map)
-            }
+            ValueType::Operation(lhs) => resolve_operation(lhs, columns_map),
         }
     }
 
@@ -754,7 +775,7 @@ where
             <td class="shapeless">" "</td>
             <td>{let p = primary.clone();move || primary_value_and_transition(p.clone())}
             </td>
-            <Show when=is_in_edit_mode fallback=|| view! {<></>}>
+            <Show when=is_in_edit_mode>
                 <td><button
                     on:click={let a = primary.clone();move |_| delete_fun(a.clone())}>{
                         let p = primary.clone();
@@ -767,7 +788,7 @@ where
             <td>{let a = non_primary.clone();move || a.to_string()}</td>
             <td class="shapeless">" "</td>
             <td>{let np = non_primary.clone();move ||all_columns.get().get(&np).map(|x| x.value.to_string())}</td>
-            <Show when=is_in_edit_mode fallback=|| view! {<></>}>
+            <Show when=is_in_edit_mode>
                 <td><button
                      on:click={let a =non_primary.clone(); move |_| delete_fun(a.clone())}>{
                         let p = non_primary.clone();

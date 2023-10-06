@@ -99,9 +99,6 @@ pub fn SheetHome() -> impl IntoView {
             </div>
             <Show
                 when=move || offset.get() != 0
-                fallback=|| {
-                    view! {  <></> }
-                }
             >
                 <button on:click=move |_| offset.update(|x| *x -= 5) class="btn">
                     <span class="up-arrow">"↑"</span>
@@ -122,9 +119,6 @@ pub fn SheetHome() -> impl IntoView {
             />
             <Show
                 when=move || { bills.get().unwrap_or(Rc::from(vec![])).len() >= 5 }
-                fallback=|| {
-                    view! {  <></> }
-                }
             >
                 <button on:click=move |_| offset.update(|x| *x += 5) class="btn">
                     <span class="down-arrow">"↓"</span>
