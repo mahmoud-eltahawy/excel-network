@@ -33,6 +33,29 @@ const FETCH_LIMIT: i64 = 7;
 
 use itertools::Itertools;
 
+fn spawn_my_local_process<T: Serialize + 'static>(
+    it_worth_it: bool,
+    operation: &'static str,
+    args: T,
+    save_edits_successes: RwSignal<i32>,
+    save_edits_dones: RwSignal<i32>,
+) {
+    spawn_local(async move {
+        if it_worth_it {
+            match invoke::<_, ()>(operation, &args).await {
+                Ok(_) => save_edits_successes.update(|x| *x += 1),
+                Err(err) => {
+                    alert(err.to_string().as_str()).await;
+                    save_edits_successes.set(0);
+                }
+            }
+        } else {
+            save_edits_successes.update(|x| *x += 1);
+        }
+        save_edits_dones.update(|x| *x += 1);
+    });
+}
+
 #[inline(always)]
 async fn collapse_rows(
     rows: Vec<Row<Rc<str>>>,
@@ -628,9 +651,55 @@ pub fn ShowSheet() -> impl IntoView {
         let Some((sheetid, sheetname)) = get_initial_sheet().map(|x| (x.id, x.sheet_name)) else {
             return;
         };
-        let the_sheet_name = sheet_name.get();
-        let the_deleted_rows = merge_collapse_and_expanded_deleted_rows();
-        let the_added_rows = added_rows.get();
+        {
+            let the_name = sheet_name.get();
+            #[derive(Serialize, Deserialize)]
+            struct Arg {
+                name: Name,
+            }
+            spawn_my_local_process(
+                !the_name.is_empty() && the_name != sheetname,
+                "update_sheet_name",
+                Arg {
+                    name: Name {
+                        id: sheetid,
+                        the_name,
+                    },
+                },
+                save_edits_successes,
+                save_edits_dones,
+            );
+        }
+        {
+            let rowsids = merge_collapse_and_expanded_deleted_rows();
+            #[derive(Serialize, Deserialize)]
+            struct RowsDeleteArg {
+                sheetid: Uuid,
+                rowsids: HashSet<Uuid>,
+            }
+            spawn_my_local_process(
+                !rowsids.is_empty(),
+                "delete_rows_from_sheet",
+                RowsDeleteArg { sheetid, rowsids },
+                save_edits_successes,
+                save_edits_dones,
+            );
+        }
+        {
+            let rows = added_rows.get();
+            #[derive(Serialize, Deserialize)]
+            struct RowsAddArg {
+                sheetid: Uuid,
+                rows: Vec<Row<Rc<str>>>,
+            }
+            spawn_my_local_process(
+                !rows.is_empty(),
+                "add_rows_to_sheet",
+                RowsAddArg { sheetid, rows },
+                save_edits_successes,
+                save_edits_dones,
+            );
+        }
         let new_row_primary_columns = modified_primary_columns
             .get()
             .into_iter()
@@ -650,155 +719,87 @@ pub fn ShowSheet() -> impl IntoView {
                     .iter()
                     .any(|(old_header, _)| header == old_header)
             })
-            .map(|(header, column)| (sheetid, header, column.value));
-
-        let new_columnsidentifiers = modified_columns
-            .get()
-            .into_iter()
-            .filter(|ColumnIdentity { row_id, header, .. }| {
-                rows_accumalator
-                    .get()
-                    .iter()
-                    .filter(|x| x.id == *row_id)
-                    .any(|x| x.columns.keys().any(|x| x != header))
-            })
-            .map(|x| (x.row_id, x.header, x.value))
-            .chain(new_row_primary_columns)
+            .map(|(header, column)| (sheetid, header, column.value))
             .collect::<Vec<_>>();
 
-        let updated_columnsidentifiers = modified_columns
-            .get()
-            .into_iter()
-            .filter(|ColumnIdentity { row_id, header, .. }| {
-                rows_accumalator
-                    .get()
-                    .iter()
-                    .filter(|x| x.id == *row_id)
-                    .any(|x| x.columns.keys().any(|x| x == header))
-            })
-            .map(|x| (x.row_id, x.header, x.value))
-            .chain(updated_row_primary_columns)
-            .collect::<Vec<_>>();
-
-        let primary_deleted_columnsidentifiers = deleted_primary_columns
-            .get()
-            .into_iter()
-            .map(|x| (sheetid, x))
-            .collect::<Vec<_>>();
-
-        fn spawn_my_local_process<T: Serialize + 'static>(
-            it_worth_it: bool,
-            operation: &'static str,
-            args: T,
-            save_edits_successes: RwSignal<i32>,
-            save_edits_dones: RwSignal<i32>,
-        ) {
-            spawn_local(async move {
-                if it_worth_it {
-                    match invoke::<_, ()>(operation, &args).await {
-                        Ok(_) => save_edits_successes.update(|x| *x += 1),
-                        Err(err) => {
-                            alert(err.to_string().as_str()).await;
-                            save_edits_successes.set(0);
-                        }
-                    }
-                } else {
-                    save_edits_successes.update(|x| *x += 1);
-                }
-                save_edits_dones.update(|x| *x += 1);
-            });
-        }
-
-        #[derive(Serialize, Deserialize)]
-        struct SheetNameArg {
-            name: Name,
-        }
-        spawn_my_local_process(
-            !the_sheet_name.is_empty() && the_sheet_name != sheetname,
-            "update_sheet_name",
-            SheetNameArg {
-                name: Name {
-                    id: sheetid,
-                    the_name: the_sheet_name,
+        {
+            let (updated_ids, mut updated_columnsidentifiers): (Vec<_>, Vec<_>) = modified_columns
+                .get()
+                .into_iter()
+                .filter(|ColumnIdentity { row_id, header, .. }| {
+                    rows_accumalator
+                        .get()
+                        .iter()
+                        .filter(|x| x.id == *row_id)
+                        .any(|x| x.columns.keys().any(|x| x == header))
+                })
+                .map(|x| (x.row_id, (x.row_id, x.header, x.value)))
+                .unzip();
+            updated_columnsidentifiers.extend(updated_row_primary_columns);
+            #[derive(Serialize, Deserialize)]
+            struct Args {
+                sheetid: Uuid,
+                columnsidentifiers: Vec<(Uuid, Rc<str>, ColumnValue<Rc<str>>)>,
+            }
+            spawn_my_local_process(
+                !updated_columnsidentifiers.is_empty(),
+                "update_columns",
+                Args {
+                    sheetid,
+                    columnsidentifiers: updated_columnsidentifiers,
                 },
-            },
-            save_edits_successes,
-            save_edits_dones,
-        );
-
-        #[derive(Serialize, Deserialize)]
-        struct RowsDeleteArg {
-            sheetid: Uuid,
-            rowsids: HashSet<Uuid>,
-        }
-        spawn_my_local_process(
-            !the_deleted_rows.is_empty(),
-            "delete_rows_from_sheet",
-            RowsDeleteArg {
-                sheetid,
-                rowsids: the_deleted_rows,
-            },
-            save_edits_successes,
-            save_edits_dones,
-        );
-
-        #[derive(Serialize, Deserialize)]
-        struct RowsAddArg {
-            sheetid: Uuid,
-            rows: Vec<Row<Rc<str>>>,
-        }
-        spawn_my_local_process(
-            !the_added_rows.is_empty(),
-            "add_rows_to_sheet",
-            RowsAddArg {
-                sheetid,
-                rows: the_added_rows,
-            },
-            save_edits_successes,
-            save_edits_dones,
-        );
-        #[derive(Serialize, Deserialize)]
-        struct DeleteColumnsArgs {
-            sheetid: Uuid,
-            rowsheaders: Vec<(Uuid, Rc<str>)>,
-        }
-        spawn_my_local_process(
-            !primary_deleted_columnsidentifiers.is_empty(),
-            "delete_columns",
-            DeleteColumnsArgs {
-                sheetid,
-                rowsheaders: primary_deleted_columnsidentifiers,
-            },
-            save_edits_successes,
-            save_edits_dones,
-        );
-
-        #[derive(Serialize, Deserialize)]
-        struct UpdateColumnsArgs {
-            sheetid: Uuid,
-            columnsidentifiers: Vec<(Uuid, Rc<str>, ColumnValue<Rc<str>>)>,
+                save_edits_successes,
+                save_edits_dones,
+            );
+            let new_columnsidentifiers = modified_columns
+                .get()
+                .into_iter()
+                .filter(|ColumnIdentity { row_id, .. }| !updated_ids.contains(row_id))
+                .filter(|ColumnIdentity { row_id, header, .. }| {
+                    rows_accumalator
+                        .get()
+                        .iter()
+                        .filter(|x| x.id == *row_id)
+                        .any(|x| x.columns.keys().any(|x| x != header))
+                })
+                .map(|x| (x.row_id, x.header, x.value))
+                .chain(new_row_primary_columns)
+                .collect::<Vec<_>>();
+            spawn_my_local_process(
+                !new_columnsidentifiers.is_empty(),
+                "save_columns",
+                Args {
+                    sheetid,
+                    columnsidentifiers: new_columnsidentifiers,
+                },
+                save_edits_successes,
+                save_edits_dones,
+            );
         }
 
-        spawn_my_local_process(
-            !updated_columnsidentifiers.is_empty(),
-            "update_columns",
-            UpdateColumnsArgs {
-                sheetid,
-                columnsidentifiers: updated_columnsidentifiers,
-            },
-            save_edits_successes,
-            save_edits_dones,
-        );
-        spawn_my_local_process(
-            !new_columnsidentifiers.is_empty(),
-            "save_columns",
-            UpdateColumnsArgs {
-                sheetid,
-                columnsidentifiers: new_columnsidentifiers,
-            },
-            save_edits_successes,
-            save_edits_dones,
-        );
+        {
+            let rowsheaders = deleted_primary_columns
+                .get()
+                .into_iter()
+                .map(|x| (sheetid, x))
+                .collect::<Vec<_>>();
+
+            #[derive(Serialize, Deserialize)]
+            struct Args {
+                sheetid: Uuid,
+                rowsheaders: Vec<(Uuid, Rc<str>)>,
+            }
+            spawn_my_local_process(
+                !rowsheaders.is_empty(),
+                "delete_columns",
+                Args {
+                    sheetid,
+                    rowsheaders,
+                },
+                save_edits_successes,
+                save_edits_dones,
+            );
+        }
     };
 
     Effect::new(move |_| {
