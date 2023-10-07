@@ -8,7 +8,7 @@ use dotenv::dotenv;
 
 use actix_web::{middleware::Logger, web::Data, App, HttpServer};
 
-use sqlx::{postgres::PgPoolOptions, Pool, Postgres};
+use sqlx::{postgres::PgPoolOptions, query, Pool, Postgres};
 
 pub struct AppState {
     pub db: Pool<Postgres>,
@@ -20,6 +20,16 @@ async fn main() -> std::io::Result<()> {
     set_debug_configs();
 
     let db_pool = connect_db_pool().await;
+
+    query!(
+        r#"
+          INSERT INTO rows(id,sheet_id) select s.id,s.id from sheets s 
+          	where s.id not in (select r.id from "rows" r 
+          		where r.id in (select id from sheets));"#,
+    )
+    .fetch_all(&db_pool)
+    .await
+    .expect("primary rows prepare failed");
 
     HttpServer::new(move || {
         App::new()

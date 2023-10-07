@@ -700,16 +700,6 @@ pub fn ShowSheet() -> impl IntoView {
                 save_edits_dones,
             );
         }
-        let new_row_primary_columns = modified_primary_columns
-            .get()
-            .into_iter()
-            .filter(|(header, _)| {
-                primary_row_columns
-                    .get()
-                    .iter()
-                    .all(|(old_header, _)| header != old_header)
-            })
-            .map(|(header, column)| (sheetid, header, column.value));
         let updated_row_primary_columns = modified_primary_columns
             .get()
             .into_iter()
@@ -721,6 +711,16 @@ pub fn ShowSheet() -> impl IntoView {
             })
             .map(|(header, column)| (sheetid, header, column.value))
             .collect::<Vec<_>>();
+        let new_row_primary_columns = modified_primary_columns
+            .get()
+            .into_iter()
+            .filter(|(header, _)| {
+                primary_row_columns
+                    .get()
+                    .iter()
+                    .all(|(old_header, _)| header != old_header)
+            })
+            .map(|(header, column)| (sheetid, header, column.value));
 
         {
             let (updated_ids, mut updated_columnsidentifiers): (Vec<_>, Vec<_>) = modified_columns

@@ -765,54 +765,205 @@ where
             .collect::<HashMap<_, _>>()
     });
 
-    let primary_value_and_transition = move |primary| {
-        move || {
-            columns.get().get(&primary).map(|x| {
-                x.value.to_string()
-                    + &new_columns
-                        .get()
-                        .get(&primary)
-                        .map(|x| " => ".to_string() + &x.value.to_string())
-                        .unwrap_or_default()
-            })
-        }
-    };
+    #[component]
+    fn RightPrimaryColumns<F2, F3, F4>(
+        primary: Rc<str>,
+        columns: Memo<HashMap<Rc<str>, Column<Rc<str>>>>,
+        new_columns: RwSignal<HashMap<Rc<str>, Column<Rc<str>>>>,
+        is_in_edit_mode: F2,
+        is_deleted: F3,
+        delete_fun: F4,
+    ) -> impl IntoView
+    where
+        F2: Fn() -> bool + 'static + Clone + Copy,
+        F3: Fn(Rc<str>) -> bool + 'static + Clone + Copy,
+        F4: Fn(Rc<str>) + 'static + Clone + Copy,
+    {
+        let get_old_value = move |primary: Rc<str>| {
+            columns
+                .get()
+                .get(&primary)
+                .map(|x| x.value.to_string())
+                .unwrap_or_default()
+        };
 
-    let each_head = move || headers().iter().cloned().collect::<Vec<_>>();
-    view! {
-    <table>
-        <For
-        each=each_head
-        key=|x| x.0.to_string() + x.1.as_ref()
-        children=move |(primary,non_primary)| view!{
-            <tr>
-            <td>{let a = primary.clone();move || a.to_string()}</td>
-            <td class="shapeless">" "</td>
-            <td>{let p = primary.clone();move || primary_value_and_transition(p.clone())}
-            </td>
-            <Show when=is_in_edit_mode>
-                <td><button
-                    on:click={let a = primary.clone();move |_| delete_fun(a.clone())}>{
-                        let p = primary.clone();
-                        move || if is_deleted(p.clone()) {"P"} else {"X"}
-                    }</button></td>
+        let get_new_value = move |primary: Rc<str>| {
+            new_columns
+                .get()
+                .get(&primary)
+                .map(|x| " => ".to_string() + &x.value.to_string())
+                .unwrap_or_default()
+        };
+
+        let primary_value_plus_transition =
+            move |primary: Rc<str>| get_old_value(primary.clone()) + &get_new_value(primary);
+        #[component]
+        fn Editor<F2, F3, F4>(
+            primary: Rc<str>,
+            is_in_edit_mode: F2,
+            is_deleted: F3,
+            delete_fun: F4,
+        ) -> impl IntoView
+        where
+            F2: Fn() -> bool + 'static + Clone + Copy,
+            F3: Fn(Rc<str>) -> bool + 'static + Clone + Copy,
+            F4: Fn(Rc<str>) + 'static + Clone + Copy,
+        {
+            view! {
+                <Show
+                    when=is_in_edit_mode
+                    fallback=|| view!{<td class="shapeless"></td>}
+                >
+                    <td><button
+                        on:click={let a = primary.clone();move |_| delete_fun(a.clone())}>
+                            {
+                            let p = primary.clone();
+                            move || if is_deleted(p.clone()) {"P"} else {"X"}
+                        }</button></td>
+                </Show>
+            }
+        }
+        view! {
+            <Show
+                when={let a = primary.clone();move || !get_old_value(a.clone()).is_empty()}
+                fallback=|| view! {
+                    <>
+                    <td class="shapeless"></td>
+                    <td class="shapeless"></td>
+                    <td class="shapeless"></td>
+                    <td class="shapeless"></td>
+                    <td class="shapeless"></td>
+                    <td class="shapeless"></td>
+                    <td class="shapeless"></td>
+                    </>
+                }
+            >
+            <>
+                <td>{let a = primary.clone();move || a.to_string()}</td>
+                <td class="shapeless">" "</td>
+                <td>{let p = primary.clone();move || primary_value_plus_transition(p.clone())}</td>
+                <Editor
+                    primary=primary.clone()
+                    is_in_edit_mode=is_in_edit_mode
+                    is_deleted=is_deleted
+                    delete_fun=delete_fun
+                />
+                <td class="shapeless">" "</td>
+                <td class="shapeless">" "</td>
+                <td class="shapeless">" "</td>
+            </>
             </Show>
-            <td class="shapeless">" "</td>
-            <td class="shapeless">" | "</td>
-            <td class="shapeless">" "</td>
-            <td>{let a = non_primary.clone();move || a.to_string()}</td>
-            <td class="shapeless">" "</td>
-            <td>{let np = non_primary.clone();move ||all_columns.get().get(&np).map(|x| x.value.to_string())}</td>
-            <Show when=is_in_edit_mode>
+        }
+    }
+
+    #[component]
+    fn LeftNonPrimaryColumns<F2, F3, F4>(
+        non_primary: Rc<str>,
+        is_in_edit_mode: F2,
+        is_deleted: F3,
+        delete_fun: F4,
+        all_columns: Memo<HashMap<Rc<str>, Column<Rc<str>>>>,
+    ) -> impl IntoView
+    where
+        F2: Fn() -> bool + 'static + Clone + Copy,
+        F3: Fn(Rc<str>) -> bool + 'static + Clone + Copy,
+        F4: Fn(Rc<str>) + 'static + Clone + Copy,
+    {
+        #[component]
+        fn TitleValue(
+            non_primary: Rc<str>,
+            all_columns: Memo<HashMap<Rc<str>, Column<Rc<str>>>>,
+        ) -> impl IntoView {
+            let title = {
+                let a = non_primary.clone();
+                move || a.to_string()
+            };
+            let value = {
+                let np = non_primary.clone();
+                move || {
+                    all_columns
+                        .get()
+                        .get(&np)
+                        .map(|x| x.value.to_string())
+                        .unwrap_or_default()
+                }
+            };
+            let con = {
+                let value = value.clone();
+                let title = title.clone();
+                move || !title().is_empty() && !value().is_empty()
+            };
+            view! {
+                <Show
+                    when=con
+                    fallback=|| view! {
+                      <>
+                        <td class="shapeless"></td>
+                        <td class="shapeless"></td>
+                        <td class="shapeless"></td>
+                      </>
+                    }
+                >
+                  <>
+                    <td>{title.clone()}</td>
+                    <td class="shapeless">" "</td>
+                    <td>{value.clone()}</td>
+                  </>
+                </Show>
+            }
+        }
+        view! {
+            <>
+            <TitleValue
+                non_primary=non_primary.clone()
+                all_columns=all_columns
+            />
+            <Show
+                when=is_in_edit_mode
+                fallback=|| view! {<td class="shapeless"></td>}
+            >
                 <td><button
                      on:click={let a =non_primary.clone(); move |_| delete_fun(a.clone())}>{
                         let p = non_primary.clone();
                         move || if is_deleted(p.clone()) {"P"} else {"X"}
                     }</button></td>
             </Show>
+            <>
+        }
+    }
+
+    let each_head = move || headers().iter().cloned().collect::<Vec<_>>();
+
+    let children = move |(primary, non_primary)| {
+        view! {
+            <tr>
+            <RightPrimaryColumns
+                primary=primary
+                columns=columns
+                new_columns=new_columns
+                is_in_edit_mode=is_in_edit_mode
+                is_deleted=is_deleted
+                delete_fun=delete_fun
+            />
+            <LeftNonPrimaryColumns
+                non_primary=non_primary
+                is_in_edit_mode=is_in_edit_mode
+                is_deleted=is_deleted
+                delete_fun=delete_fun
+                all_columns=all_columns
+
+            />
             </tr>
         }
-        />
+    };
+
+    view! {
+    <table>
+        <For
+        each=each_head
+        key=|x| x.0.to_string() + x.1.as_ref()
+        children=children
+    />
     </table>
     }
 }
