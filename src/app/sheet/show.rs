@@ -654,13 +654,13 @@ pub fn ShowSheet() -> impl IntoView {
         {
             let the_name = sheet_name.get();
             #[derive(Serialize, Deserialize)]
-            struct Arg {
+            struct Args {
                 name: Name,
             }
             spawn_my_local_process(
                 !the_name.is_empty() && the_name != sheetname,
                 "update_sheet_name",
-                Arg {
+                Args {
                     name: Name {
                         id: sheetid,
                         the_name,
@@ -673,14 +673,14 @@ pub fn ShowSheet() -> impl IntoView {
         {
             let rowsids = merge_collapse_and_expanded_deleted_rows();
             #[derive(Serialize, Deserialize)]
-            struct RowsDeleteArg {
+            struct Args {
                 sheetid: Uuid,
                 rowsids: HashSet<Uuid>,
             }
             spawn_my_local_process(
                 !rowsids.is_empty(),
                 "delete_rows_from_sheet",
-                RowsDeleteArg { sheetid, rowsids },
+                Args { sheetid, rowsids },
                 save_edits_successes,
                 save_edits_dones,
             );
@@ -688,14 +688,14 @@ pub fn ShowSheet() -> impl IntoView {
         {
             let rows = added_rows.get();
             #[derive(Serialize, Deserialize)]
-            struct RowsAddArg {
+            struct Args {
                 sheetid: Uuid,
                 rows: Vec<Row<Rc<str>>>,
             }
             spawn_my_local_process(
                 !rows.is_empty(),
                 "add_rows_to_sheet",
-                RowsAddArg { sheetid, rows },
+                Args { sheetid, rows },
                 save_edits_successes,
                 save_edits_dones,
             );
@@ -816,7 +816,7 @@ pub fn ShowSheet() -> impl IntoView {
             .get()
             .map(|x| x.map(|x| x.0.id).unwrap_or_default())
             .unwrap_or_default();
-        rows_accumalator.update_untracked(|xs| {
+        rows_accumalator.update(|xs| {
             xs.extend(added_rows.get());
             let deleted = merge_collapse_and_expanded_deleted_rows();
             xs.retain(|x| !deleted.contains(&x.id));
@@ -889,8 +889,6 @@ pub fn ShowSheet() -> impl IntoView {
                 };
             }
         });
-        rows_accumalator
-            .update(|xs| xs.sort_rows(sheet_priorities_resource.get().unwrap_or(Rc::from([]))));
     };
 
     Effect::new(move |_| {
@@ -1334,6 +1332,20 @@ where
             }
         };
 
+        let get_first = move |header| {
+            let id = match expand_collapse_id(id) {
+                Some(ids) => ids.first().cloned().unwrap_or(id),
+                None => id,
+            };
+            modified_columns
+                .get()
+                .into_iter()
+                .filter(|x| x.row_id == id && x.header == header)
+                .collect::<Vec<_>>()
+                .first()
+                .map(|x| x.value.to_string())
+        };
+
         let get_sum = move |header| {
             if let Some(ids) = expand_collapse_id(id) {
                 let result = modified_columns
@@ -1351,22 +1363,8 @@ where
                     None
                 }
             } else {
-                None
+                get_first(header)
             }
-        };
-
-        let get_first = move |header| {
-            let id = match expand_collapse_id(id) {
-                Some(ids) => ids.first().cloned().unwrap_or(id),
-                None => id,
-            };
-            modified_columns
-                .get()
-                .into_iter()
-                .filter(|x| x.row_id == id && x.header == header)
-                .collect::<Vec<_>>()
-                .first()
-                .map(|x| x.value.to_string())
         };
 
         let edited = move |header: Rc<str>| match get_collapse_pattern(header.clone()) {
