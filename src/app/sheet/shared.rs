@@ -610,9 +610,12 @@ where
             </For>
         </tr>
         <tr>
-            <td>
+            <td class="shapeless"></td>
+            <td class="shapeless"></td>
+            <td class="shapeless"></td>
+            <td class="shapeless">
                 <button on:click=on_click class="centered-button">
-                    "اضافة"
+                    "_+_"
                 </button>
             </td>
         </tr>
@@ -893,6 +896,7 @@ where
                 let title = title.clone();
                 move || !title().is_empty() && !value().is_empty()
             };
+
             view! {
                 <Show
                     when=con
@@ -912,6 +916,13 @@ where
                 </Show>
             }
         }
+        let deleted_style = {
+            let a = non_primary.clone();
+            move || match is_deleted(a.clone()) {
+                true => "fineb",
+                false => "dangerb",
+            }
+        };
         view! {
             <>
             <TitleValue
@@ -923,12 +934,10 @@ where
                 fallback=|| view! {<td class="shapeless"></td>}
             >
                 <td><button
-                     on:click={let a =non_primary.clone(); move |_| delete_fun(a.clone())}>{
-                        let p = non_primary.clone();
-                        move || if is_deleted(p.clone()) {"P"} else {"X"}
-                    }</button></td>
+                     class=deleted_style.clone()
+                     on:click={let a =non_primary.clone(); move |_| delete_fun(a.clone())}>"X"</button></td>
             </Show>
-            <>
+            </>
         }
     }
 

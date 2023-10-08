@@ -1372,22 +1372,25 @@ where
             _ => get_first(header.clone()),
         };
 
+        let children = move |header: Rc<str>| {
+            let on_dbl_click =
+                on_dbl_click(header.clone(), columns.clone(), edit_column, edit_mode);
+            view! { <td
+                    style="cursor: pointer"
+                    on:dblclick=on_dbl_click
+                 >{
+                    original(header.clone(),columns.clone())
+                }" "{
+                    move || edited(header.clone())
+                }</td>
+            }
+        };
+
         view! {
         <For
             each=basic_headers
             key=|key| key.clone()
-            children=move |header| {
-                let on_dbl_click = on_dbl_click(header.clone(),columns.clone(),edit_column,edit_mode);
-                view! { <td
-                        style="cursor: pointer"
-                        on:dblclick=on_dbl_click
-                     >{
-                        original(header.clone(),columns.clone())
-                    }" "{
-                        move || edited(header.clone())
-                    }</td>
-                }
-            }
+            children=children
         />
         }
     }
@@ -1429,9 +1432,9 @@ where
         FD: Fn(Uuid) + 'static + Clone + Copy,
         ID: Fn(Uuid) -> bool + 'static + Clone + Copy,
     {
-        let deleted = move || match is_deleted(id) {
-            true => "P",
-            false => "X",
+        let deleted_style = move || match is_deleted(id) {
+            true => "fineb",
+            false => "dangerb",
         };
         let on_click = move |_| {
             if modified_columns.get().iter().any(|x| x.row_id == id) {
@@ -1446,9 +1449,7 @@ where
                 when=move || matches!(edit_mode.get(),EditState::NonePrimary)
             >
                 <td>
-                    <button on:click=on_click>
-                        {deleted}
-                    </button>
+                    <button class=deleted_style on:click=on_click>"XXX"</button>
                 </td>
             </Show>
 
@@ -1470,7 +1471,7 @@ where
                     expand_collapse_id=expand_collapse_id
                     get_collapse_pattern=get_collapse_pattern
                 />
-                <td class="shapeless">"  "</td>
+                <td class="shapeless"></td>
                 <CalcColumns
                     calc_headers=calc_headers
                     columns=columns

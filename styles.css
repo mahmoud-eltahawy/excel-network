@@ -60,7 +60,7 @@ table {
 th,
 td {
   border: 1px solid black;
-  padding: 5px;
+  padding: 0px;
 }
 
 th {
@@ -246,6 +246,7 @@ button:hover {
 .shapeless {
   border: none;
   background: transparent;
+  padding: 2px;
 }
 
 td input {
@@ -271,4 +272,20 @@ td input {
   width: 80%;
   height: 30%;
   font-size: 24px;
+}
+
+.dangerb {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: red;
+  color: red;
+}
+
+.fineb {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: green;
+  color: green;
 }
