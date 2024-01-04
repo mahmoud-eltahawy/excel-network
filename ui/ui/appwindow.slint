@@ -1,0 +1,36 @@
+import { Button, VerticalBox , Switch} from "std-widgets.slint";
+
+export enum CurrentPage { Home,SheetHome,SheetShow,SheetInsert }
+
+export global Router {
+    in property<[string]> pages_names: ["مبيعات","مشتريات","كارت الصنف"];
+    in-out property <CurrentPage> page : Home;
+    pure callback prepare-sheet-page(string);
+}
+
+component Home inherits VerticalBox {
+    for name in Router.pages_names : Button {
+        text: name;
+        clicked => {
+            Router.prepare-sheet-page(name);
+            Router.page = CurrentPage.SheetHome
+        }
+    }
+}
+
+component Routes {
+    if Router.page == CurrentPage.Home : Home {
+        height: 90%;
+        width: 90%;
+    }
+    if Router.page == CurrentPage.SheetHome: Text { text: "sheet home";}
+    if Router.page == CurrentPage.SheetShow: Text { text: "sheet show";}
+    if Router.page == CurrentPage.SheetInsert: Text { text: "sheet insert";}
+}
+
+export component AppWindow inherits Window {
+    Routes {
+        height: 100%;
+        width: 100%;
+    }
+}
