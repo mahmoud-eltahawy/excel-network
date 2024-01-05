@@ -1,0 +1,36 @@
+import { Button, VerticalBox , Switch} from "std-widgets.slint";
+import { Router,CurrentPage } from "./global.slint";
+
+export component SheetHome inherits VerticalBox {
+    HorizontalLayout {
+        height: 10%;
+        Button {
+            width: 5%;
+            text: "<-";
+            clicked => {
+                Router.page = CurrentPage.Home
+            }
+        }
+        VerticalBox {
+            Text {
+                font-size: 16px;
+                text: "search bar";
+            }
+            HorizontalLayout {
+                Text {text: "begin date";}
+                Text {text: "end date";}
+            }
+        }
+        Button {
+            width: 5%;
+            text: "+";
+            clicked => {
+                Router.page = CurrentPage.SheetInsert
+            }
+        }
+    }
+    VerticalBox {
+        Text {text: "one";}
+        Text {text: "two";}
+    }
+}
