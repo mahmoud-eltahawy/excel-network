@@ -2,6 +2,7 @@ import { Button, VerticalBox } from "std-widgets.slint";
 import { SheetHome } from "./SheetHome.slint";
 import { Home } from "./Home.slint";
 import { SheetInsert } from "./SheetInsert.slint";
+import { SheetShow } from "./SheetShow.slint";
 import { CurrentPage,Router } from "./global.slint";
 
 component Routes {
@@ -10,7 +11,7 @@ component Routes {
         width: 90%;
     }
     if Router.page == CurrentPage.SheetHome: SheetHome {}
-    if Router.page == CurrentPage.SheetShow: Text { text: "sheet show";}
+    if Router.page == CurrentPage.SheetShow: SheetShow {}
     if Router.page == CurrentPage.SheetInsert: SheetInsert {}
 }
 
