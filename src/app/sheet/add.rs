@@ -1,6 +1,7 @@
+use client_models::{ColumnConfig, ConfigValue, HeaderGetter};
 use leptos::*;
 use leptos_router::*;
-use models::{Column, ColumnConfig, ConfigValue, HeaderGetter, Row, RowsSort};
+use models::{Column, Row, RowsSort};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
@@ -22,7 +23,7 @@ struct SaveSheetArgs {
     sheetid: Uuid,
     sheetname: Rc<str>,
     typename: Rc<str>,
-    rows: Vec<Row<Rc<str>>>,
+    rows: Vec<Row<Uuid, Rc<str>>>,
 }
 
 use std::rc::Rc;
@@ -31,7 +32,7 @@ use std::rc::Rc;
 #[component]
 pub fn AddSheet() -> impl IntoView {
     let sheet_name = RwSignal::from(Rc::from(""));
-    let rows = RwSignal::from(Vec::<Row<Rc<str>>>::new());
+    let rows = RwSignal::from(Vec::<Row<Uuid, Rc<str>>>::new());
     let modified_primary_columns = RwSignal::from(HashMap::<Rc<str>, Column<Rc<str>>>::new());
     let params = use_params_map();
     let sheet_type_id = move || {
@@ -122,7 +123,7 @@ pub fn AddSheet() -> impl IntoView {
             .collect::<Vec<_>>()
     };
 
-    let append = move |row: Row<Rc<str>>| {
+    let append = move |row: Row<Uuid, Rc<str>>| {
         rows.update_untracked(|xs| xs.push(row));
         rows.update(|xs| xs.sort_rows(sheet_priorities_resource.get().unwrap_or(Rc::from([]))));
     };

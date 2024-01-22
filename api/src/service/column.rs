@@ -19,7 +19,7 @@ pub fn scope() -> Scope {
 
 #[post("/delete")]
 async fn delete_columns(state: web::Data<AppState>, ids: web::Bytes) -> impl Responder {
-    let ids = extract::<Vec<ColumnId<Arc<str>>>>(ids);
+    let ids = extract::<Vec<ColumnId<Uuid, Arc<str>>>>(ids);
 
     let ids = match ids {
         Ok(ids) => ids,
@@ -38,7 +38,7 @@ async fn delete_columns(state: web::Data<AppState>, ids: web::Bytes) -> impl Res
 #[put("/")]
 async fn update_columns(state: web::Data<AppState>, ids_and_values: web::Bytes) -> impl Responder {
     let ids_and_values =
-        extract::<Vec<(ColumnId<Arc<str>>, ColumnValue<Arc<str>>)>>(ids_and_values);
+        extract::<Vec<(ColumnId<Uuid, Arc<str>>, ColumnValue<Arc<str>>)>>(ids_and_values);
 
     let ids_and_values = match ids_and_values {
         Ok(ids) => ids,
@@ -57,7 +57,7 @@ async fn update_columns(state: web::Data<AppState>, ids_and_values: web::Bytes) 
 #[post("/")]
 async fn save_columns(state: web::Data<AppState>, ids_and_values: web::Bytes) -> impl Responder {
     let ids_and_values =
-        extract::<Vec<(ColumnId<Arc<str>>, ColumnValue<Arc<str>>)>>(ids_and_values);
+        extract::<Vec<(ColumnId<Uuid, Arc<str>>, ColumnValue<Arc<str>>)>>(ids_and_values);
 
     let ids_and_values = match ids_and_values {
         Ok(ids) => ids,
@@ -82,7 +82,7 @@ async fn save_columns(state: web::Data<AppState>, ids_and_values: web::Bytes) ->
 
 pub async fn delete_column_by_column_id(
     state: &AppState,
-    ids: ColumnId<Arc<str>>,
+    ids: ColumnId<Uuid, Arc<str>>,
 ) -> Result<(), Box<dyn Error>> {
     let ColumnId {
         sheet_id,
@@ -108,7 +108,7 @@ pub async fn delete_column_by_column_id(
 
 pub async fn update_column_by_column_id(
     state: &AppState,
-    ids: ColumnId<Arc<str>>,
+    ids: ColumnId<Uuid, Arc<str>>,
     value: ColumnValue<Arc<str>>,
 ) -> Result<(), Box<dyn Error>> {
     let ColumnId {

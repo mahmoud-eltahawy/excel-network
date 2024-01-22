@@ -57,7 +57,7 @@ pub fn SheetHome() -> impl IntoView {
     };
 
     let bills = Resource::new(search_args, |value| async move {
-        invoke::<_, Rc<[Name]>>("top_5_sheets", &value)
+        invoke::<_, Rc<[Name<Uuid>]>>("top_5_sheets", &value)
             .await
             .unwrap_or(Rc::from(vec![]))
     });

@@ -31,7 +31,7 @@ async fn search(state: Data<AppState>, params: web::Bytes) -> impl Responder {
         Ok(params) => params,
         Err(err) => return HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
     };
-    fn compact(dep: Vec<Name>) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    fn compact(dep: Vec<Name<Uuid>>) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         let mut buf = vec![];
         ciborium::ser::into_writer(
             &dep.into_iter()
@@ -52,7 +52,7 @@ async fn search(state: Data<AppState>, params: web::Bytes) -> impl Responder {
 
 #[post("/")]
 async fn save(state: Data<AppState>, sheet: web::Bytes) -> impl Responder {
-    let sheet = match extract::<Sheet<Arc<str>>>(sheet) {
+    let sheet = match extract::<Sheet<Uuid, Arc<str>>>(sheet) {
         Ok(sheet) => sheet,
         Err(err) => return HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
     };
@@ -64,7 +64,7 @@ async fn save(state: Data<AppState>, sheet: web::Bytes) -> impl Responder {
 
 #[put("/name")]
 async fn update_name(state: Data<AppState>, name: web::Bytes) -> impl Responder {
-    let name = match extract::<Name>(name) {
+    let name = match extract::<Name<Uuid>>(name) {
         Ok(name) => name,
         Err(err) => return HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
     };
@@ -107,7 +107,7 @@ async fn get_number_of_sheet_rows_by_id(
             rows.push(Row { id, columns })
         };
     }
-    fn compact(dep: Vec<Row<Arc<str>>>) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    fn compact(dep: Vec<Row<Uuid, Arc<str>>>) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
         let mut buf = vec![];
         ciborium::ser::into_writer(
             &dep.into_iter()
@@ -132,7 +132,7 @@ async fn add_rows_to_sheet(
 ) -> impl Responder {
     let sheet_id = sheet_id.into_inner();
 
-    let rows = match extract::<Vec<Row<Arc<str>>>>(rows) {
+    let rows = match extract::<Vec<Row<Uuid, Arc<str>>>>(rows) {
         Ok(rows) => rows,
         Err(err) => return HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
     };
@@ -241,7 +241,7 @@ pub async fn delete_row_by_id(
 async fn fetch_custom_sheet_by_id(
     state: &AppState,
     id: Uuid,
-) -> Result<Sheet<Arc<str>>, Box<dyn Error>> {
+) -> Result<Sheet<Uuid, Arc<str>>, Box<dyn Error>> {
     let record = query!(
         r#"
         select *
@@ -262,7 +262,7 @@ async fn fetch_custom_sheet_by_id(
 async fn search_by_params(
     state: &AppState,
     params: SearchSheetParams,
-) -> Result<Vec<Name>, Box<dyn Error>> {
+) -> Result<Vec<Name<Uuid>>, Box<dyn Error>> {
     let SearchSheetParams {
         offset,
         sheet_type_name,
@@ -396,7 +396,7 @@ async fn search_by_params(
 async fn save_row(
     state: &AppState,
     sheet_id: &Uuid,
-    row: Row<Arc<str>>,
+    row: Row<Uuid, Arc<str>>,
 ) -> Result<(), Box<dyn Error>> {
     let Row { id, columns } = row;
     query!(
@@ -416,7 +416,7 @@ async fn save_row(
     Ok(())
 }
 
-async fn save_sheet(state: &AppState, sheet: Sheet<Arc<str>>) -> Result<(), Box<dyn Error>> {
+async fn save_sheet(state: &AppState, sheet: Sheet<Uuid, Arc<str>>) -> Result<(), Box<dyn Error>> {
     let Sheet {
         id,
         sheet_name,
@@ -441,7 +441,7 @@ async fn save_sheet(state: &AppState, sheet: Sheet<Arc<str>>) -> Result<(), Box<
     Ok(())
 }
 
-async fn update_sheet_name(state: &AppState, name: Name) -> Result<(), Box<dyn Error>> {
+async fn update_sheet_name(state: &AppState, name: Name<Uuid>) -> Result<(), Box<dyn Error>> {
     let Name { id, the_name } = name;
     query!(
         r#"

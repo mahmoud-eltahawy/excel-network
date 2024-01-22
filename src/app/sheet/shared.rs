@@ -17,8 +17,10 @@ use tauri_sys::{
 };
 use uuid::Uuid;
 
-use models::{
-    ColumnConfig, ColumnProps, Operation, OperationConfig, OperationKind, RowsSort, ValueType,
+use models::RowsSort;
+
+use client_models::{
+    ColumnConfig, ColumnProps, Operation, OperationConfig, OperationKind, ValueType,
 };
 
 use std::rc::Rc;
@@ -51,8 +53,8 @@ pub async fn import_sheet_rows(
     sheetid: Uuid,
     sheettype: Rc<str>,
     filepath: String,
-) -> Vec<Row<Rc<str>>> {
-    invoke::<ImportSheetArgs, Vec<Row<Rc<str>>>>(
+) -> Vec<Row<Uuid, Rc<str>>> {
+    invoke::<ImportSheetArgs, Vec<Row<Uuid, Rc<str>>>>(
         "import_sheet",
         &ImportSheetArgs {
             sheettype,
@@ -150,7 +152,7 @@ fn ColumnEdit<F1, F2, F3, F4>(
     cancel: F2,
     priorities: F3,
     get_column_type: F4,
-    rows: RwSignal<Vec<Row<Rc<str>>>>,
+    rows: RwSignal<Vec<Row<Uuid, Rc<str>>>>,
 ) -> impl IntoView
 where
     F1: Fn() -> (Rc<str>, Uuid, Rc<HashMap<Rc<str>, Column<Rc<str>>>>) + 'static,
@@ -246,10 +248,8 @@ where
                 Some(ColumnValue::Float(_)) => {
                     ColumnValue::Float(value.parse().unwrap_or_default())
                 }
-                Some(ColumnValue::Date(_)) => {
-                    ColumnValue::Date(Some(value.parse().unwrap_or_default()))
-                }
-                _ => ColumnValue::String(Some(Rc::from(value))),
+                Some(ColumnValue::Date(_)) => ColumnValue::Date(value.parse().unwrap_or_default()),
+                _ => ColumnValue::String(Rc::from(value)),
             };
             column_value.set(Some(value));
         };
@@ -314,7 +314,7 @@ pub fn ShowNewRows<BH, CH, FD, FP, FI, BT>(
     priorities: FP,
     sheet_id: FI,
     get_column_type: BT,
-    rows: RwSignal<Vec<Row<Rc<str>>>>,
+    rows: RwSignal<Vec<Row<Uuid, Rc<str>>>>,
 ) -> impl IntoView
 where
     BH: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
@@ -337,7 +337,7 @@ where
     #[component]
     fn ShowColumnEdit<FP, BT>(
         edit_column: RwSignal<Option<EditColumn>>,
-        rows: RwSignal<Vec<Row<Rc<str>>>>,
+        rows: RwSignal<Vec<Row<Uuid, Rc<str>>>>,
         priorities: FP,
         get_column_type: BT,
     ) -> impl IntoView
@@ -481,7 +481,7 @@ pub fn InputRow<F, BH, CH>(
     calc_columns: Memo<Vec<OperationConfig>>,
 ) -> impl IntoView
 where
-    F: Fn(Row<Rc<str>>) + 'static + Clone + Copy,
+    F: Fn(Row<Uuid, Rc<str>>) + 'static + Clone + Copy,
     BH: Fn() -> Vec<Rc<str>> + 'static + Clone,
     CH: Fn() -> Vec<Rc<str>> + 'static,
 {
@@ -530,11 +530,9 @@ where
             let mut basic_map = HashMap::new();
             for (header, column_signal) in basic_signals_map.get() {
                 let column_value = match column_signal {
-                    ColumnSignal::String(reader) => {
-                        ColumnValue::String(Some(Rc::from(reader.get().0)))
-                    }
+                    ColumnSignal::String(reader) => ColumnValue::String(Rc::from(reader.get().0)),
                     ColumnSignal::Float(reader) => ColumnValue::Float(reader.get().0),
-                    ColumnSignal::Date(reader) => ColumnValue::Date(Some(reader.get().0)),
+                    ColumnSignal::Date(reader) => ColumnValue::Date(reader.get().0),
                 };
                 basic_map.insert(header, column_value);
             }
@@ -554,7 +552,7 @@ where
                 match value {
                     ColumnSignal::String(reader) => Column {
                         is_basic: true,
-                        value: ColumnValue::String(Some(Rc::from(reader.get().0))),
+                        value: ColumnValue::String(Rc::from(reader.get().0)),
                     },
                     ColumnSignal::Float(reader) => Column {
                         is_basic: true,
@@ -562,7 +560,7 @@ where
                     },
                     ColumnSignal::Date(reader) => Column {
                         is_basic: true,
-                        value: ColumnValue::Date(Some(reader.get().0)),
+                        value: ColumnValue::Date(reader.get().0),
                     },
                 },
             );
@@ -987,12 +985,10 @@ pub fn PrimaryRowEditor(new_columns: RwSignal<HashMap<Rc<str>, Column<Rc<str>>>>
     let on_value_input = move |ev| {
         column_value.update(|x| match x {
             ColumnValue::String(_) => {
-                *x = ColumnValue::String(Some(Rc::from(event_target_value(&ev).trim())))
+                *x = ColumnValue::String(Rc::from(event_target_value(&ev).trim()))
             }
             ColumnValue::Date(_) => {
-                *x = ColumnValue::Date(Some(
-                    event_target_value(&ev).trim().parse().unwrap_or_default(),
-                ))
+                *x = ColumnValue::Date(event_target_value(&ev).trim().parse().unwrap_or_default())
             }
             ColumnValue::Float(_) => {
                 *x = ColumnValue::Float(event_target_value(&ev).trim().parse().unwrap_or_default())
@@ -1022,7 +1018,7 @@ pub fn PrimaryRowEditor(new_columns: RwSignal<HashMap<Rc<str>, Column<Rc<str>>>>
             class="centered-button"
             on:click=move |_| {
             add_what.set(Some("date"));
-            column_value.set(ColumnValue::Date(Some(Local::now().date_naive())))
+            column_value.set(ColumnValue::Date(Local::now().date_naive()))
             }
             >"+ تاريخ"</button>
             <button
@@ -1036,7 +1032,7 @@ pub fn PrimaryRowEditor(new_columns: RwSignal<HashMap<Rc<str>, Column<Rc<str>>>>
             class="centered-button"
             on:click=move |_| {
             add_what.set(Some("text"));
-            column_value.set(ColumnValue::String(Some(Rc::from(""))));
+            column_value.set(ColumnValue::String(Rc::from("")));
             }
             >"+ نص"</button>
         </>

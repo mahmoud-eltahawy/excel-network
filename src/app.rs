@@ -61,7 +61,7 @@ use std::rc::Rc;
 #[component]
 pub fn Home() -> impl IntoView {
     let sheets_types_names = Resource::once(|| async move {
-        invoke::<Non, Rc<[Name]>>("sheets_types_names", &Non {})
+        invoke::<Non, Rc<[Name<Uuid>]>>("sheets_types_names", &Non {})
             .await
             .unwrap_or(Rc::from(vec![]))
     });

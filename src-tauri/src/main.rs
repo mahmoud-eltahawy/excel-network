@@ -4,11 +4,9 @@
 mod api;
 
 use chrono::{Local, NaiveDate};
+use client_models::{Config, ConfigValue, ImportConfig, RowIdentity, SheetConfig};
 use dotenv::dotenv;
-use models::{
-    Column, ColumnId, ColumnValue, Config, ConfigValue, ImportConfig, Name, Row, RowIdentity,
-    SearchSheetParams, Sheet, SheetConfig,
-};
+use models::{Column, ColumnId, ColumnValue, Name, Row, SearchSheetParams, Sheet};
 use std::{
     collections::HashMap,
     env,
@@ -24,7 +22,7 @@ use rust_xlsxwriter::{Color, Format, FormatBorder, Workbook};
 use serde_json::{Deserializer, Value};
 
 #[tauri::command]
-fn sheets_types_names(sheets_types_names: tauri::State<'_, SheetsTypesNames>) -> Vec<Name> {
+fn sheets_types_names(sheets_types_names: tauri::State<'_, SheetsTypesNames>) -> Vec<Name<Uuid>> {
     sheets_types_names.0.clone()
 }
 
@@ -92,7 +90,7 @@ async fn save_sheet(
     sheetid: Uuid,
     sheetname: Arc<str>,
     typename: Arc<str>,
-    rows: Vec<Row<Arc<str>>>,
+    rows: Vec<Row<Uuid, Arc<str>>>,
 ) -> Result<(), String> {
     if sheetname.is_empty() {
         return Err("اسم الشيت مطلوب".to_string());
@@ -114,7 +112,7 @@ async fn save_sheet(
 async fn top_5_sheets(
     app_state: tauri::State<'_, AppState>,
     params: SearchSheetParams,
-) -> Result<Vec<Name>, String> {
+) -> Result<Vec<Name<Uuid>>, String> {
     match api::search_for_5_sheets(&app_state, &params).await {
         Ok(names) => Ok(names),
         Err(err) => Err(err.to_string()),
@@ -125,7 +123,7 @@ async fn top_5_sheets(
 async fn get_sheet(
     app_state: tauri::State<'_, AppState>,
     id: Option<Uuid>,
-) -> Result<(Sheet<Arc<str>>, i64), String> {
+) -> Result<(Sheet<Uuid, Arc<str>>, i64), String> {
     match id {
         Some(id) => match api::get_sheet_by_id(&app_state, &id).await {
             Ok((sheet, len)) => Ok((sheet, len)),
@@ -141,7 +139,7 @@ async fn get_sheet_rows(
     id: Option<Uuid>,
     offset: i64,
     limit: i64,
-) -> Result<Vec<Row<Arc<str>>>, String> {
+) -> Result<Vec<Row<Uuid, Arc<str>>>, String> {
     match id {
         Some(id) => match api::get_sheet_rows_between(&app_state, &id, offset, limit).await {
             Ok(rows) => Ok(rows),
@@ -184,7 +182,7 @@ async fn get_priorities(
 #[tauri::command]
 async fn update_sheet_name(
     app_state: tauri::State<'_, AppState>,
-    name: Name,
+    name: Name<Uuid>,
 ) -> Result<(), String> {
     match api::update_sheet_name(&app_state, name).await {
         Ok(_) => Ok(()),
@@ -196,7 +194,7 @@ async fn update_sheet_name(
 async fn add_rows_to_sheet(
     app_state: tauri::State<'_, AppState>,
     sheetid: Uuid,
-    rows: Vec<Row<Arc<str>>>,
+    rows: Vec<Row<Uuid, Arc<str>>>,
 ) -> Result<(), String> {
     match api::add_rows_to_sheet(&app_state, sheetid, rows).await {
         Ok(_) => Ok(()),
@@ -287,7 +285,10 @@ async fn update_columns(
 }
 
 #[tauri::command]
-async fn export_sheet(headers: Arc<[Arc<str>]>, sheet: Sheet<Arc<str>>) -> Result<(), String> {
+async fn export_sheet(
+    headers: Arc<[Arc<str>]>,
+    sheet: Sheet<Uuid, Arc<str>>,
+) -> Result<(), String> {
     match write_sheet(headers, sheet).await {
         Ok(_) => Ok(()),
         Err(err) => Err(err.to_string()),
@@ -319,11 +320,11 @@ fn column_from_value(value: &Value) -> Column<Arc<str>> {
                     .unwrap_or("unparsable string to date")
                     .parse::<NaiveDate>()
                 {
-                    Ok(v) => ColumnValue::Date(Some(v)),
-                    Err(_) => ColumnValue::String(Some(Arc::from(v.to_owned()))),
+                    Ok(v) => ColumnValue::Date(v),
+                    Err(_) => ColumnValue::String(Arc::from(v.to_owned())),
                 },
             },
-            _ => ColumnValue::String(Some(Arc::from("".to_string()))),
+            _ => ColumnValue::String(Arc::from("".to_string())),
         },
     }
 }
@@ -334,7 +335,7 @@ async fn import_sheet(
     sheettype: Arc<str>,
     sheetid: Uuid,
     filepath: String,
-) -> Result<Vec<Row<Arc<str>>>, String> {
+) -> Result<Vec<Row<Uuid, Arc<str>>>, String> {
     let ImportConfig {
         main_entry,
         repeated_entry,
@@ -413,7 +414,7 @@ async fn import_sheet(
     Ok(result)
 }
 
-struct SheetsTypesNames(Vec<Name>);
+struct SheetsTypesNames(Vec<Name<Uuid>>);
 struct SheetsRows(HashMap<Arc<str>, Vec<ConfigValue>>);
 struct SheetImport(HashMap<Arc<str>, ImportConfig>);
 struct SheetRowsIds(HashMap<Arc<str>, RowIdentity<Arc<str>>>);
@@ -504,7 +505,7 @@ impl Default for AppState {
 
 pub async fn write_sheet(
     headers: Arc<[Arc<str>]>,
-    sheet: Sheet<Arc<str>>,
+    sheet: Sheet<Uuid, Arc<str>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let Sheet {
         id,
@@ -544,14 +545,14 @@ pub async fn write_sheet(
         match column.value {
             ColumnValue::String(v) => {
                 worksheet.write_string(row, 1, header.to_string())?;
-                worksheet.write_string(row, 3, v.map(|x| x.to_string()).unwrap_or_default())?;
+                worksheet.write_string(row, 3, v.to_string())?;
             }
             ColumnValue::Float(v) => {
                 worksheet.write_string(row, 1, header.to_string())?;
                 worksheet.write_number(row, 3, v)?;
             }
             ColumnValue::Date(v) => {
-                let v = v.map(|x| x.to_string()).unwrap_or_default();
+                let v = v.to_string();
                 worksheet.write_string(row, 1, header.to_string())?;
                 worksheet.write_string(row, 3, v)?;
             }
@@ -570,17 +571,16 @@ pub async fn write_sheet(
             worksheet.set_row_height(row, 30)?;
             match &columns.get(header) {
                 Some(column) => match &column.value {
-                    ColumnValue::Date(Some(date)) => {
+                    ColumnValue::Date(date) => {
                         let string = date.to_string();
                         worksheet.write_string(row, col, string)?;
                     }
-                    ColumnValue::String(Some(string)) => {
+                    ColumnValue::String(string) => {
                         worksheet.write_string(row, col, string.to_string())?;
                     }
                     ColumnValue::Float(number) => {
                         worksheet.write_number(row, col, *number)?;
                     }
-                    _ => (),
                 },
                 None => (),
             }

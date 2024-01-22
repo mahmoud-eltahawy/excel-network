@@ -10,7 +10,7 @@ use crate::AppState;
 
 pub async fn save_sheet(
     app_state: &AppState,
-    sheet: Sheet<Arc<str>>,
+    sheet: Sheet<Uuid, Arc<str>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = vec![];
     let sheet = sheet.to_serial();
@@ -36,7 +36,7 @@ pub async fn save_sheet(
 
 pub async fn update_sheet_name(
     app_state: &AppState,
-    name: Name,
+    name: Name<Uuid>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = vec![];
     let name = name.to_serial();
@@ -62,7 +62,7 @@ pub async fn update_sheet_name(
 
 pub async fn update_columns(
     app_state: &AppState,
-    args: Vec<(ColumnId<Arc<str>>, ColumnValue<Arc<str>>)>,
+    args: Vec<(ColumnId<Uuid, Arc<str>>, ColumnValue<Arc<str>>)>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = vec![];
     let args = args
@@ -89,7 +89,7 @@ pub async fn update_columns(
 
 pub async fn save_columns(
     app_state: &AppState,
-    args: Vec<(ColumnId<Arc<str>>, ColumnValue<Arc<str>>)>,
+    args: Vec<(ColumnId<Uuid, Arc<str>>, ColumnValue<Arc<str>>)>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = vec![];
     let args = args
@@ -116,7 +116,7 @@ pub async fn save_columns(
 
 pub async fn delete_columns(
     app_state: &AppState,
-    ids: Vec<ColumnId<Arc<str>>>,
+    ids: Vec<ColumnId<Uuid, Arc<str>>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = vec![];
     let ids = ids
@@ -144,7 +144,7 @@ pub async fn delete_columns(
 pub async fn add_rows_to_sheet(
     app_state: &AppState,
     sheet_id: Uuid,
-    rows: Vec<Row<Arc<str>>>,
+    rows: Vec<Row<Uuid, Arc<str>>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut buffer = vec![];
     let rows = rows
@@ -200,7 +200,7 @@ pub async fn delete_rows_from_sheet(
 pub async fn search_for_5_sheets(
     app_state: &AppState,
     params: &SearchSheetParams,
-) -> Result<Vec<Name>, Box<dyn std::error::Error>> {
+) -> Result<Vec<Name<Uuid>>, Box<dyn std::error::Error>> {
     let mut buffer = vec![];
     ciborium::ser::into_writer(&params, Cursor::new(&mut buffer))?;
 
@@ -214,7 +214,7 @@ pub async fn search_for_5_sheets(
     if res.status() == StatusCode::OK {
         let body = res.bytes().await.unwrap_or_default();
         let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body))
-            .map(|body| body.deserialized::<Vec<Name>>().unwrap_or_default())
+            .map(|body| body.deserialized::<Vec<Name<Uuid>>>().unwrap_or_default())
             .unwrap_or_default();
         Ok(body)
     } else {
@@ -227,7 +227,7 @@ pub async fn search_for_5_sheets(
 pub async fn get_sheet_by_id(
     app_state: &AppState,
     id: &Uuid,
-) -> Result<(Sheet<Arc<str>>, i64), Box<dyn std::error::Error>> {
+) -> Result<(Sheet<Uuid, Arc<str>>, i64), Box<dyn std::error::Error>> {
     let origin = &app_state.origin;
     let res = reqwest::Client::new()
         .get(format!("{origin}/sheet/{id}"))
@@ -237,7 +237,7 @@ pub async fn get_sheet_by_id(
     if res.status() == StatusCode::OK {
         let body = res.bytes().await.unwrap_or_default();
         let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body))
-            .map(|body| body.deserialized::<(Sheet<Arc<str>>, i64)>());
+            .map(|body| body.deserialized::<(Sheet<Uuid, Arc<str>>, i64)>());
 
         match body {
             Ok(Ok(v)) => Ok(v),
@@ -256,7 +256,7 @@ pub async fn get_sheet_rows_between(
     id: &Uuid,
     offset: i64,
     limit: i64,
-) -> Result<Vec<Row<Arc<str>>>, Box<dyn std::error::Error>> {
+) -> Result<Vec<Row<Uuid, Arc<str>>>, Box<dyn std::error::Error>> {
     let origin = &app_state.origin;
     let res = reqwest::Client::new()
         .get(format!("{origin}/sheet/{id}/{offset}/{limit}"))
@@ -266,7 +266,7 @@ pub async fn get_sheet_rows_between(
     if res.status() == StatusCode::OK {
         let body = res.bytes().await.unwrap_or_default();
         let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body))
-            .map(|body| body.deserialized::<Vec<Row<Arc<str>>>>());
+            .map(|body| body.deserialized::<Vec<Row<Uuid, Arc<str>>>>());
 
         match body {
             Ok(Ok(rows)) => Ok(rows),

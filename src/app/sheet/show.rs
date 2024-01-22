@@ -3,13 +3,12 @@ use crate::app::sheet::shared::{
 };
 use crate::Id;
 use chrono::{Local, NaiveDate};
+use client_models::{ColumnConfig, ConfigValue, HeaderGetter, IdentityDiffsOps, RowIdentity};
 use leptos::spawn_local;
 use leptos::{ev::MouseEvent, *};
 use leptos_router::*;
-use models::{
-    Column, ColumnConfig, ColumnValue, ConfigValue, HeaderGetter, IdentityDiffsOps, Row,
-    RowIdentity, RowsSort, Sheet,
-};
+use models::{Column, ColumnValue, Row, RowsSort, Sheet};
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::str::FromStr;
@@ -58,19 +57,22 @@ fn spawn_my_local_process<T: Serialize + 'static>(
 
 #[inline(always)]
 async fn collapse_rows(
-    rows: Vec<Row<Rc<str>>>,
+    rows: Vec<Row<Uuid, Rc<str>>>,
     row_identity: RowIdentity<Rc<str>>,
     priorities: Rc<[Rc<str>]>,
-) -> (Vec<Row<Rc<str>>>, HashMap<Uuid, Vec<Uuid>>) {
-    let row_to_key = |x: &Row<Rc<str>>| {
+) -> (Vec<Row<Uuid, Rc<str>>>, HashMap<Uuid, Vec<Uuid>>) {
+    let row_to_key = |x: &Row<Uuid, Rc<str>>| {
         x.columns
             .get(&row_identity.id)
             .map(|x| Rc::from(x.value.to_string()))
             .unwrap_or(Rc::from(""))
     };
     #[inline(always)]
-    fn stack_rows(rows: Vec<Row<Rc<str>>>, rows_ids_id: &Rc<str>) -> Vec<Vec<Row<Rc<str>>>> {
-        let key = |x: &Row<Rc<str>>| {
+    fn stack_rows(
+        rows: Vec<Row<Uuid, Rc<str>>>,
+        rows_ids_id: &Rc<str>,
+    ) -> Vec<Vec<Row<Uuid, Rc<str>>>> {
+        let key = |x: &Row<Uuid, Rc<str>>| {
             x.columns
                 .get(rows_ids_id)
                 .map(|x| x.value.to_string())
@@ -84,11 +86,11 @@ async fn collapse_rows(
 
     fn column_value_from_identity(
         value: &IdentityDiffsOps,
-        rows: &[Row<Rc<str>>],
+        rows: &[Row<Uuid, Rc<str>>],
         title: &Rc<str>,
     ) -> Option<ColumnValue<Rc<str>>> {
         let row_main_column_value =
-            |x: &Row<Rc<str>>| x.columns.get(title).map(|x| x.value.clone());
+            |x: &Row<Uuid, Rc<str>>| x.columns.get(title).map(|x| x.value.clone());
 
         let map_rows_to_columns = || rows.iter().filter_map(row_main_column_value);
 
@@ -154,7 +156,7 @@ async fn collapse_rows(
             .partition(|x| repeated.contains(&row_to_key(x)))
     };
 
-    let mut collapsed_rows = Vec::<Row<Rc<str>>>::new();
+    let mut collapsed_rows = Vec::<Row<Uuid, Rc<str>>>::new();
     let mut collapsed_rows_ids = HashMap::<Uuid, Vec<Uuid>>::new();
     let stacked_rows = stack_rows(repeated, &row_identity.id);
     for rows in stacked_rows {
@@ -191,7 +193,7 @@ pub fn ShowSheet() -> impl IntoView {
     let sheet_name = RwSignal::<Rc<str>>::from(Rc::from(""));
     let expanded_deleted_rows = RwSignal::from(Vec::<Uuid>::new());
     let collapsed_deleted_rows = RwSignal::from(Vec::<Uuid>::new());
-    let added_rows = RwSignal::from(Vec::<Row<Rc<str>>>::new());
+    let added_rows = RwSignal::from(Vec::<Row<Uuid, Rc<str>>>::new());
     let modified_columns = RwSignal::from(Vec::<ColumnIdentity>::new());
     let modified_primary_columns = RwSignal::from(HashMap::<Rc<str>, Column<Rc<str>>>::new());
     let deleted_primary_columns = RwSignal::from(Vec::<Rc<str>>::new());
@@ -256,7 +258,7 @@ pub fn ShowSheet() -> impl IntoView {
     };
 
     let sheet_resource = Resource::once(move || async move {
-        invoke::<Id, (Sheet<Rc<str>>, i64)>("get_sheet", &Id { id: sheet_id() })
+        invoke::<Id, (Sheet<Uuid, Rc<str>>, i64)>("get_sheet", &Id { id: sheet_id() })
             .await
             .ok()
     });
@@ -271,8 +273,8 @@ pub fn ShowSheet() -> impl IntoView {
             .unwrap_or(default)
     });
 
-    let rows_accumalator = RwSignal::from(Vec::<Row<Rc<str>>>::new());
-    let rows_collapser = RwSignal::from(Vec::<Row<Rc<str>>>::new());
+    let rows_accumalator = RwSignal::from(Vec::<Row<Uuid, Rc<str>>>::new());
+    let rows_collapser = RwSignal::from(Vec::<Row<Uuid, Rc<str>>>::new());
     let rows_collapsed_ids = RwSignal::from(HashMap::<Uuid, Vec<Uuid>>::new());
     let rows_updates = RwSignal::from(HashMap::<Uuid, i32>::new());
 
@@ -291,7 +293,7 @@ pub fn ShowSheet() -> impl IntoView {
             }
 
             let rows_number = rows_number.get();
-            let new_rows = invoke::<_, Vec<Row<Rc<str>>>>(
+            let new_rows = invoke::<_, Vec<Row<Uuid, Rc<str>>>>(
                 "get_sheet_rows",
                 &LimitedId {
                     id: sheet_id(),
@@ -530,7 +532,7 @@ pub fn ShowSheet() -> impl IntoView {
             #[derive(Serialize, Deserialize)]
             struct Args {
                 headers: Vec<Rc<str>>,
-                sheet: Sheet<Rc<str>>,
+                sheet: Sheet<Uuid, Rc<str>>,
             }
             match invoke::<_, ()>(
                 "export_sheet",
@@ -690,7 +692,7 @@ pub fn ShowSheet() -> impl IntoView {
             #[derive(Serialize, Deserialize)]
             struct Args {
                 sheetid: Uuid,
-                rows: Vec<Row<Rc<str>>>,
+                rows: Vec<Row<Uuid, Rc<str>>>,
             }
             spawn_my_local_process(
                 !rows.is_empty(),
@@ -1123,7 +1125,7 @@ fn ShowRows<BH, CH, FD, ID, BT, EX, CL>(
     get_column_type: BT,
     expand_collapse_id: EX,
     rows_updates: RwSignal<HashMap<Uuid, i32>>,
-    rows: Memo<Vec<Row<Rc<str>>>>,
+    rows: Memo<Vec<Row<Uuid, Rc<str>>>>,
     edit_mode: RwSignal<EditState>,
     modified_columns: RwSignal<Vec<ColumnIdentity>>,
     get_collapse_pattern: CL,
@@ -1184,10 +1186,8 @@ where
                 let value = event_target_value(&ev).trim().to_string();
                 let value = match column_value.get() {
                     ColumnValue::Float(_) => ColumnValue::Float(value.parse().unwrap_or_default()),
-                    ColumnValue::Date(_) => {
-                        ColumnValue::Date(Some(value.parse().unwrap_or_default()))
-                    }
-                    _ => ColumnValue::String(Some(Rc::from(value))),
+                    ColumnValue::Date(_) => ColumnValue::Date(value.parse().unwrap_or_default()),
+                    _ => ColumnValue::String(Rc::from(value)),
                 };
                 column_value.set(value);
             };
@@ -1286,7 +1286,7 @@ where
         basic_headers: BH,
         get_column_type: BT,
         modified_columns: RwSignal<Vec<ColumnIdentity>>,
-        row: Row<Rc<str>>,
+        row: Row<Uuid, Rc<str>>,
         edit_mode: RwSignal<EditState>,
         edit_column: RwSignal<Option<ColumnIdentity>>,
         expand_collapse_id: EX,
@@ -1315,12 +1315,10 @@ where
             let columns = columns.clone();
             move |_| {
                 let or: ColumnValue<Rc<str>> = match get_column_type(header.to_string()) {
-                    Some(ColumnConfig::String(_)) => ColumnValue::String(Some(Rc::from("empty"))),
+                    Some(ColumnConfig::String(_)) => ColumnValue::String(Rc::from("empty")),
                     Some(ColumnConfig::Float(_)) => ColumnValue::Float(0.0),
-                    Some(ColumnConfig::Date(_)) => {
-                        ColumnValue::Date(Some(Local::now().date_naive()))
-                    }
-                    _ => ColumnValue::String(Some(Rc::from("EMPTY"))),
+                    Some(ColumnConfig::Date(_)) => ColumnValue::Date(Local::now().date_naive()),
+                    _ => ColumnValue::String(Rc::from("EMPTY")),
                 };
                 if matches!(edit_mode.get(), EditState::NonePrimary) {
                     edit_column.set(Some(ColumnIdentity {
