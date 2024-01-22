@@ -4,11 +4,9 @@ use sqlx::query;
 use std::error::Error;
 use uuid::Uuid;
 
-use std::io::Cursor;
-
 use std::sync::Arc;
 
-use crate::AppState;
+use crate::{service::extract, AppState};
 
 use models::{ColumnId, ColumnValue};
 
@@ -21,14 +19,10 @@ pub fn scope() -> Scope {
 
 #[post("/delete")]
 async fn delete_columns(state: web::Data<AppState>, ids: web::Bytes) -> impl Responder {
-    let ids = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(ids))
-        .map(|body| body.deserialized::<Vec<ColumnId<Arc<str>>>>());
+    let ids = extract::<Vec<ColumnId<Arc<str>>>>(ids);
 
     let ids = match ids {
-        Ok(Ok(ids)) => ids,
-        Ok(Err(err)) => {
-            return HttpResponse::InternalServerError().body(err.to_string().into_bytes())
-        }
+        Ok(ids) => ids,
         Err(err) => return HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
     };
 
@@ -44,14 +38,10 @@ async fn delete_columns(state: web::Data<AppState>, ids: web::Bytes) -> impl Res
 #[put("/")]
 async fn update_columns(state: web::Data<AppState>, ids_and_values: web::Bytes) -> impl Responder {
     let ids_and_values =
-        ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(ids_and_values))
-            .map(|body| body.deserialized::<Vec<(ColumnId<Arc<str>>, ColumnValue<Arc<str>>)>>());
+        extract::<Vec<(ColumnId<Arc<str>>, ColumnValue<Arc<str>>)>>(ids_and_values);
 
     let ids_and_values = match ids_and_values {
-        Ok(Ok(ids_and_values)) => ids_and_values,
-        Ok(Err(err)) => {
-            return HttpResponse::InternalServerError().body(err.to_string().into_bytes())
-        }
+        Ok(ids) => ids,
         Err(err) => return HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
     };
 
@@ -67,14 +57,10 @@ async fn update_columns(state: web::Data<AppState>, ids_and_values: web::Bytes) 
 #[post("/")]
 async fn save_columns(state: web::Data<AppState>, ids_and_values: web::Bytes) -> impl Responder {
     let ids_and_values =
-        ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(ids_and_values))
-            .map(|body| body.deserialized::<Vec<(ColumnId<Arc<str>>, ColumnValue<Arc<str>>)>>());
+        extract::<Vec<(ColumnId<Arc<str>>, ColumnValue<Arc<str>>)>>(ids_and_values);
 
     let ids_and_values = match ids_and_values {
-        Ok(Ok(ids_and_values)) => ids_and_values,
-        Ok(Err(err)) => {
-            return HttpResponse::InternalServerError().body(err.to_string().into_bytes())
-        }
+        Ok(ids) => ids,
         Err(err) => return HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
     };
 
