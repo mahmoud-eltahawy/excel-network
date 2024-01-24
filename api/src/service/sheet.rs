@@ -4,7 +4,7 @@ use actix_web::{
     web::{self, Data},
     HttpResponse, Responder, Result, Scope,
 };
-use sqlx::{query, query_as};
+use sqlx::{query, query_as, Transaction};
 use std::{collections::HashMap, error::Error};
 use uuid::Uuid;
 
@@ -137,10 +137,21 @@ async fn add_rows_to_sheet(
         Err(err) => return HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
     };
 
-    for row in rows {
-        if let Err(err) = save_row(&state, &sheet_id, row).await {
+    let mut transaction = match state.db.begin().await {
+        Ok(v) => v,
+        Err(err) => {
             return HttpResponse::InternalServerError().body(err.to_string().into_bytes());
         }
+    };
+
+    for row in rows {
+        if let Err(err) = save_row(&mut transaction, &sheet_id, row).await {
+            transaction.rollback().await.unwrap_or_default();
+            return HttpResponse::InternalServerError().body(err.to_string().into_bytes());
+        }
+    }
+    if let Err(err) = transaction.commit().await {
+        return HttpResponse::InternalServerError().body(err.to_string().into_bytes());
     }
     HttpResponse::Ok().into()
 }
@@ -157,11 +168,22 @@ async fn delete_sheet_rows(
         Err(err) => return HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
     };
 
+    let mut transaction = match state.db.begin().await {
+        Ok(v) => v,
+        Err(err) => {
+            return HttpResponse::InternalServerError().body(err.to_string().into_bytes());
+        }
+    };
+
     for row_id in rows {
-        if let Err(err) = delete_row_by_id(&state, &sheet_id, row_id).await {
+        if let Err(err) = delete_row_by_id(&mut transaction, &sheet_id, row_id).await {
+            transaction.rollback().await.unwrap_or_default();
             return HttpResponse::InternalServerError().body(err.to_string().into_bytes());
         }
     }
+    if let Err(err) = transaction.commit().await {
+        return HttpResponse::InternalServerError().body(err.to_string().into_bytes());
+    };
     HttpResponse::Ok().into()
 }
 
@@ -222,7 +244,7 @@ async fn fetch_sheet_rows_length(state: &AppState, sheet_id: &Uuid) -> Result<i6
 }
 
 pub async fn delete_row_by_id(
-    state: &AppState,
+    transaction: &mut Transaction<'_, sqlx::Postgres>,
     sheet_id: &Uuid,
     row_id: Uuid,
 ) -> Result<(), Box<dyn Error>> {
@@ -233,7 +255,7 @@ pub async fn delete_row_by_id(
         sheet_id,
         row_id,
     )
-    .execute(&state.db)
+    .execute(transaction)
     .await?;
     Ok(())
 }
@@ -393,8 +415,8 @@ async fn search_by_params(
     Ok(names)
 }
 
-async fn save_row(
-    state: &AppState,
+async fn save_row<'a>(
+    transaction: &mut Transaction<'_, sqlx::Postgres>,
     sheet_id: &Uuid,
     row: Row<Uuid, Arc<str>>,
 ) -> Result<(), Box<dyn Error>> {
@@ -406,11 +428,11 @@ async fn save_row(
         id,
         sheet_id,
     )
-    .execute(&state.db)
+    .execute(&mut *transaction)
     .await?;
     for (header_name, column) in columns {
         if column.is_basic {
-            save_cloumn_value(state, &id, header_name, column.value).await?;
+            save_cloumn_value(&mut *transaction, &id, header_name, column.value).await?;
         }
     }
     Ok(())
@@ -424,6 +446,7 @@ async fn save_sheet(state: &AppState, sheet: Sheet<Uuid, Arc<str>>) -> Result<()
         insert_date,
         rows,
     } = sheet;
+    let mut transaction = state.db.begin().await?;
     query!(
         r#"
 	INSERT INTO sheets(id,sheet_name,type_name,insert_date)
@@ -433,11 +456,16 @@ async fn save_sheet(state: &AppState, sheet: Sheet<Uuid, Arc<str>>) -> Result<()
         type_name.to_string(),
         insert_date,
     )
-    .execute(&state.db)
+    .execute(&mut transaction)
     .await?;
     for row in rows {
-        save_row(state, &id, row).await?;
+        if let Err(err) = save_row(&mut transaction, &id, row).await {
+            transaction.rollback().await.unwrap_or_default();
+            return Err(err);
+        };
     }
+
+    transaction.commit().await?;
     Ok(())
 }
 

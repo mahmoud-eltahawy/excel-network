@@ -1,5 +1,5 @@
 use actix_web::{post, put, web, HttpResponse, Responder, Scope};
-use sqlx::query;
+use sqlx::{query, Transaction};
 
 use std::error::Error;
 use uuid::Uuid;
@@ -19,18 +19,27 @@ pub fn scope() -> Scope {
 
 #[post("/delete")]
 async fn delete_columns(state: web::Data<AppState>, ids: web::Bytes) -> impl Responder {
-    let ids = extract::<Vec<ColumnId<Uuid, Arc<str>>>>(ids);
-
-    let ids = match ids {
+    let ids = match extract::<Vec<ColumnId<Uuid, Arc<str>>>>(ids) {
         Ok(ids) => ids,
         Err(err) => return HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
     };
 
+    let mut transaction = match state.db.begin().await {
+        Ok(v) => v,
+        Err(err) => {
+            return HttpResponse::InternalServerError().body(err.to_string().into_bytes());
+        }
+    };
+
     for id in ids {
-        if let Err(err) = delete_column_by_column_id(&state, id).await {
+        if let Err(err) = delete_column_by_column_id(&mut transaction, id).await {
+            transaction.rollback().await.unwrap_or_default();
             return HttpResponse::InternalServerError().body(err.to_string().into_bytes());
         }
     }
+    if let Err(err) = transaction.commit().await {
+        return HttpResponse::InternalServerError().body(err.to_string().into_bytes());
+    };
 
     HttpResponse::Ok().into()
 }
@@ -38,19 +47,31 @@ async fn delete_columns(state: web::Data<AppState>, ids: web::Bytes) -> impl Res
 #[put("/")]
 async fn update_columns(state: web::Data<AppState>, ids_and_values: web::Bytes) -> impl Responder {
     let ids_and_values =
-        extract::<Vec<(ColumnId<Uuid, Arc<str>>, ColumnValue<Arc<str>>)>>(ids_and_values);
+        match extract::<Vec<(ColumnId<Uuid, Arc<str>>, ColumnValue<Arc<str>>)>>(ids_and_values) {
+            Ok(ids) => ids,
+            Err(err) => {
+                return HttpResponse::InternalServerError().body(err.to_string().into_bytes())
+            }
+        };
 
-    let ids_and_values = match ids_and_values {
-        Ok(ids) => ids,
-        Err(err) => return HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
+    let mut transaction = match state.db.begin().await {
+        Ok(v) => v,
+        Err(err) => {
+            return HttpResponse::InternalServerError().body(err.to_string().into_bytes());
+        }
     };
 
     for ids_and_value in ids_and_values {
         let (ids, value) = ids_and_value;
-        if let Err(err) = update_column_by_column_id(&state, ids, value).await {
+        if let Err(err) = update_column_by_column_id(&mut transaction, ids, value).await {
+            transaction.rollback().await.unwrap_or_default();
             return HttpResponse::InternalServerError().body(err.to_string().into_bytes());
         }
     }
+    if let Err(err) = transaction.commit().await {
+        return HttpResponse::InternalServerError().body(err.to_string().into_bytes());
+    }
+
     HttpResponse::Ok().into()
 }
 
@@ -64,6 +85,13 @@ async fn save_columns(state: web::Data<AppState>, ids_and_values: web::Bytes) ->
         Err(err) => return HttpResponse::InternalServerError().body(err.to_string().into_bytes()),
     };
 
+    let mut transaction = match state.db.begin().await {
+        Ok(v) => v,
+        Err(err) => {
+            return HttpResponse::InternalServerError().body(err.to_string().into_bytes());
+        }
+    };
+
     for ids_and_value in ids_and_values {
         let (
             ColumnId {
@@ -73,15 +101,19 @@ async fn save_columns(state: web::Data<AppState>, ids_and_values: web::Bytes) ->
             },
             value,
         ) = ids_and_value;
-        if let Err(err) = save_cloumn_value(&state, &row_id, header, value).await {
+        if let Err(err) = save_cloumn_value(&mut transaction, &row_id, header, value).await {
+            transaction.rollback().await.unwrap_or_default();
             return HttpResponse::InternalServerError().body(err.to_string().into_bytes());
         }
     }
+    if let Err(err) = transaction.commit().await {
+        return HttpResponse::InternalServerError().body(err.to_string().into_bytes());
+    };
     HttpResponse::Ok().into()
 }
 
 pub async fn delete_column_by_column_id(
-    state: &AppState,
+    transaction: &mut Transaction<'_, sqlx::Postgres>,
     ids: ColumnId<Uuid, Arc<str>>,
 ) -> Result<(), Box<dyn Error>> {
     let ColumnId {
@@ -101,13 +133,13 @@ pub async fn delete_column_by_column_id(
         row_id,
         sheet_id,
     )
-    .execute(&state.db)
+    .execute(transaction)
     .await?;
     Ok(())
 }
 
 pub async fn update_column_by_column_id(
-    state: &AppState,
+    transaction: &mut Transaction<'_, sqlx::Postgres>,
     ids: ColumnId<Uuid, Arc<str>>,
     value: ColumnValue<Arc<str>>,
 ) -> Result<(), Box<dyn Error>> {
@@ -131,13 +163,13 @@ pub async fn update_column_by_column_id(
         row_id,
         sheet_id,
     )
-    .execute(&state.db)
+    .execute(transaction)
     .await?;
     Ok(())
 }
 
 pub async fn save_cloumn_value(
-    state: &AppState,
+    transaction: &mut Transaction<'_, sqlx::Postgres>,
     row_id: &Uuid,
     header_name: Arc<str>,
     value: ColumnValue<Arc<str>>,
@@ -153,7 +185,7 @@ pub async fn save_cloumn_value(
         header_name.to_string(),
         value,
     )
-    .execute(&state.db)
+    .execute(transaction)
     .await?;
     Ok(())
 }
