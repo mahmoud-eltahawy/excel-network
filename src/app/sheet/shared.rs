@@ -1,3 +1,7 @@
+use leptonic::table::Td;
+use leptonic::table::Th;
+use leptonic::table::Thead;
+use leptonic::table::Tr;
 use leptos::*;
 use models::Column;
 use models::ColumnValue;
@@ -123,25 +127,25 @@ where
     Fb: Fn() -> Vec<Rc<str>> + 'static,
 {
     view! {
-        <thead>
-            <tr>
+        <Thead>
+            <Tr>
                 <For
                     each=basic_headers
                     key=move |x| x.clone()
                     let:x
                 >
-                    <th>{x.to_string()}</th>
+                    <Th>{x.to_string()}</Th>
                 </For>
-                <th class="shapeless">"  "</th>
+                <Th>"  "</Th>
                 <For
                     each=calc_headers
                     key=move |x| x.clone()
                     let:x
                 >
-                    <th>{x.to_string()}</th>
+                    <Th>{x.to_string()}</Th>
                 </For>
-            </tr>
-        </thead>
+            </Tr>
+        </Thead>
     }
 }
 
@@ -279,7 +283,7 @@ where
     }
 
     view! {
-        <div class="popup">
+        <div>
             <MainInput
                 get_column_type=get_column_type
                 header=header
@@ -295,10 +299,10 @@ where
             placeholder="لاسفل"
             on:input=move |ev| down.set(Some(event_target_value(&ev).trim().parse().unwrap_or_default()))
             />
-            <button on:click=move|_| cancel() class="centered-button">
+            <button on:click=move|_| cancel()>
                 "الغاء"
             </button>
-            <button on:click=save class="centered-button">
+            <button on:click=save>
                 "تاكيد"
             </button>
         </div>
@@ -383,12 +387,11 @@ where
                 move || columns.get(&header).map(|x| x.value.to_string())
             };
             view! {
-                <td
-                    style="cursor: pointer"
+                <Td
                     on:dblclick=on_dblclick
                 >
                     {content}
-                </td>
+                </Td>
             }
         };
 
@@ -413,7 +416,7 @@ where
         let children = move |column| {
             let columns = columns.clone();
             let content = move || columns.get(&column).map(|x| x.value.to_string());
-            view! {  <td>{content}</td> }
+            view! {  <Td>{content}</Td> }
         };
         view! {
             <For
@@ -426,22 +429,22 @@ where
     let children = move |Row { columns, id }| {
         let columns = Rc::new(columns);
         view! {
-            <tr>
+            <Tr>
                 <BasicColumns
                     basic_headers=basic_headers
                     columns=columns.clone()
                     edit_column=edit_column
                     id=id
                 />
-                <td class="shapeless">"  "</td>
+                <Td>"  "</Td>
                 <CalcColumn
                     calc_headers=calc_headers
                     columns=columns
                 />
-                <td>
+                <Td>
                     <button on:click=move |_| delete_row(id)>"X"</button>
-                </td>
-            </tr>
+                </Td>
+            </Tr>
         }
     };
 
@@ -584,7 +587,7 @@ where
 
     view! {
         <>
-        <tr>
+        <Tr>
             <For
                 each=move || basic_headers().clone()
                 key=|x| x.clone()
@@ -592,31 +595,31 @@ where
             >
                 <MyInput header=header basic_signals_map=basic_signals_map/>
             </For>
-            <td class="shapeless">"  "</td>
+            <Td>"  "</Td>
             <For
                 each=move || calc_headers().clone()
                 key=|x| x.clone()
                 let:header
             >
-                <td>
+                <Td>
                     {move || calc_signals_map
                         .get()
                         .get(&header)
                         .map(|x| format!("{:.2}",* x))
                     }
-                </td>
+                </Td>
             </For>
-        </tr>
-        <tr>
-            <td class="shapeless"></td>
-            <td class="shapeless"></td>
-            <td class="shapeless"></td>
-            <td class="shapeless">
-                <button on:click=on_click class="centered-button">
+        </Tr>
+        <Tr>
+            <Td>""</Td>
+            <Td>""</Td>
+            <Td>""</Td>
+            <Td>
+                <button on:click=on_click>
                     "_+_"
                 </button>
-            </td>
-        </tr>
+            </Td>
+        </Tr>
         </>
     }
 }
@@ -635,7 +638,7 @@ fn MyInput(
         None => ("", "".to_string()),
     };
     view! {
-        <td>
+        <Td>
             <input
                 type=i_type
                 value=move || value.clone()
@@ -652,7 +655,7 @@ fn MyInput(
                     None => {}
                 }
             />
-        </td>
+        </Td>
     }
 }
 
@@ -813,14 +816,18 @@ where
             view! {
                 <Show
                     when=is_in_edit_mode
-                    fallback=|| view!{<td class="shapeless"></td>}
+                    fallback=|| view!{<Td>""</Td>}
                 >
-                    <td><button
-                        on:click={let a = primary.clone();move |_| delete_fun(a.clone())}>
+                    <td>
+                        <button
+                            on:click={let a = primary.clone();move |_| delete_fun(a.clone())}
+                        >
                             {
-                            let p = primary.clone();
-                            move || if is_deleted(p.clone()) {"P"} else {"X"}
-                        }</button></td>
+                                let p = primary.clone();
+                                move || if is_deleted(p.clone()) {"P"} else {"X"}
+                            }
+                        </button>
+                    </td>
                 </Show>
             }
         }
@@ -829,19 +836,19 @@ where
                 when={let a = primary.clone();move || !get_old_value(a.clone()).is_empty()}
                 fallback=|| view! {
                     <>
-                    <td class="shapeless"></td>
-                    <td class="shapeless"></td>
-                    <td class="shapeless"></td>
-                    <td class="shapeless"></td>
-                    <td class="shapeless"></td>
-                    <td class="shapeless"></td>
-                    <td class="shapeless"></td>
+                    <Td>""</Td>
+                    <Td>""</Td>
+                    <Td>""</Td>
+                    <Td>""</Td>
+                    <Td>""</Td>
+                    <Td>""</Td>
+                    <Td>""</Td>
                     </>
                 }
             >
             <>
                 <td>{let a = primary.clone();move || a.to_string()}</td>
-                <td class="shapeless">" "</td>
+                <Td>" "</Td>
                 <td>{let p = primary.clone();move || primary_value_plus_transition(p.clone())}</td>
                 <Editor
                     primary=primary.clone()
@@ -849,25 +856,23 @@ where
                     is_deleted=is_deleted
                     delete_fun=delete_fun
                 />
-                <td class="shapeless">" "</td>
-                <td class="shapeless">" "</td>
-                <td class="shapeless">" "</td>
+                <Td>" "</Td>
+                <Td>" "</Td>
+                <Td>" "</Td>
             </>
             </Show>
         }
     }
 
     #[component]
-    fn LeftNonPrimaryColumns<F2, F3, F4>(
+    fn LeftNonPrimaryColumns<F2, F4>(
         non_primary: Rc<str>,
         is_in_edit_mode: F2,
-        is_deleted: F3,
         delete_fun: F4,
         all_columns: Memo<HashMap<Rc<str>, Column<Rc<str>>>>,
     ) -> impl IntoView
     where
         F2: Fn() -> bool + 'static + Clone + Copy,
-        F3: Fn(Rc<str>) -> bool + 'static + Clone + Copy,
         F4: Fn(Rc<str>) + 'static + Clone + Copy,
     {
         #[component]
@@ -900,27 +905,20 @@ where
                     when=con
                     fallback=|| view! {
                       <>
-                        <td class="shapeless"></td>
-                        <td class="shapeless"></td>
-                        <td class="shapeless"></td>
+                        <Td>""</Td>
+                        <Td>""</Td>
+                        <Td>""</Td>
                       </>
                     }
                 >
                   <>
                     <td>{title.clone()}</td>
-                    <td class="shapeless">" "</td>
+                    <Td>" "</Td>
                     <td>{value.clone()}</td>
                   </>
                 </Show>
             }
         }
-        let deleted_style = {
-            let a = non_primary.clone();
-            move || match is_deleted(a.clone()) {
-                true => "fineb",
-                false => "dangerb",
-            }
-        };
         view! {
             <>
             <TitleValue
@@ -929,10 +927,9 @@ where
             />
             <Show
                 when=is_in_edit_mode
-                fallback=|| view! {<td class="shapeless"></td>}
+                fallback=|| view! {<Td>""</Td>}
             >
                 <td><button
-                     class=deleted_style.clone()
                      on:click={let a =non_primary.clone(); move |_| delete_fun(a.clone())}>"X"</button></td>
             </Show>
             </>
@@ -943,7 +940,7 @@ where
 
     let children = move |(primary, non_primary)| {
         view! {
-            <tr>
+            <Tr>
             <RightPrimaryColumns
                 primary=primary
                 columns=columns
@@ -955,12 +952,11 @@ where
             <LeftNonPrimaryColumns
                 non_primary=non_primary
                 is_in_edit_mode=is_in_edit_mode
-                is_deleted=is_deleted
                 delete_fun=delete_fun
                 all_columns=all_columns
 
             />
-            </tr>
+            </Tr>
         }
     };
 
@@ -1015,21 +1011,18 @@ pub fn PrimaryRowEditor(new_columns: RwSignal<HashMap<Rc<str>, Column<Rc<str>>>>
         fallback=move|| view!{
         <>
             <button
-            class="centered-button"
             on:click=move |_| {
             add_what.set(Some("date"));
             column_value.set(ColumnValue::Date(Local::now().date_naive()))
             }
             >"+ تاريخ"</button>
             <button
-            class="centered-button"
             on:click=move |_| {
             add_what.set(Some("number"));
             column_value.set(ColumnValue::Float(0.0));
             }
             >"+ رقم"</button>
             <button
-            class="centered-button"
             on:click=move |_| {
             add_what.set(Some("text"));
             column_value.set(ColumnValue::String(Rc::from("")));
@@ -1040,13 +1033,11 @@ pub fn PrimaryRowEditor(new_columns: RwSignal<HashMap<Rc<str>, Column<Rc<str>>>>
         >
             <div>
             <input
-            style="width:40%; height:30px;"
             type="text"
             placeholder="العنوان"
                 on:input=move |ev| header.set(Rc::from(event_target_value(&ev).trim()))
             />
             <input
-            style="width:40%; height:30px;"
             type=add_what.get().unwrap_or_default()
             placeholder="القيمة"
                 on:input=on_value_input
@@ -1055,10 +1046,8 @@ pub fn PrimaryRowEditor(new_columns: RwSignal<HashMap<Rc<str>, Column<Rc<str>>>>
             <br/>
         <button
             on:click=append_column
-        class="centered-button"
         >"تاكيد"</button>
         <button
-        class="centered-button"
            on:click=move |_| add_what.set(None)
         >"الغاء"</button>
         </Show>

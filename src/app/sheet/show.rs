@@ -1,9 +1,11 @@
 use crate::app::sheet::shared::{
     merge_primary_row_headers, new_id, PrimaryRowContent, PrimaryRowEditor,
 };
+use crate::atoms::{BackArrow, CollapseIcon, EditIcon, ExcelExport, RenderMode, SaveIcon};
 use crate::Id;
 use chrono::{Local, NaiveDate};
 use client_models::{ColumnConfig, ConfigValue, HeaderGetter, IdentityDiffsOps, RowIdentity};
+use leptonic::table::{Table, Tbody, Td, Tr};
 use leptos::spawn_local;
 use leptos::{ev::MouseEvent, *};
 use leptos_router::*;
@@ -17,8 +19,8 @@ use tauri_sys::tauri::invoke;
 use uuid::Uuid;
 
 use super::shared::{
-    alert, confirm, import_sheet_rows, message, open_file, resolve_operation, EditState, InputRow,
-    Name, NameArg, SheetHead, ShowNewRows,
+    alert, import_sheet_rows, message, open_file, resolve_operation, EditState, InputRow, Name,
+    NameArg, SheetHead, ShowNewRows,
 };
 
 #[derive(Debug, Clone)]
@@ -186,7 +188,6 @@ async fn collapse_rows(
     )
 }
 
-#[inline(always)]
 #[component]
 pub fn ShowSheet() -> impl IntoView {
     let edit_mode = RwSignal::from(EditState::None);
@@ -345,35 +346,7 @@ pub fn ShowSheet() -> impl IntoView {
             _ => None,
         }
     };
-
-    #[derive(Clone)]
-    enum RenderMode {
-        Accumalate,
-        Collapse,
-        None,
-    }
     let render_mode = RwSignal::new(RenderMode::None);
-
-    #[component]
-    fn CollapseButton<F>(render_mode: RwSignal<RenderMode>, is_collapsble: F) -> impl IntoView
-    where
-        F: Fn() -> bool + 'static,
-    {
-        let toggle = move |_| match render_mode.get() {
-            RenderMode::None | RenderMode::Accumalate => render_mode.set(RenderMode::Collapse),
-            RenderMode::Collapse => render_mode.set(RenderMode::Accumalate),
-        };
-        let content = move || match render_mode.get() {
-            RenderMode::None => "(O)",
-            RenderMode::Accumalate => "><",
-            RenderMode::Collapse => "<>",
-        };
-        view! {
-            <Show when=is_collapsble>
-                <button on:click=toggle>{content}</button>
-            </Show>
-        }
-    }
 
     let get_rendered_rows = move || {
         sheet_rows_resource.get();
@@ -516,51 +489,8 @@ pub fn ShowSheet() -> impl IntoView {
             .collect::<Vec<_>>()
     });
 
-    let export = move |_| {
-        let mut sheet = match get_initial_sheet() {
-            Some(x) => x,
-            None => Sheet {
-                id: Uuid::nil(),
-                sheet_name: Rc::from(""),
-                type_name: Rc::from(""),
-                insert_date: NaiveDate::default(),
-                rows: vec![],
-            },
-        };
-        sheet.rows = sheet_rows_with_primary_row_with_calc_values.get();
-        spawn_local(async move {
-            #[derive(Serialize, Deserialize)]
-            struct Args {
-                headers: Vec<Rc<str>>,
-                sheet: Sheet<Uuid, Rc<str>>,
-            }
-            match invoke::<_, ()>(
-                "export_sheet",
-                &Args {
-                    sheet,
-                    headers: basic_headers()
-                        .into_iter()
-                        .chain(calc_headers())
-                        .collect::<Vec<Rc<str>>>(),
-                },
-            )
-            .await
-            {
-                Ok(_) => message("🏹 👍").await,
-                Err(err) => alert(err.to_string().as_str()).await,
-            }
-        })
-    };
-
     let is_collapsed_id = move |id: &Uuid| rows_collapsed_ids.get().get(id).is_some();
 
-    let is_deleted = move |id| {
-        if is_collapsed_id(&id) {
-            collapsed_deleted_rows.get().contains(&id)
-        } else {
-            expanded_deleted_rows.get().contains(&id)
-        }
-    };
     let delete_row = move |id| {
         if is_collapsed_id(&id) {
             if collapsed_deleted_rows.get().contains(&id) {
@@ -597,18 +527,6 @@ pub fn ShowSheet() -> impl IntoView {
         deleted_primary_columns.set(Vec::new());
     };
 
-    let cancel_edit = move || {
-        spawn_local(async move {
-            let reset = if has_anything_changed() {
-                confirm("سيتم تجاهل كل التعديلات").await
-            } else {
-                true
-            };
-            if reset {
-                revert_all_edits();
-            }
-        });
-    };
     let append = move |row| {
         added_rows.update_untracked(|xs| xs.push(row));
         added_rows
@@ -956,41 +874,30 @@ pub fn ShowSheet() -> impl IntoView {
             .collect::<Rc<[_]>>()
     };
 
-    let toggle_edit_mode = move |_| {
-        if on_edit.get() {
-            on_edit.set(false);
-        } else {
-            on_edit.set(true);
-        }
-        cancel_edit()
-    };
-
     view! {
         <section>
-            <A class="left-corner" href=format!("/sheet/{}", sheet_type_id().unwrap_or_default())>
-                "->"
-            </A>
-            <button class="right-corner" on:click=export>
-                "🏹"
-            </button>
-            <CollapseButton render_mode=render_mode is_collapsble=is_collapsable/>
-            <button on:click=toggle_edit_mode class="right-corner-left">
-                {
-                    move || if on_edit.get() {
-                         "X"
-                    } else {
-                         "✏️"
-                    }
+            <BackArrow n=2/>
+            <ExcelExport
+                sheet=move || {
+                    get_initial_sheet().unwrap_or(Sheet {
+                        id: Uuid::nil(),
+                        sheet_name: Rc::from(""),
+                        type_name: Rc::from(""),
+                        insert_date: NaiveDate::default(),
+                        rows: vec![],
+                    })
                 }
-            </button>
-            <Show
-                when=has_anything_changed
-            >
-                <button on:click=save_edits class="left-corner-right">
-                    "💾"
-                </button>
-            </Show>
-            <br/>
+                headers=move|| {
+                    basic_headers()
+                        .into_iter()
+                        .chain(calc_headers())
+                        .collect::<Vec<Rc<str>>>()
+                }
+                all_rows=move|| sheet_rows_with_primary_row_with_calc_values.get()
+             />
+            <CollapseIcon render_mode=render_mode is_collapsble=is_collapsable/>
+            <EditIcon on_edit=on_edit has_anything_changed=has_anything_changed revert_all_edits=revert_all_edits/>
+            <SaveIcon has_anything_changed=has_anything_changed save_edits=save_edits/>
             <Show
                 when=move || matches!(edit_mode.get(),EditState::Primary)
                 fallback=move || {
@@ -999,7 +906,6 @@ pub fn ShowSheet() -> impl IntoView {
             >
                 <input
                     type="text"
-                    class="centered-input"
                     placeholder=move || {
                         format!(
                             "{} ({})", "اسم الشيت", get_initial_sheet().map(|x| x.sheet_name.to_string()).unwrap_or_default()
@@ -1009,8 +915,6 @@ pub fn ShowSheet() -> impl IntoView {
                     on:input=move |ev| sheet_name.set(Rc::from(event_target_value(&ev).trim()))
                 />
             </Show>
-        <br/>
-        <br/>
         <PrimaryRow
           columns=primary_row_columns
           new_columns=modified_primary_columns
@@ -1024,9 +928,9 @@ pub fn ShowSheet() -> impl IntoView {
         >
             <progress max=move || rows_number.get() value=move || rows_offset.get()/>
         </Show>
-            <table>
+            <Table>
                 <SheetHead basic_headers=basic_headers calc_headers=calc_headers/>
-                <tbody>
+                <Tbody>
                     <ShowRows
                         delete_row=delete_row
                         basic_headers=basic_headers
@@ -1034,7 +938,6 @@ pub fn ShowSheet() -> impl IntoView {
                         rows_updates=rows_updates
                         rows=sheet_rows_without_primary_row_with_calc_values
                         edit_mode=edit_mode
-                        is_deleted=is_deleted
                         modified_columns=modified_columns
                         get_column_type=get_header_type
                         expand_collapse_id=expand_collapsed_id
@@ -1043,7 +946,7 @@ pub fn ShowSheet() -> impl IntoView {
             <Show
             when=move || !added_rows.get().is_empty()
             >
-            <tr><td class="shapeless">r"+"</td></tr>
+            <Tr><Td>r"+"</Td></Tr>
             </Show>
                     <ShowNewRows
                         delete_row=delete_new_row
@@ -1065,8 +968,8 @@ pub fn ShowSheet() -> impl IntoView {
                             calc_columns=calc_columns
                         />
                     </Show>
-                </tbody>
-            </table>
+                </Tbody>
+            </Table>
             <EditButtons
                 edit_mode=edit_mode
                 load_file=load_file
@@ -1091,23 +994,20 @@ where
         <Show
         when=move || on_edit.get() && matches!(edit_mode.get(),EditState::None)
         >
-        <div class="popup">
-            <br/>
+        <div>
             <button
                 on:click=move |_| edit_mode.set(EditState::Primary)
-                class="centered-button"
             >"تعديل العناوين"</button>
             <br/>
             <button
                 on:click=move |_| edit_mode.set(EditState::NonePrimary)
-                class="centered-button"
             >"تعديل الصفوف"</button>
             <br/>
-            <button on:click=load_file class="centered-button">
+            <button on:click=load_file>
                 "تحميل ملف"
             </button>
             <br/>
-            <button on:click=move |_| on_edit.set(false) class="centered-button">
+            <button on:click=move |_| on_edit.set(false)>
                 "الغاء"
             </button>
         </div>
@@ -1117,11 +1017,10 @@ where
 
 #[inline(always)]
 #[component]
-fn ShowRows<BH, CH, FD, ID, BT, EX, CL>(
+fn ShowRows<BH, CH, FD, BT, EX, CL>(
     basic_headers: BH,
     calc_headers: CH,
     delete_row: FD,
-    is_deleted: ID,
     get_column_type: BT,
     expand_collapse_id: EX,
     rows_updates: RwSignal<HashMap<Uuid, i32>>,
@@ -1133,7 +1032,6 @@ fn ShowRows<BH, CH, FD, ID, BT, EX, CL>(
 where
     BH: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
     CH: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
-    ID: Fn(Uuid) -> bool + 'static + Clone + Copy,
     FD: Fn(Uuid) + 'static + Clone + Copy,
     BT: Fn(String) -> Option<ColumnConfig> + 'static + Clone + Copy,
     EX: Fn(Uuid) -> Option<Vec<Uuid>> + 'static + Clone + Copy,
@@ -1241,16 +1139,16 @@ where
                 move || format!("{} ({})", "القيمة الحالية", column_value.get().to_string());
 
             view! {
-                <div class="popup">
+                <div>
                     <input
                         type=input_type
                         placeholder=placeholder
                         on:input=on_input
                     />
-                    <button on:click=move|_| cancel() class="centered-button">
+                    <button on:click=move|_| cancel()>
                         "الغاء"
                     </button>
-                    <button on:click=save class="centered-button">
+                    <button on:click=save>
                         "تاكيد"
                     </button>
                 </div>
@@ -1373,14 +1271,11 @@ where
         let children = move |header: Rc<str>| {
             let on_dbl_click =
                 on_dbl_click(header.clone(), columns.clone(), edit_column, edit_mode);
-            view! { <td
-                    style="cursor: pointer"
-                    on:dblclick=on_dbl_click
-                 >{
+            view! { <td><div on:dblclick=on_dbl_click>{
                     original(header.clone(),columns.clone())
                 }" "{
                     move || edited(header.clone())
-                }</td>
+                }</div></td>
             }
         };
 
@@ -1419,21 +1314,15 @@ where
 
     #[inline(always)]
     #[component]
-    fn RowEditor<FD, ID>(
+    fn RowEditor<FD>(
         modified_columns: RwSignal<Vec<ColumnIdentity>>,
         edit_mode: RwSignal<EditState>,
         id: Uuid,
         delete_row: FD,
-        is_deleted: ID,
     ) -> impl IntoView
     where
         FD: Fn(Uuid) + 'static + Clone + Copy,
-        ID: Fn(Uuid) -> bool + 'static + Clone + Copy,
     {
-        let deleted_style = move || match is_deleted(id) {
-            true => "fineb",
-            false => "dangerb",
-        };
         let on_click = move |_| {
             if modified_columns.get().iter().any(|x| x.row_id == id) {
                 modified_columns.update(|xs| xs.retain(|x| x.row_id != id))
@@ -1446,9 +1335,9 @@ where
             <Show
                 when=move || matches!(edit_mode.get(),EditState::NonePrimary)
             >
-                <td>
-                    <button class=deleted_style on:click=on_click>"XXX"</button>
-                </td>
+                <Td>
+                    <button on:click=on_click>"XXX"</button>
+                </Td>
             </Show>
 
         }
@@ -1458,7 +1347,7 @@ where
         let columns0 = columns.clone().into_iter().collect();
         let columns = Rc::new(columns);
         view! {
-            <tr>
+            <Tr>
                 <BasicColumns
                     basic_headers=basic_headers
                     modified_columns=modified_columns
@@ -1469,19 +1358,18 @@ where
                     expand_collapse_id=expand_collapse_id
                     get_collapse_pattern=get_collapse_pattern
                 />
-                <td class="shapeless"></td>
+                <Td>" "</Td>
                 <CalcColumns
                     calc_headers=calc_headers
                     columns=columns
                 />
                 <RowEditor
                     modified_columns=modified_columns
-                    is_deleted=is_deleted
                     delete_row=delete_row
                     id=id
                     edit_mode=edit_mode
                  />
-            </tr>
+            </Tr>
         }
     };
     view! {

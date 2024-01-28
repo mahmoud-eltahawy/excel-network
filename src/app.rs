@@ -1,10 +1,11 @@
+use leptonic::prelude::*;
 use leptos::*;
 use leptos_router::*;
 use serde::{Deserialize, Serialize};
 
 use tauri_sys::tauri::invoke;
 
-mod sheet;
+pub mod sheet;
 
 use sheet::{add::AddSheet, show::ShowSheet, SheetHome};
 
@@ -66,22 +67,44 @@ pub fn Home() -> impl IntoView {
             .unwrap_or(Rc::from(vec![]))
     });
 
+    let button_style = r#"
+        width: 70%;
+        font-size : 2rem;
+    "#
+    .trim();
+
+    let div_style = r#"
+      margin: 0;
+      position: absolute;
+      top: 50%;
+      -ms-transform: translateY(-50%);
+      transform: translateY(-50%);    
+      width: 100%;
+    "#
+    .trim();
+
     view! {
-        <section>
-            <br/>
-            <br/>
+        <div style=div_style>
+        <Stack spacing=Size::Px(150)>
             <For
                 each=move || sheets_types_names.get().unwrap_or(Rc::from(vec![])).to_vec()
                 key=|s| s.id
-                children=move | s| {
+                children=move |s| {
                     view! {
-                        <A class="button" href=format!("sheet/{}", s.id)>
-                            <h1>{s.the_name}</h1>
-                        </A>
+                        <Button on_click=move |_| {
+                            window()
+                                .location()
+                                .set_href(&format!("sheet/{}", s.id))
+                                .unwrap_or_default();
+                            }
+                            style={button_style}
+                            size=ButtonSize::Big
+                        >{s.the_name}</Button>
                     }
                 }
             />
-            <Outlet/>
-        </section>
+        </Stack>
+        <Outlet/>
+        </div>
     }
 }

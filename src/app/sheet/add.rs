@@ -1,4 +1,5 @@
 use client_models::{ColumnConfig, ConfigValue, HeaderGetter};
+use leptonic::table::{Table, Tbody};
 use leptos::*;
 use leptos_router::*;
 use models::{Column, Row, RowsSort};
@@ -13,6 +14,7 @@ use std::collections::HashMap;
 
 use crate::{
     app::sheet::shared::{merge_primary_row_headers, PrimaryRowContent, PrimaryRowEditor},
+    atoms::BackArrow,
     Id,
 };
 use tauri_sys::tauri::invoke;
@@ -231,13 +233,9 @@ pub fn AddSheet() -> impl IntoView {
 
     view! {
         <section>
-            <A class="left-corner" href=format!("/sheet/{}", sheet_type_id().unwrap_or_default())>
-                "->"
-            </A>
-            <br/>
+            <BackArrow n=1/>
             <input
                 type="text"
-                class="centered-input"
                 placeholder=move || {
                     format!(
                         "{} ({})", "اسم الشيت", sheet_type_name_resource.get()
@@ -252,10 +250,9 @@ pub fn AddSheet() -> impl IntoView {
               non_primary_headers=primary_non_primary_headers
               new_columns=modified_primary_columns
             />
-            <br/>
-            <table>
+            <Table>
                 <SheetHead basic_headers=basic_headers calc_headers=calc_headers/>
-                <tbody>
+                <Tbody>
                     <ShowNewRows
                         delete_row=delete_row
                         basic_headers=basic_headers
@@ -272,12 +269,12 @@ pub fn AddSheet() -> impl IntoView {
                         basic_columns=basic_columns
                         calc_columns=calc_columns
                     />
-                </tbody>
-            </table>
-            <button on:click=load_file class="centered-button">
+                </Tbody>
+            </Table>
+            <button on:click=load_file>
                 "تحميل ملف"
             </button>
-            <button on:click=save_sheet class="centered-button">
+            <button on:click=save_sheet>
                 "حفظ الشيت"
             </button>
             <Outlet/>

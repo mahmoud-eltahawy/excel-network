@@ -1,7 +1,7 @@
 /dist/
 /target/
-/Cargo.lock
 *~
 /models/output
 /models/#*#
 /src-tauri/#*#
+generated
