@@ -3,7 +3,6 @@ use crate::atoms::{BackArrow, CollapseIcon, EditIcon, ExcelExport, RenderMode, S
 use crate::Id;
 use chrono::{Local, NaiveDate};
 use client_models::{ColumnConfig, ConfigValue, HeaderGetter, IdentityDiffsOps, RowIdentity};
-use leptonic::table::{Table, Tbody, Td, Tr};
 use leptos::spawn_local;
 use leptos::{ev::MouseEvent, *};
 use leptos_router::*;
@@ -14,6 +13,7 @@ use std::collections::HashSet;
 use std::str::FromStr;
 use std::{collections::HashMap, rc::Rc};
 use tauri_sys::tauri::invoke;
+use thaw::Table;
 use uuid::Uuid;
 
 use super::shared::{
@@ -867,8 +867,8 @@ pub fn ShowSheet() -> impl IntoView {
             .chain(primary_row_columns.get())
             .collect::<HashMap<_, _>>()
             .keys()
-            .cloned()
             .filter(|x| !primary_headers.contains(x))
+            .cloned()
             .collect::<Rc<[_]>>()
     };
 
@@ -928,7 +928,7 @@ pub fn ShowSheet() -> impl IntoView {
         </Show>
             <Table>
                 <SheetHead basic_headers=basic_headers calc_headers=calc_headers/>
-                <Tbody>
+                <tbody>
                     <ShowRows
                         delete_row=delete_row
                         basic_headers=basic_headers
@@ -944,7 +944,7 @@ pub fn ShowSheet() -> impl IntoView {
             <Show
             when=move || !added_rows.get().is_empty()
             >
-            <Tr><Td>r"+"</Td></Tr>
+            <tr><td>r"+"</td></tr>
             </Show>
                     <ShowNewRows
                         delete_row=delete_new_row
@@ -966,7 +966,7 @@ pub fn ShowSheet() -> impl IntoView {
                             calc_columns=calc_columns
                         />
                     </Show>
-                </Tbody>
+                </tbody>
             </Table>
             <EditButtons
                 edit_mode=edit_mode
@@ -1333,9 +1333,9 @@ where
             <Show
                 when=move || matches!(edit_mode.get(),EditState::NonePrimary)
             >
-                <Td>
+                <td>
                     <button on:click=on_click>"XXX"</button>
-                </Td>
+                </td>
             </Show>
 
         }
@@ -1345,7 +1345,7 @@ where
         let columns0 = columns.clone().into_iter().collect();
         let columns = Rc::new(columns);
         view! {
-            <Tr>
+            <tr>
                 <BasicColumns
                     basic_headers=basic_headers
                     modified_columns=modified_columns
@@ -1356,7 +1356,7 @@ where
                     expand_collapse_id=expand_collapse_id
                     get_collapse_pattern=get_collapse_pattern
                 />
-                <Td>" "</Td>
+                <td>" "</td>
                 <CalcColumns
                     calc_headers=calc_headers
                     columns=columns
@@ -1367,7 +1367,7 @@ where
                     id=id
                     edit_mode=edit_mode
                  />
-            </Tr>
+            </tr>
         }
     };
     view! {

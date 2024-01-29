@@ -1,9 +1,9 @@
 use chrono::NaiveDate;
-use leptonic::prelude::*;
 use leptos::*;
 use leptos_router::*;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use thaw::{Button, ButtonSize, DatePicker, Input, Space};
 use uuid::Uuid;
 
 use crate::{
@@ -78,24 +78,14 @@ pub fn SheetHome() -> impl IntoView {
         <section>
             <BackArrow n=2/>
             <AddIcon/>
-            <TextInput get=sheet_name placeholder=format!{"{}", "اسم الشيت"} set=sheet_name/>
+            <Input value=sheet_name placeholder=format!{"{}", "اسم الشيت"}/>
             <div>
-                <label for="start-date">"تاريخ البداية"</label>
-                <input
-                    type="date"
-                    id="start-date"
-                    value=move || begin.get().map(|x| x.to_string()).unwrap_or_else(|| "".to_string())
-                    on:input=move |ev| begin.set(event_target_value(&ev).parse().ok())
-                />
-                <label for="end-date">"تاريخ النهاية"</label>
-                <input
-                    type="date"
-                    id="end-date"
-                    value=move || end.get().map(|x| x.to_string()).unwrap_or_else(|| "".to_string())
-                    on:input=move |ev| end.set(event_target_value(&ev).parse().ok())
-                />
+                <label>"تاريخ البداية"</label>
+                <DatePicker value=begin/>
+                <label>"تاريخ النهاية"</label>
+                <DatePicker value=end/>
             </div>
-            <Stack spacing=Size::Px(50)>
+            <Space vertical=true>
                 <Show
                     when=move || offset.get() != 0
                 >
@@ -114,7 +104,7 @@ pub fn SheetHome() -> impl IntoView {
                                     .unwrap_or_default();
                                 }
                                 style="width: 70%; font-size : 1.2rem;"
-                                size=ButtonSize::Big
+                                size=ButtonSize::Large
                             >{s.the_name}</Button>
                         }
                     }
@@ -124,7 +114,7 @@ pub fn SheetHome() -> impl IntoView {
                 >
                     <DownIcon scroll=move |_| offset.update(|x| *x += 5)/>
                 </Show>
-            </Stack>
+            </Space>
             <Outlet/>
         </section>
     }

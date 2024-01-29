@@ -2,17 +2,16 @@ mod app;
 
 mod atoms;
 use app::*;
-use leptonic::{root::Root, theme::LeptonicTheme};
-use leptos::{logging::log, *};
+use leptos::*;
+use thaw::{Theme, ThemeProvider};
 
 fn main() {
-    let id = uuid::Uuid::new_v4();
-    log!("{}", id);
-    mount_to_body(|| {
+    let theme = RwSignal::new(Theme::light());
+    mount_to_body(move || {
         view! {
-            <Root default_theme=LeptonicTheme::Dark>
+            <ThemeProvider theme=theme>
                 <App/>
-            </Root>
+            </ThemeProvider>
         }
     })
 }

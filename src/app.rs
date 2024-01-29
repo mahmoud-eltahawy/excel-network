@@ -1,4 +1,3 @@
-use leptonic::prelude::*;
 use leptos::*;
 use leptos_router::*;
 use serde::{Deserialize, Serialize};
@@ -55,6 +54,7 @@ pub fn App() -> impl IntoView {
     }
 }
 use models::Name;
+use thaw::{Button, ButtonSize, Space};
 use uuid::Uuid;
 
 use std::rc::Rc;
@@ -85,7 +85,7 @@ pub fn Home() -> impl IntoView {
 
     view! {
         <div style=div_style>
-        <Stack spacing=Size::Px(150)>
+        <Space vertical=true >
             <For
                 each=move || sheets_types_names.get().unwrap_or(Rc::from(vec![])).to_vec()
                 key=|s| s.id
@@ -98,12 +98,12 @@ pub fn Home() -> impl IntoView {
                                 .unwrap_or_default();
                             }
                             style={button_style}
-                            size=ButtonSize::Big
+                            size=ButtonSize::Large
                         >{s.the_name}</Button>
                     }
                 }
             />
-        </Stack>
+        </Space>
         <Outlet/>
         </div>
     }

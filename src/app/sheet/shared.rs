@@ -1,7 +1,3 @@
-use leptonic::table::Td;
-use leptonic::table::Th;
-use leptonic::table::Thead;
-use leptonic::table::Tr;
 use leptos::*;
 use models::Column;
 use models::ColumnValue;
@@ -103,9 +99,7 @@ pub async fn open_file() -> Option<String> {
             Some(home_dir.join("Downloads"))
         }
     };
-    let Some(download_dir) = download_dir else {
-        return None;
-    };
+    let download_dir = download_dir?;
     builder.set_default_path(download_dir.as_path());
     let Ok(Some(path)) = builder.pick_file().await else {
         return None;
@@ -121,25 +115,25 @@ where
     Fb: Fn() -> Vec<Rc<str>> + 'static,
 {
     view! {
-        <Thead>
-            <Tr>
+        <thead>
+            <tr>
                 <For
                     each=basic_headers
                     key=move |x| x.clone()
                     let:x
                 >
-                    <Th>{x.to_string()}</Th>
+                    <th>{x.to_string()}</th>
                 </For>
-                <Th>"  "</Th>
+                <th>"  "</th>
                 <For
                     each=calc_headers
                     key=move |x| x.clone()
                     let:x
                 >
-                    <Th>{x.to_string()}</Th>
+                    <th>{x.to_string()}</th>
                 </For>
-            </Tr>
-        </Thead>
+            </tr>
+        </thead>
     }
 }
 
@@ -381,11 +375,11 @@ where
                 move || columns.get(&header).map(|x| x.value.to_string())
             };
             view! {
-                <Td
+                <td
                     on:dblclick=on_dblclick
                 >
                     {content}
-                </Td>
+                </td>
             }
         };
 
@@ -410,7 +404,7 @@ where
         let children = move |column| {
             let columns = columns.clone();
             let content = move || columns.get(&column).map(|x| x.value.to_string());
-            view! {  <Td>{content}</Td> }
+            view! {  <td>{content}</td> }
         };
         view! {
             <For
@@ -423,22 +417,22 @@ where
     let children = move |Row { columns, id }| {
         let columns = Rc::new(columns);
         view! {
-            <Tr>
+            <tr>
                 <BasicColumns
                     basic_headers=basic_headers
                     columns=columns.clone()
                     edit_column=edit_column
                     id=id
                 />
-                <Td>"  "</Td>
+                <td>""</td>
                 <CalcColumn
                     calc_headers=calc_headers
                     columns=columns
                 />
-                <Td>
+                <td>
                     <button on:click=move |_| delete_row(id)>"X"</button>
-                </Td>
-            </Tr>
+                </td>
+            </tr>
         }
     };
 
@@ -579,7 +573,7 @@ where
 
     view! {
         <>
-        <Tr>
+        <tr>
             <For
                 each=move || basic_headers().clone()
                 key=|x| x.clone()
@@ -587,31 +581,31 @@ where
             >
                 <MyInput header=header basic_signals_map=basic_signals_map/>
             </For>
-            <Td>"  "</Td>
+            <td>" "</td>
             <For
                 each=move || calc_headers().clone()
                 key=|x| x.clone()
                 let:header
             >
-                <Td>
+                <td>
                     {move || calc_signals_map
                         .get()
                         .get(&header)
                         .map(|x| format!("{:.2}",* x))
                     }
-                </Td>
+                </td>
             </For>
-        </Tr>
-        <Tr>
-            <Td>""</Td>
-            <Td>""</Td>
-            <Td>""</Td>
-            <Td>
+        </tr>
+        <tr>
+            <td>""</td>
+            <td>""</td>
+            <td>""</td>
+            <td>
                 <button on:click=on_click>
                     "_+_"
                 </button>
-            </Td>
-        </Tr>
+            </td>
+        </tr>
         </>
     }
 }
@@ -630,7 +624,7 @@ fn MyInput(
         None => ("", "".to_string()),
     };
     view! {
-        <Td>
+        <td>
             <input
                 type=i_type
                 value=move || value.clone()
@@ -647,7 +641,7 @@ fn MyInput(
                     None => {}
                 }
             />
-        </Td>
+        </td>
     }
 }
 
@@ -808,7 +802,7 @@ where
             view! {
                 <Show
                     when=is_in_edit_mode
-                    fallback=|| view!{<Td>""</Td>}
+                    fallback=|| view!{<td>""</td>}
                 >
                     <td>
                         <button
@@ -828,19 +822,19 @@ where
                 when={let a = primary.clone();move || !get_old_value(a.clone()).is_empty()}
                 fallback=|| view! {
                     <>
-                    <Td>""</Td>
-                    <Td>""</Td>
-                    <Td>""</Td>
-                    <Td>""</Td>
-                    <Td>""</Td>
-                    <Td>""</Td>
-                    <Td>""</Td>
+                    <td>""</td>
+                    <td>""</td>
+                    <td>""</td>
+                    <td>""</td>
+                    <td>""</td>
+                    <td>""</td>
+                    <td>""</td>
                     </>
                 }
             >
             <>
                 <td>{let a = primary.clone();move || a.to_string()}</td>
-                <Td>" "</Td>
+                <td>" "</td>
                 <td>{let p = primary.clone();move || primary_value_plus_transition(p.clone())}</td>
                 <Editor
                     primary=primary.clone()
@@ -848,9 +842,9 @@ where
                     is_deleted=is_deleted
                     delete_fun=delete_fun
                 />
-                <Td>" "</Td>
-                <Td>" "</Td>
-                <Td>" "</Td>
+                <td>" "</td>
+                <td>" "</td>
+                <td>" "</td>
             </>
             </Show>
         }
@@ -897,15 +891,15 @@ where
                     when=con
                     fallback=|| view! {
                       <>
-                        <Td>""</Td>
-                        <Td>""</Td>
-                        <Td>""</Td>
+                        <td>""</td>
+                        <td>""</td>
+                        <td>""</td>
                       </>
                     }
                 >
                   <>
                     <td>{title.clone()}</td>
-                    <Td>" "</Td>
+                    <td>" "</td>
                     <td>{value.clone()}</td>
                   </>
                 </Show>
@@ -919,7 +913,7 @@ where
             />
             <Show
                 when=is_in_edit_mode
-                fallback=|| view! {<Td>""</Td>}
+                fallback=|| view! {<td>""</td>}
             >
                 <td><button
                      on:click={let a =non_primary.clone(); move |_| delete_fun(a.clone())}>"X"</button></td>
@@ -932,7 +926,7 @@ where
 
     let children = move |(primary, non_primary)| {
         view! {
-            <Tr>
+            <tr>
             <RightPrimaryColumns
                 primary=primary
                 columns=columns
@@ -948,7 +942,7 @@ where
                 all_columns=all_columns
 
             />
-            </Tr>
+            </tr>
         }
     };
 

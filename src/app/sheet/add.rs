@@ -1,10 +1,12 @@
-use client_models::{ColumnConfig, ConfigValue, HeaderGetter};
-use leptonic::table::{Table, Tbody};
+use crate::Id;
+use client_models::HeaderGetter;
+use client_models::{ColumnConfig, ConfigValue};
 use leptos::*;
 use leptos_router::*;
 use models::{Column, Row, RowsSort};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use thaw::Table;
 
 use super::shared::{
     alert, import_sheet_rows, message, open_file, InputRow, NameArg, SheetHead, ShowNewRows,
@@ -15,7 +17,7 @@ use std::collections::HashMap;
 use crate::{
     app::sheet::shared::{merge_primary_row_headers, PrimaryRowContent, PrimaryRowEditor},
     atoms::BackArrow,
-    Id,
+    // Id,
 };
 use tauri_sys::tauri::invoke;
 use uuid::Uuid;
@@ -196,8 +198,8 @@ pub fn AddSheet() -> impl IntoView {
         modified_primary_columns
             .get()
             .keys()
+            .filter(|&x| !primary_headers.contains(x))
             .cloned()
-            .filter(|x| !primary_headers.contains(x))
             .collect::<Rc<[_]>>()
     };
 
@@ -247,7 +249,7 @@ pub fn AddSheet() -> impl IntoView {
             />
             <Table>
                 <SheetHead basic_headers=basic_headers calc_headers=calc_headers/>
-                <Tbody>
+                <tbody>
                     <ShowNewRows
                         delete_row=delete_row
                         basic_headers=basic_headers
@@ -264,7 +266,7 @@ pub fn AddSheet() -> impl IntoView {
                         basic_columns=basic_columns
                         calc_columns=calc_columns
                     />
-                </Tbody>
+                </tbody>
             </Table>
             <button on:click=load_file>
                 "تحميل ملف"

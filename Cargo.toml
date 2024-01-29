@@ -46,10 +46,10 @@ wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
 tauri-sys = { git = "https://github.com/JonasKruckenberg/tauri-sys",features = ["tauri","event","dialog","path"] }
 futures = "0.3.28"
-leptonic = { git="https://github.com/lpotthast/leptonic.git", features = ["csr"] }
 icondata = "0.3.0"
 leptos_icons = "0.2.1"
 time = {workspace = true ,features = ["local-offset","parsing"]}
+thaw = "0.1.9"
 
 [profile.wasm-release]
 inherits = "release"
@@ -57,7 +57,3 @@ opt-level = 3
 lto = true
 codegen-units = 1
 panic = "abort"
-
-[build-dependencies]
-leptonic-theme = "0.3.0"
-leptos-tiptap-build = "0.2.4"
