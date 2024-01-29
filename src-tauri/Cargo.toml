@@ -28,6 +28,7 @@ dirs = {workspace = true}
 ciborium = { workspace = true }
 ciborium-io = { workspace = true, features = ["std"] }
 rust_xlsxwriter = "^0.42"
+tokio = { version = "1.35.1", features = ["full"] }
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem

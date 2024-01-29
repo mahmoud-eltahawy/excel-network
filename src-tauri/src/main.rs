@@ -3,23 +3,18 @@
 
 mod api;
 
+use anyhow::Result;
 use chrono::{Local, NaiveDate};
 use client_models::{Config, ConfigValue, ImportConfig, RowIdentity, SheetConfig};
 use dotenv::dotenv;
 use models::{Column, ColumnId, ColumnValue, Name, Row, SearchSheetParams, Sheet};
-use std::{
-    collections::HashMap,
-    env,
-    fs::{create_dir_all, rename, File},
-    io::BufRead,
-    path::Path,
-    sync::Arc,
-};
+use std::{collections::HashMap, env, io::Cursor, ops::Deref, path::Path, sync::Arc};
+use tokio::io::AsyncReadExt;
 use uuid::Uuid;
 
 use rust_xlsxwriter::{Color, Format, FormatBorder, Workbook};
 
-use serde_json::{Deserializer, Value};
+use serde_json::Value;
 
 #[tauri::command]
 fn sheets_types_names(sheets_types_names: tauri::State<'_, SheetsTypesNames>) -> Vec<Name<Uuid>> {
@@ -329,6 +324,13 @@ fn column_from_value(value: &Value) -> Column<Arc<str>> {
     }
 }
 
+async fn file_content(path: &str) -> anyhow::Result<String> {
+    let mut file = tokio::fs::File::open(path).await?;
+    let mut buf = String::new();
+    file.read_to_string(&mut buf).await?;
+    Ok(buf)
+}
+
 #[tauri::command]
 async fn import_sheet(
     sheet_import: tauri::State<'_, SheetImport>,
@@ -336,21 +338,20 @@ async fn import_sheet(
     sheetid: Uuid,
     filepath: String,
 ) -> Result<Vec<Row<Uuid, Arc<str>>>, String> {
-    let ImportConfig {
+    let Some(ImportConfig {
         main_entry,
         repeated_entry,
         unique,
         repeated,
         primary,
-    } = match sheet_import.0.get(&sheettype) {
-        Some(v) => v,
-        None => return Ok(vec![]),
-    };
-    let Ok(file) = File::open(&filepath) else {
+    }) = sheet_import.get(&sheettype)
+    else {
         return Ok(vec![]);
     };
-    let reader = Deserializer::from_reader(file);
-    let Some(Ok(main_json)) = reader.into_iter::<Value>().next() else {
+    let Ok(main_json) = file_content(&filepath).await else {
+        return Ok(vec![]);
+    };
+    let Ok(main_json) = serde_json::from_str::<Value>(&main_json) else {
         return Ok(vec![]);
     };
     let main_json = get_main_json_entry(&main_json, main_entry);
@@ -399,14 +400,14 @@ async fn import_sheet(
         .join(WORKDIR)
         .join(sheettype.to_string())
         .join("الملفات المستوردة");
-
-    if create_dir_all(new_path.clone()).is_err() {
+    if tokio::fs::create_dir_all(new_path.clone()).await.is_err() {
         println!("Directory already exists");
     }
 
     let new_path = new_path.join(old_path.file_name().unwrap_or_default());
 
-    if download_dir == old_path.parent().unwrap_or(old_path) && rename(old_path, new_path).is_err()
+    if download_dir == old_path.parent().unwrap_or(old_path)
+        && tokio::fs::rename(old_path, new_path).await.is_err()
     {
         println!("failed to move file");
     };
@@ -417,18 +418,28 @@ async fn import_sheet(
 struct SheetsTypesNames(Vec<Name<Uuid>>);
 struct SheetsRows(HashMap<Arc<str>, Vec<ConfigValue>>);
 struct SheetImport(HashMap<Arc<str>, ImportConfig>);
+impl Deref for SheetImport {
+    type Target = HashMap<Arc<str>, ImportConfig>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 struct SheetRowsIds(HashMap<Arc<str>, RowIdentity<Arc<str>>>);
 
-use std::io::{BufReader, Cursor};
+async fn file_u8_content(path: &str) -> anyhow::Result<Vec<u8>> {
+    let mut file = tokio::fs::File::open(path).await?;
+    let mut buf = vec![];
+    file.read_to_end(&mut buf).await?;
+    Ok(buf)
+}
 
-fn main() {
+#[tokio::main]
+async fn main() {
     dotenv().ok();
 
     let file_path = "config";
-    let file = File::open(file_path).expect("config file does not exist");
-    let mut reader = BufReader::new(file);
-
-    let buf = reader.fill_buf().unwrap();
+    let buf = file_u8_content(file_path).await.unwrap();
 
     let v: ciborium::Value = ciborium::de::from_reader(Cursor::new(buf)).unwrap();
     let config: Config = v.deserialized().unwrap();
@@ -506,7 +517,7 @@ impl Default for AppState {
 pub async fn write_sheet(
     headers: Arc<[Arc<str>]>,
     sheet: Sheet<Uuid, Arc<str>>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> anyhow::Result<()> {
     let Sheet {
         id,
         sheet_name,
@@ -610,7 +621,7 @@ pub async fn write_sheet(
         .join(type_name.to_string())
         .join("الشيتات المصدرة");
 
-    if create_dir_all(file_path.clone()).is_err() {
+    if tokio::fs::create_dir_all(file_path.clone()).await.is_err() {
         println!("Directory already exists");
     }
 

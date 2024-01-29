@@ -11,7 +11,7 @@ use tauri_sys::tauri::invoke;
 use uuid::Uuid;
 use web_sys::MouseEvent;
 
-const ICON_STYLE: &str = "font-size: 5rem;";
+const ICON_STYLE: &str = "font-size: 2.5rem;";
 
 #[component]
 pub fn BackArrow(n: usize) -> impl IntoView {

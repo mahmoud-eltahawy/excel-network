@@ -1,3 +1,4 @@
+use anyhow::{Error, Ok};
 use models::{ColumnId, ColumnValue, Name, Row, SearchSheetParams, Sheet, ToSerial};
 use reqwest::StatusCode;
 use uuid::Uuid;
@@ -8,10 +9,7 @@ use std::sync::Arc;
 
 use crate::AppState;
 
-pub async fn save_sheet(
-    app_state: &AppState,
-    sheet: Sheet<Uuid, Arc<str>>,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn save_sheet(app_state: &AppState, sheet: Sheet<Uuid, Arc<str>>) -> anyhow::Result<()> {
     let mut buffer = vec![];
     let sheet = sheet.to_serial();
     ciborium::ser::into_writer(&sheet, Cursor::new(&mut buffer))?;
@@ -26,18 +24,14 @@ pub async fn save_sheet(
     if res.status() == StatusCode::OK {
         Ok(())
     } else {
-        let body = res.bytes().await.unwrap_or_default();
-        let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body))
-            .map(|body| body.deserialized::<String>().unwrap_or_default())
-            .unwrap_or_default();
-        Err(body.into())
+        let body = res.bytes().await?;
+        let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body))?;
+        let body = body.deserialized::<String>()?;
+        Err(Error::msg(body))
     }
 }
 
-pub async fn update_sheet_name(
-    app_state: &AppState,
-    name: Name<Uuid>,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn update_sheet_name(app_state: &AppState, name: Name<Uuid>) -> anyhow::Result<()> {
     let mut buffer = vec![];
     let name = name.to_serial();
     ciborium::ser::into_writer(&name, Cursor::new(&mut buffer))?;
@@ -52,18 +46,17 @@ pub async fn update_sheet_name(
     if res.status() == StatusCode::OK {
         Ok(())
     } else {
-        let body = res.bytes().await.unwrap_or_default();
-        let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body))
-            .map(|body| body.deserialized::<String>().unwrap_or_default())
-            .unwrap_or_default();
-        Err(body.into())
+        let body = res.bytes().await?;
+        let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body))?;
+        let body = body.deserialized::<String>()?;
+        Err(Error::msg(body))
     }
 }
 
 pub async fn update_columns(
     app_state: &AppState,
     args: Vec<(ColumnId<Uuid, Arc<str>>, ColumnValue<Arc<str>>)>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> anyhow::Result<()> {
     let mut buffer = vec![];
     let args = args
         .into_iter()
@@ -81,16 +74,16 @@ pub async fn update_columns(
     if res.status() == StatusCode::OK {
         Ok(())
     } else {
-        let body = res.bytes().await.unwrap_or_default();
-        let body = String::from_utf8(body.to_vec()).unwrap_or_default();
-        Err(body.into())
+        let body = res.bytes().await?;
+        let body = String::from_utf8(body.to_vec())?;
+        Err(Error::msg(body))
     }
 }
 
 pub async fn save_columns(
     app_state: &AppState,
     args: Vec<(ColumnId<Uuid, Arc<str>>, ColumnValue<Arc<str>>)>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> anyhow::Result<()> {
     let mut buffer = vec![];
     let args = args
         .into_iter()
@@ -108,16 +101,16 @@ pub async fn save_columns(
     if res.status() == StatusCode::OK {
         Ok(())
     } else {
-        let body = res.bytes().await.unwrap_or_default();
-        let body = String::from_utf8(body.to_vec()).unwrap_or_default();
-        Err(body.into())
+        let body = res.bytes().await?;
+        let body = String::from_utf8(body.to_vec())?;
+        Err(Error::msg(body))
     }
 }
 
 pub async fn delete_columns(
     app_state: &AppState,
     ids: Vec<ColumnId<Uuid, Arc<str>>>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> anyhow::Result<()> {
     let mut buffer = vec![];
     let ids = ids
         .into_iter()
@@ -135,9 +128,9 @@ pub async fn delete_columns(
     if res.status() == StatusCode::OK {
         Ok(())
     } else {
-        let body = res.bytes().await.unwrap_or_default();
-        let body = String::from_utf8(body.to_vec()).unwrap_or_default();
-        Err(body.into())
+        let body = res.bytes().await?;
+        let body = String::from_utf8(body.to_vec())?;
+        Err(Error::msg(body))
     }
 }
 
@@ -145,7 +138,7 @@ pub async fn add_rows_to_sheet(
     app_state: &AppState,
     sheet_id: Uuid,
     rows: Vec<Row<Uuid, Arc<str>>>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> anyhow::Result<()> {
     let mut buffer = vec![];
     let rows = rows
         .into_iter()
@@ -163,9 +156,9 @@ pub async fn add_rows_to_sheet(
     if res.status() == StatusCode::OK {
         Ok(())
     } else {
-        let body = res.bytes().await.unwrap_or_default();
-        let body = String::from_utf8(body.to_vec()).unwrap_or_default();
-        Err(body.into())
+        let body = res.bytes().await?;
+        let body = String::from_utf8(body.to_vec())?;
+        Err(Error::msg(body))
     }
 }
 
@@ -173,7 +166,7 @@ pub async fn delete_rows_from_sheet(
     app_state: &AppState,
     sheet_id: Uuid,
     rows: Vec<Uuid>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> anyhow::Result<()> {
     let mut buffer = vec![];
     let rows = rows
         .into_iter()
@@ -191,16 +184,16 @@ pub async fn delete_rows_from_sheet(
     if res.status() == StatusCode::OK {
         Ok(())
     } else {
-        let body = res.bytes().await.unwrap_or_default();
-        let body = String::from_utf8(body.to_vec()).unwrap_or_default();
-        Err(body.into())
+        let body = res.bytes().await?;
+        let body = String::from_utf8(body.to_vec())?;
+        Err(Error::msg(body))
     }
 }
 
 pub async fn search_for_5_sheets(
     app_state: &AppState,
     params: &SearchSheetParams,
-) -> Result<Vec<Name<Uuid>>, Box<dyn std::error::Error>> {
+) -> anyhow::Result<Vec<Name<Uuid>>> {
     let mut buffer = vec![];
     ciborium::ser::into_writer(&params, Cursor::new(&mut buffer))?;
 
@@ -218,16 +211,16 @@ pub async fn search_for_5_sheets(
             .unwrap_or_default();
         Ok(body)
     } else {
-        let body = res.bytes().await.unwrap_or_default();
-        let body = String::from_utf8(body.to_vec()).unwrap_or_default();
-        Err(body.into())
+        let body = res.bytes().await?;
+        let body = String::from_utf8(body.to_vec())?;
+        Err(Error::msg(body))
     }
 }
 
 pub async fn get_sheet_by_id(
     app_state: &AppState,
     id: &Uuid,
-) -> Result<(Sheet<Uuid, Arc<str>>, i64), Box<dyn std::error::Error>> {
+) -> anyhow::Result<(Sheet<Uuid, Arc<str>>, i64)> {
     let origin = &app_state.origin;
     let res = reqwest::Client::new()
         .get(format!("{origin}/sheet/{id}"))
@@ -236,18 +229,14 @@ pub async fn get_sheet_by_id(
 
     if res.status() == StatusCode::OK {
         let body = res.bytes().await.unwrap_or_default();
-        let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body))
-            .map(|body| body.deserialized::<(Sheet<Uuid, Arc<str>>, i64)>());
+        let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body))?;
+        let body = body.deserialized::<(Sheet<Uuid, Arc<str>>, i64)>()?;
 
-        match body {
-            Ok(Ok(v)) => Ok(v),
-            Ok(Err(err)) => Err(err.to_string().into()),
-            Err(err) => Err(err.to_string().into()),
-        }
+        Ok(body)
     } else {
-        let body = res.bytes().await.unwrap_or_default();
-        let body = String::from_utf8(body.to_vec()).unwrap_or_default();
-        Err(body.into())
+        let body = res.bytes().await?;
+        let body = String::from_utf8(body.to_vec())?;
+        Err(Error::msg(body))
     }
 }
 
@@ -256,7 +245,7 @@ pub async fn get_sheet_rows_between(
     id: &Uuid,
     offset: i64,
     limit: i64,
-) -> Result<Vec<Row<Uuid, Arc<str>>>, Box<dyn std::error::Error>> {
+) -> anyhow::Result<Vec<Row<Uuid, Arc<str>>>> {
     let origin = &app_state.origin;
     let res = reqwest::Client::new()
         .get(format!("{origin}/sheet/{id}/{offset}/{limit}"))
@@ -265,17 +254,13 @@ pub async fn get_sheet_rows_between(
 
     if res.status() == StatusCode::OK {
         let body = res.bytes().await.unwrap_or_default();
-        let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body))
-            .map(|body| body.deserialized::<Vec<Row<Uuid, Arc<str>>>>());
+        let body = ciborium::de::from_reader::<ciborium::Value, _>(Cursor::new(body))?;
+        let body = body.deserialized::<Vec<Row<Uuid, Arc<str>>>>()?;
 
-        match body {
-            Ok(Ok(rows)) => Ok(rows),
-            Ok(Err(err)) => Err(err.to_string().into()),
-            Err(err) => Err(err.to_string().into()),
-        }
+        Ok(body)
     } else {
-        let body = res.bytes().await.unwrap_or_default();
-        let body = String::from_utf8(body.to_vec()).unwrap_or_default();
-        Err(body.into())
+        let body = res.bytes().await?;
+        let body = String::from_utf8(body.to_vec())?;
+        Err(Error::msg(body))
     }
 }
