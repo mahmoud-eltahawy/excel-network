@@ -1,6 +1,4 @@
-use crate::app::sheet::shared::{
-    merge_primary_row_headers, new_id, PrimaryRowContent, PrimaryRowEditor,
-};
+use crate::app::sheet::shared::{merge_primary_row_headers, PrimaryRowContent, PrimaryRowEditor};
 use crate::atoms::{BackArrow, CollapseIcon, EditIcon, ExcelExport, RenderMode, SaveIcon};
 use crate::Id;
 use chrono::{Local, NaiveDate};
@@ -177,7 +175,7 @@ async fn collapse_rows(
                 })
             })
             .collect::<HashMap<_, _>>();
-        let id = new_id().await;
+        let id = Uuid::new_v4();
         collapsed_rows.push(Row { id, columns });
         collapsed_rows_ids.insert(id, rows.iter().map(|x| x.id).collect::<Vec<_>>());
     }

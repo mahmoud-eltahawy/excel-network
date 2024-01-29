@@ -22,11 +22,6 @@ fn sheets_types_names(sheets_types_names: tauri::State<'_, SheetsTypesNames>) ->
 }
 
 #[tauri::command]
-fn new_id() -> Uuid {
-    Uuid::new_v4()
-}
-
-#[tauri::command]
 fn sheet_type_name(
     sheets_types_names: tauri::State<'_, SheetsTypesNames>,
     id: Option<Uuid>,
@@ -479,7 +474,6 @@ async fn main() {
             sheet_primary_headers,
             sheet_headers,
             sheet_type_name,
-            new_id,
             save_sheet,
             top_5_sheets,
             get_sheet,

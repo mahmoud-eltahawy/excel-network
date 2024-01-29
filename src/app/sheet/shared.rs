@@ -7,7 +7,6 @@ use models::Column;
 use models::ColumnValue;
 use models::Row;
 
-use crate::Non;
 use chrono::Local;
 
 use chrono::NaiveDate;
@@ -28,11 +27,6 @@ use client_models::{
 };
 
 use std::rc::Rc;
-
-#[inline(always)]
-pub async fn new_id() -> Uuid {
-    invoke::<_, Uuid>("new_id", &Non {}).await.unwrap()
-}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NameArg {
@@ -577,12 +571,10 @@ where
                 },
             );
         }
-        spawn_local(async move {
-            append(Row {
-                id: new_id().await,
-                columns: result,
-            });
-        })
+        append(Row {
+            id: Uuid::new_v4(),
+            columns: result,
+        });
     };
 
     view! {

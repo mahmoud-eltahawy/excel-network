@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
 use super::shared::{
-    alert, import_sheet_rows, message, new_id, open_file, InputRow, NameArg, SheetHead, ShowNewRows,
+    alert, import_sheet_rows, message, open_file, InputRow, NameArg, SheetHead, ShowNewRows,
 };
 
 use std::collections::HashMap;
@@ -71,7 +71,7 @@ pub fn AddSheet() -> impl IntoView {
                 .unwrap_or_default()
         },
     );
-    let sheet_id_resource = Resource::once(move || async move { new_id().await });
+    let sheet_id_sig = RwSignal::new(Uuid::new_v4());
     let basic_columns = Memo::new(move |_| {
         sheet_headers_resource
             .get()
@@ -133,7 +133,7 @@ pub fn AddSheet() -> impl IntoView {
     let delete_row = move |id: Uuid| rows.update(|xs| xs.retain(|x| x.id != id));
 
     let save_sheet = move |_| {
-        let id = sheet_id_resource.get().unwrap_or_default();
+        let id = sheet_id_sig.get();
         spawn_local(async move {
             let mut the_rows = rows.get();
             let index = the_rows.iter().position(|x| x.id == id);
@@ -173,7 +173,7 @@ pub fn AddSheet() -> impl IntoView {
                 Ok(_) => {
                     message("👍").await;
                     rows.set(Vec::new());
-                    sheet_id_resource.refetch();
+                    sheet_id_sig.set(Uuid::new_v4());
                     sheet_name.set(Rc::from(""));
                 }
                 Err(err) => alert(err.to_string().as_str()).await,
@@ -207,15 +207,10 @@ pub fn AddSheet() -> impl IntoView {
             let Some(filepath) = open_file().await else {
                 return;
             };
-            let the_rows = import_sheet_rows(
-                sheet_id_resource.get().unwrap_or_default(),
-                sheettype,
-                filepath,
-            )
-            .await;
+            let the_rows = import_sheet_rows(sheet_id_sig.get(), sheettype, filepath).await;
             let primary_row = the_rows
                 .iter()
-                .filter(|x| x.id == sheet_id_resource.get().unwrap_or_default())
+                .filter(|x| x.id == sheet_id_sig.get())
                 .collect::<Vec<_>>();
             let primary_row = primary_row
                 .first()
@@ -258,7 +253,7 @@ pub fn AddSheet() -> impl IntoView {
                         basic_headers=basic_headers
                         calc_headers=calc_headers
                         rows=rows
-                        sheet_id=move || sheet_id_resource.get().unwrap_or_default()
+                        sheet_id=move || sheet_id_sig.get()
                         priorities=move || sheet_priorities_resource.get().unwrap_or(Rc::from([]))
                         get_column_type=get_header_type
                     />
