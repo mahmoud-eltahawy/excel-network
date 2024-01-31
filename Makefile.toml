@@ -1,0 +1,50 @@
+env_files = [".env"]
+
+[env]
+CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
+
+[tasks.api]
+workspace = false
+command = "cargo"
+args = ["run","-p","api"]
+
+[tasks.ui]
+workspace = false
+command = "cargo"
+args = ["tauri","dev"]
+
+[tasks.build_api]
+workspace = false
+command = "cargo"
+args = ["build","--release","-p","api"]
+
+[tasks.build_ui]
+workspace = false
+command = "cargo"
+args = ["tauri","build"]
+
+[tasks.default_ui_config]
+workspace = false
+script = '''
+#!/usr/bin/nu
+let p = (pwd)
+echo $p
+let from = $"($p)/src-tauri/config"
+let to = $"($p)/target/release"
+echo $"copy (($from)) to (($to))"
+cp $from $to
+exit 0
+'''
+
+[tasks.build]
+workspace = false
+dependencies = [
+  "build_api",
+  "build_ui",
+  "default_ui_config",
+]
+
+[tasks.default]
+workspace = false
+alias = "ui"
+

@@ -1,0 +1,14 @@
+html {
+  direction: rtl;
+}
+
+* {
+  margin: 0px;
+  padding: 0px;
+  box-sizing: border-box;
+  text-align: center;
+  align-content: center;
+  justify-self: center;
+  justify-items: center;
+  justify-content: center;
+}

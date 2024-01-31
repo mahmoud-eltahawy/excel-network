@@ -54,7 +54,7 @@ pub fn App() -> impl IntoView {
     }
 }
 use models::Name;
-use thaw::{Button, ButtonSize, Space};
+use thaw::{Button, ButtonSize, Space, SpaceGap};
 use uuid::Uuid;
 
 use std::rc::Rc;
@@ -68,7 +68,7 @@ pub fn Home() -> impl IntoView {
     });
 
     let button_style = r#"
-        width: 70%;
+        width: 80%;
         font-size : 2rem;
     "#
     .trim();
@@ -85,21 +85,26 @@ pub fn Home() -> impl IntoView {
 
     view! {
         <div style=div_style>
-        <Space vertical=true >
+        <Space vertical=true gap=SpaceGap::WH(150,40)>
             <For
                 each=move || sheets_types_names.get().unwrap_or(Rc::from(vec![])).to_vec()
                 key=|s| s.id
                 children=move |s| {
                     view! {
-                        <Button on_click=move |_| {
-                            window()
-                                .location()
-                                .set_href(&format!("sheet/{}", s.id))
-                                .unwrap_or_default();
+                        <Button
+                            on_click=move |_| {
+                                window()
+                                    .location()
+                                    .set_href(&format!("sheet/{}", s.id))
+                                    .unwrap_or_default();
                             }
                             style={button_style}
                             size=ButtonSize::Large
                         >{s.the_name}</Button>
+                        <br/>
+                        <br/>
+                        <br/>
+                        <br/>
                     }
                 }
             />

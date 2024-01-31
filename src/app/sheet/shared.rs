@@ -14,6 +14,10 @@ use tauri_sys::{
     path::{download_dir, home_dir},
     tauri::invoke,
 };
+use thaw::Button;
+use thaw::ButtonColor;
+use thaw::Input;
+use thaw::Space;
 use uuid::Uuid;
 
 use models::RowsSort;
@@ -961,7 +965,7 @@ where
 #[component]
 pub fn PrimaryRowEditor(new_columns: RwSignal<HashMap<Rc<str>, Column<Rc<str>>>>) -> impl IntoView {
     let add_what = RwSignal::from(None::<&str>);
-    let header = RwSignal::from(Rc::from(""));
+    let header = RwSignal::from("".to_string());
     let column_value = RwSignal::from(ColumnValue::Float(0.0));
 
     let on_value_input = move |ev| {
@@ -981,7 +985,7 @@ pub fn PrimaryRowEditor(new_columns: RwSignal<HashMap<Rc<str>, Column<Rc<str>>>>
     let append_column = move |_| {
         new_columns.update(|map| {
             map.insert(
-                header.get(),
+                Rc::from(header.get()),
                 Column {
                     is_basic: true,
                     value: column_value.get(),
@@ -995,47 +999,49 @@ pub fn PrimaryRowEditor(new_columns: RwSignal<HashMap<Rc<str>, Column<Rc<str>>>>
         <Show
         when=move || add_what.get().is_some()
         fallback=move|| view!{
-        <>
-            <button
-            on:click=move |_| {
-            add_what.set(Some("date"));
-            column_value.set(ColumnValue::Date(Local::now().date_naive()))
-            }
-            >"+ تاريخ"</button>
-            <button
-            on:click=move |_| {
-            add_what.set(Some("number"));
-            column_value.set(ColumnValue::Float(0.0));
-            }
-            >"+ رقم"</button>
-            <button
-            on:click=move |_| {
-            add_what.set(Some("text"));
-            column_value.set(ColumnValue::String(Rc::from("")));
-            }
-            >"+ نص"</button>
-        </>
+            <Space>
+                <Button
+                    on_click=move |_| {
+                        add_what.set(Some("date"));
+                        column_value.set(ColumnValue::Date(Local::now().date_naive()))
+                    }
+                >"+ تاريخ"</Button>
+                <Button
+                    on_click=move |_| {
+                        add_what.set(Some("number"));
+                        column_value.set(ColumnValue::Float(0.0));
+                    }
+                >"+ رقم"</Button>
+                <Button
+                    on_click=move |_| {
+                        add_what.set(Some("text"));
+                        column_value.set(ColumnValue::String(Rc::from("")));
+                    }
+                >"+ نص"</Button>
+            </Space>
         }
         >
-            <div>
-            <input
-            type="text"
-            placeholder="العنوان"
-                on:input=move |ev| header.set(Rc::from(event_target_value(&ev).trim()))
+        <Space>
+            <Input
+                placeholder="العنوان"
+                value=header
             />
             <input
-            type=add_what.get().unwrap_or_default()
-            placeholder="القيمة"
+                class="thaw-input"
+                type=add_what.get().unwrap_or_default()
+                placeholder="القيمة"
                 on:input=on_value_input
             />
-            </div>
-            <br/>
-        <button
-            on:click=append_column
-        >"تاكيد"</button>
-        <button
-           on:click=move |_| add_what.set(None)
-        >"الغاء"</button>
+        </Space>
+        <Space>
+            <Button
+                on_click=append_column
+            >"تاكيد"</Button>
+            <Button
+               color=ButtonColor::Warning
+               on_click=move |_| add_what.set(None)
+            >"الغاء"</Button>
+        </Space>
         </Show>
     }
 }

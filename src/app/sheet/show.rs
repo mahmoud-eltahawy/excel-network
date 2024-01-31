@@ -4,7 +4,7 @@ use crate::Id;
 use chrono::{Local, NaiveDate};
 use client_models::{ColumnConfig, ConfigValue, HeaderGetter, IdentityDiffsOps, RowIdentity};
 use leptos::spawn_local;
-use leptos::{ev::MouseEvent, *};
+use leptos::*;
 use leptos_router::*;
 use models::{Column, ColumnValue, Row, RowsSort, Sheet};
 
@@ -13,7 +13,7 @@ use std::collections::HashSet;
 use std::str::FromStr;
 use std::{collections::HashMap, rc::Rc};
 use tauri_sys::tauri::invoke;
-use thaw::Table;
+use thaw::{Button, Modal, Space, Table};
 use uuid::Uuid;
 
 use super::shared::{
@@ -820,7 +820,7 @@ pub fn ShowSheet() -> impl IntoView {
         }
     });
 
-    let load_file = move |_| {
+    let load_file = move || {
         let sheettype = sheet_type_name_resource.get().unwrap_or(Rc::from(""));
         edit_mode.set(EditState::LoadFile);
         spawn_local(async move {
@@ -874,28 +874,35 @@ pub fn ShowSheet() -> impl IntoView {
 
     view! {
         <section>
-            <BackArrow n=2/>
-            <ExcelExport
-                sheet=move || {
-                    get_initial_sheet().unwrap_or(Sheet {
-                        id: Uuid::nil(),
-                        sheet_name: Rc::from(""),
-                        type_name: Rc::from(""),
-                        insert_date: NaiveDate::default(),
-                        rows: vec![],
-                    })
-                }
-                headers=move|| {
-                    basic_headers()
-                        .into_iter()
-                        .chain(calc_headers())
-                        .collect::<Vec<Rc<str>>>()
-                }
-                all_rows=move|| sheet_rows_with_primary_row_with_calc_values.get()
-             />
-            <CollapseIcon render_mode=render_mode is_collapsble=is_collapsable/>
-            <EditIcon on_edit=on_edit has_anything_changed=has_anything_changed revert_all_edits=revert_all_edits/>
-            <SaveIcon has_anything_changed=has_anything_changed save_edits=save_edits/>
+            <EditButtons
+                edit_mode=edit_mode
+                load_file=load_file
+                on_edit=on_edit
+            />
+            <Space>
+                <BackArrow n=2/>
+                <ExcelExport
+                    sheet=move || {
+                        get_initial_sheet().unwrap_or(Sheet {
+                            id: Uuid::nil(),
+                            sheet_name: Rc::from(""),
+                            type_name: Rc::from(""),
+                            insert_date: NaiveDate::default(),
+                            rows: vec![],
+                        })
+                    }
+                    headers=move|| {
+                        basic_headers()
+                            .into_iter()
+                            .chain(calc_headers())
+                            .collect::<Vec<Rc<str>>>()
+                    }
+                    all_rows=move|| sheet_rows_with_primary_row_with_calc_values.get()
+                 />
+                <CollapseIcon render_mode=render_mode is_collapsble=is_collapsable/>
+                <EditIcon on_edit=on_edit has_anything_changed=has_anything_changed revert_all_edits=revert_all_edits/>
+                <SaveIcon has_anything_changed=has_anything_changed save_edits=save_edits/>
+            </Space>
             <Show
                 when=move || matches!(edit_mode.get(),EditState::Primary)
                 fallback=move || {
@@ -968,11 +975,6 @@ pub fn ShowSheet() -> impl IntoView {
                     </Show>
                 </tbody>
             </Table>
-            <EditButtons
-                edit_mode=edit_mode
-                load_file=load_file
-                on_edit=on_edit
-            />
             <Outlet/>
         </section>
     }
@@ -986,30 +988,27 @@ fn EditButtons<FL>(
     on_edit: RwSignal<bool>,
 ) -> impl IntoView
 where
-    FL: Fn(MouseEvent) + 'static + Clone + Copy,
+    FL: Fn() + 'static + Clone + Copy,
 {
     view! {
-        <Show
-        when=move || on_edit.get() && matches!(edit_mode.get(),EditState::None)
+        <Modal
+            show=on_edit
         >
-        <div>
-            <button
-                on:click=move |_| edit_mode.set(EditState::Primary)
-            >"تعديل العناوين"</button>
-            <br/>
-            <button
-                on:click=move |_| edit_mode.set(EditState::NonePrimary)
-            >"تعديل الصفوف"</button>
-            <br/>
-            <button on:click=load_file>
-                "تحميل ملف"
-            </button>
-            <br/>
-            <button on:click=move |_| on_edit.set(false)>
-                "الغاء"
-            </button>
-        </div>
-        </Show>
+            <Space vertical=true>
+                <Button
+                    on_click=move |_| {edit_mode.set(EditState::Primary); on_edit.set(false) }
+                >"تعديل العناوين"</Button>
+                <Button
+                    on_click=move |_| {edit_mode.set(EditState::NonePrimary); on_edit.set(false)}
+                >"تعديل الصفوف"</Button>
+                <Button on:click=move |_| {on_edit.set(false);load_file()}>
+                    "تحميل ملف"
+                </Button>
+                <Button on_click=move |_| on_edit.set(false)>
+                    "الغاء"
+                </Button>
+            </Space>
+        </Modal>
     }
 }
 

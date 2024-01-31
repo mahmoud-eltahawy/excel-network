@@ -75,47 +75,48 @@ pub fn SheetHome() -> impl IntoView {
     });
 
     view! {
-        <section>
-            <BackArrow n=2/>
-            <AddIcon/>
-            <Input value=sheet_name placeholder=format!{"{}", "اسم الشيت"}/>
-            <div>
-                <label>"تاريخ البداية"</label>
-                <DatePicker value=begin/>
-                <label>"تاريخ النهاية"</label>
-                <DatePicker value=end/>
-            </div>
-            <Space vertical=true>
-                <Show
-                    when=move || offset.get() != 0
-                >
-                    <UpIcon scroll=move |_| offset.update(|x| *x -= 5)/>
-                </Show>
-                <For
-                    each=move || bills.get().unwrap_or(Rc::from(vec![])).to_vec()
-                    key=|s| s.id
-                    children=move |s| {
-                        view! {
-                            <Button on_click=move |_| {
-                                let href = window().location().href().unwrap_or_default();
-                                window()
-                                    .location()
-                                    .set_href(&format!("{}/show/{}", href,s.id))
-                                    .unwrap_or_default();
-                                }
-                                style="width: 70%; font-size : 1.2rem;"
-                                size=ButtonSize::Large
-                            >{s.the_name}</Button>
-                        }
-                    }
-                />
-                <Show
-                    when=move || { bills.get().unwrap_or(Rc::from(vec![])).len() >= 5 }
-                >
-                    <DownIcon scroll=move |_| offset.update(|x| *x += 5)/>
-                </Show>
+        <Space vertical=true>
+            <Space>
+                <BackArrow n=2/>
+                <AddIcon/>
             </Space>
+            <Input value=sheet_name placeholder=format!{"{}", "اسم الشيت"}/>
+            <h3>"تاريخ البداية"</h3>
+            <DatePicker value=begin/>
+            <h3>"تاريخ النهاية"</h3>
+            <DatePicker value=end/>
+            <br/><br/><br/>
+            <Show
+                when=move || offset.get() != 0
+            >
+                <UpIcon scroll=move |_| offset.update(|x| *x -= 5)/>
+            </Show>
+            <br/>
+            <For
+                each=move || bills.get().unwrap_or(Rc::from(vec![])).to_vec()
+                key=|s| s.id
+                children=move |s| {
+                    view! {
+                        <Button on_click=move |_| {
+                            let href = window().location().href().unwrap_or_default();
+                            window()
+                                .location()
+                                .set_href(&format!("{}/show/{}", href,s.id))
+                                .unwrap_or_default();
+                            }
+                            style="width: 70%; font-size : 1.2rem;"
+                            size=ButtonSize::Large
+                        >{s.the_name}</Button>
+                        <br/><br/><br/><br/>
+                    }
+                }
+            />
+            <Show
+                when=move || { bills.get().unwrap_or(Rc::from(vec![])).len() >= 5 }
+            >
+                <DownIcon scroll=move |_| offset.update(|x| *x += 5)/>
+            </Show>
             <Outlet/>
-        </section>
+        </Space>
     }
 }

@@ -6,7 +6,7 @@ use leptos_router::*;
 use models::{Column, Row, RowsSort};
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
-use thaw::Table;
+use thaw::{Button, Input, Space, Table};
 
 use super::shared::{
     alert, import_sheet_rows, message, open_file, InputRow, NameArg, SheetHead, ShowNewRows,
@@ -17,7 +17,6 @@ use std::collections::HashMap;
 use crate::{
     app::sheet::shared::{merge_primary_row_headers, PrimaryRowContent, PrimaryRowEditor},
     atoms::BackArrow,
-    // Id,
 };
 use tauri_sys::tauri::invoke;
 use uuid::Uuid;
@@ -35,7 +34,7 @@ use std::rc::Rc;
 #[inline(always)]
 #[component]
 pub fn AddSheet() -> impl IntoView {
-    let sheet_name = RwSignal::from(Rc::from(""));
+    let sheet_name = RwSignal::from(String::new());
     let rows = RwSignal::from(Vec::<Row<Uuid, Rc<str>>>::new());
     let modified_primary_columns = RwSignal::from(HashMap::<Rc<str>, Column<Rc<str>>>::new());
     let params = use_params_map();
@@ -156,7 +155,7 @@ pub fn AddSheet() -> impl IntoView {
                 "save_sheet",
                 &SaveSheetArgs {
                     sheetid: id,
-                    sheetname: sheet_name.get(),
+                    sheetname: Rc::from(sheet_name.get()),
                     typename: sheet_type_name_resource.get().unwrap_or(Rc::from("")),
                     rows: the_rows
                         .into_iter()
@@ -176,7 +175,7 @@ pub fn AddSheet() -> impl IntoView {
                     message("👍").await;
                     rows.set(Vec::new());
                     sheet_id_sig.set(Uuid::new_v4());
-                    sheet_name.set(Rc::from(""));
+                    sheet_name.set("".to_string());
                 }
                 Err(err) => alert(err.to_string().as_str()).await,
             }
@@ -230,17 +229,12 @@ pub fn AddSheet() -> impl IntoView {
 
     view! {
         <section>
-            <BackArrow n=1/>
-            <input
-                type="text"
-                placeholder=move || {
-                    format!(
-                        "{} ({})", "اسم الشيت", sheet_type_name_resource.get()
-                        .unwrap_or(Rc::from(""))
-                    )
-                }
-                value=move || sheet_name.get()
-                on:input=move |ev| sheet_name.set(Rc::from(event_target_value(&ev).trim()))
+            <Space>
+                <BackArrow n=1/>
+            </Space>
+            <Input
+                placeholder="اسم الشيت"
+                value=sheet_name
             />
             <PrimaryRow
               primary_headers=move || sheet_primary_headers_resource.get().unwrap_or(Rc::from([]))
@@ -268,12 +262,14 @@ pub fn AddSheet() -> impl IntoView {
                     />
                 </tbody>
             </Table>
-            <button on:click=load_file>
-                "تحميل ملف"
-            </button>
-            <button on:click=save_sheet>
-                "حفظ الشيت"
-            </button>
+            <Space>
+                <Button on_click=load_file>
+                    "تحميل ملف"
+                </Button>
+                <Button on_click=save_sheet>
+                    "حفظ الشيت"
+                </Button>
+            </Space>
             <Outlet/>
         </section>
     }
