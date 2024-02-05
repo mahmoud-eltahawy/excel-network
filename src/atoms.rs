@@ -1,12 +1,11 @@
 use std::rc::Rc;
 
 use leptos::*;
-use leptos_icons::Icon;
 use leptos_router::A;
 use models::{Row, Sheet};
 use serde::Serialize;
 use tauri_sys::tauri::invoke;
-use thaw::Button;
+use thaw::{Button, Icon};
 use uuid::Uuid;
 use web_sys::MouseEvent;
 

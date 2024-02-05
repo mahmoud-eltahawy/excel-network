@@ -16,6 +16,7 @@ use tauri_sys::{
 };
 use thaw::Button;
 use thaw::ButtonColor;
+use thaw::Icon;
 use thaw::Input;
 use thaw::Space;
 use uuid::Uuid;
@@ -604,9 +605,10 @@ where
             <td>""</td>
             <td>""</td>
             <td>""</td>
+            <td>""</td>
             <td>
                 <button on:click=on_click>
-                    "_+_"
+            <Icon style="font-size : 2rem;" icon=icondata::CgPlayListAdd/>
                 </button>
             </td>
         </tr>
