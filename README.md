@@ -1,10 +1,11 @@
 
 
 # Test Dependencies
-1. (**Rust Programming Language**)[https://www.rust-lang.org/]
-2. (**tauri prerequisites**)[https://tauri.app/v1/guides/getting-started/prerequisites]
-3. **cargo-make** __cargo install cargo-make__
-4. (**docker**)[https://www.docker.com/]
+1. [**Rust Programming Language**](https://www.rust-lang.org/)
+2. [**tauri prerequisites**](https://tauri.app/v1/guides/getting-started/prerequisites)
+3. # **cargo-make**
+   cargo install cargo-make
+4. [**docker**](https://www.docker.com/)
 
 
 # How to Test
