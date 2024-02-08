@@ -10,7 +10,7 @@
 
 # How to Test
 ## clone the repo
-   https://github.com/mahmoud-eltahawy/excel-network.git
+   git clone https://github.com/mahmoud-eltahawy/excel-network.git
 ## create postgres docker image 
    docker compose -f postgres-docker.yml up
 ## run the api
