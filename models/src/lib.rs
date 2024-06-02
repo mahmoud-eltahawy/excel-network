@@ -1,5 +1,6 @@
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
+use std::fmt::Display;
 use std::hash::Hash;
 use std::sync::Arc;
 use std::{cmp::Ordering, collections::HashMap, marker::Sized, rc::Rc};
@@ -91,16 +92,24 @@ where
     Date(NaiveDate),
 }
 
-impl<T> ToString for ColumnValue<T>
+// impl<T> ToString for ColumnValue<T>
+// where
+//     T: Eq + Hash + ToString,
+// {
+//     fn to_string(&self) -> String {
+//     }
+// }
+impl<T> Display for ColumnValue<T>
 where
     T: Eq + Hash + ToString,
 {
-    fn to_string(&self) -> String {
-        match self {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let result = match self {
             Self::String(v) => v.to_string(),
             Self::Float(v) => format!("{:.2}", v),
             Self::Date(v) => v.to_string(),
-        }
+        };
+        write!(f, "{}", result)
     }
 }
 

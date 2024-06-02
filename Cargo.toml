@@ -38,9 +38,9 @@ serde_json = {workspace = true}
 bigdecimal = {workspace = true , features = ["serde"]}
 serde = { workspace = true, features = ["derive","rc"] }
 itertools = { workspace = true }
-leptos = { version = "^0.6" , features = ["csr"] }
-leptos_router = { version = "^0.6" , features = ["csr"]}
-thaw = {version = "^0.2.0-beta", features = ["csr"]}
+leptos = { version = "0.6.12" , features = ["csr"] }
+leptos_router = { version = "0.6.12" , features = ["csr"]}
+thaw = {version = "^0.3", features = ["csr"]}
 serde-wasm-bindgen = "0.5"
 wasm-bindgen = { version = "0.2", features = ["serde-serialize"] }
 wasm-bindgen-futures = "0.4"

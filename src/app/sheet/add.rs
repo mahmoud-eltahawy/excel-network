@@ -31,7 +31,6 @@ struct SaveSheetArgs {
 
 use std::rc::Rc;
 
-#[inline(always)]
 #[component]
 pub fn AddSheet() -> impl IntoView {
     let sheet_name = RwSignal::from(String::new());
@@ -275,17 +274,12 @@ pub fn AddSheet() -> impl IntoView {
     }
 }
 
-#[inline(always)]
 #[component]
-fn PrimaryRow<FP, FN>(
-    primary_headers: FP,
-    non_primary_headers: FN,
+fn PrimaryRow(
+    primary_headers: impl Fn() -> Rc<[Rc<str>]> + 'static + Copy,
+    non_primary_headers: impl Fn() -> Rc<[Rc<str>]> + 'static + Copy,
     new_columns: RwSignal<HashMap<Rc<str>, Column<Rc<str>>>>,
-) -> impl IntoView
-where
-    FP: Fn() -> Rc<[Rc<str>]> + 'static + Clone + Copy,
-    FN: Fn() -> Rc<[Rc<str>]> + 'static + Clone + Copy,
-{
+) -> impl IntoView {
     let headers = move || merge_primary_row_headers(primary_headers(), non_primary_headers());
 
     view! {

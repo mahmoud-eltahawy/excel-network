@@ -80,7 +80,7 @@ pub fn SheetHome() -> impl IntoView {
                 <BackArrow n=2/>
                 <AddIcon/>
             </Space>
-            <Input value=sheet_name placeholder=format!{"{}", "اسم الشيت"}/>
+            <Input value=sheet_name placeholder="اسم الشيت".to_string()/>
             <h3>"تاريخ البداية"</h3>
             <DatePicker value=begin/>
             <h3>"تاريخ النهاية"</h3>

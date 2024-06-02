@@ -47,7 +47,6 @@ pub struct Name {
     pub the_name: Rc<str>,
 }
 
-#[inline(always)]
 pub async fn import_sheet_rows(
     sheetid: Uuid,
     sheettype: Rc<str>,
@@ -65,7 +64,6 @@ pub async fn import_sheet_rows(
     .unwrap_or_default()
 }
 
-#[inline(always)]
 pub async fn alert(message: &str) {
     let mut builder = MessageDialogBuilder::new();
     builder.set_title("تحذير");
@@ -74,7 +72,6 @@ pub async fn alert(message: &str) {
     builder.message(message).await.unwrap_or_default();
 }
 
-#[inline(always)]
 pub async fn message(message: &str) {
     let mut builder = MessageDialogBuilder::new();
     builder.set_title("رسالة");
@@ -83,14 +80,12 @@ pub async fn message(message: &str) {
     builder.message(message).await.unwrap_or_default();
 }
 
-#[inline(always)]
 pub async fn confirm(message: &str) -> bool {
     let mut builder = MessageDialogBuilder::new();
     builder.set_title("تاكيد");
     builder.confirm(message).await.unwrap_or_default()
 }
 
-#[inline(always)]
 pub async fn open_file() -> Option<String> {
     let mut builder = FileDialogBuilder::new();
     builder.add_filter("Serialized", &["json"]);
@@ -112,13 +107,11 @@ pub async fn open_file() -> Option<String> {
     Some(path.display().to_string())
 }
 
-#[inline(always)]
 #[component]
-pub fn SheetHead<Fa, Fb>(basic_headers: Fa, calc_headers: Fb) -> impl IntoView
-where
-    Fa: Fn() -> Vec<Rc<str>> + 'static,
-    Fb: Fn() -> Vec<Rc<str>> + 'static,
-{
+pub fn SheetHead(
+    basic_headers: impl Fn() -> Vec<Rc<str>> + 'static,
+    calc_headers: impl Fn() -> Vec<Rc<str>> + 'static,
+) -> impl IntoView {
     view! {
         <thead>
             <tr>
@@ -142,21 +135,14 @@ where
     }
 }
 
-#[inline(always)]
 #[component]
-fn ColumnEdit<F1, F2, F3, F4>(
-    mode: F1,
-    cancel: F2,
-    priorities: F3,
-    get_column_type: F4,
+fn ColumnEdit(
+    mode: impl Fn() -> (Rc<str>, Uuid, Rc<HashMap<Rc<str>, Column<Rc<str>>>>) + 'static,
+    cancel: impl Fn() + 'static + Copy,
+    priorities: impl Fn() -> Rc<[Rc<str>]> + 'static + Copy,
+    get_column_type: impl Fn(String) -> Option<ColumnConfig> + 'static + Copy,
     rows: RwSignal<Vec<Row<Uuid, Rc<str>>>>,
-) -> impl IntoView
-where
-    F1: Fn() -> (Rc<str>, Uuid, Rc<HashMap<Rc<str>, Column<Rc<str>>>>) + 'static,
-    F2: Fn() + 'static + Clone + Copy,
-    F3: Fn() -> Rc<[Rc<str>]> + 'static + Clone + Copy,
-    F4: Fn(String) -> Option<ColumnConfig> + 'static + Clone + Copy,
-{
+) -> impl IntoView {
     let (header, id, map) = mode();
 
     let column_value = RwSignal::from(map.clone().get(&header).map(|x| x.value.clone()));
@@ -231,14 +217,11 @@ where
         cancel()
     };
     #[component]
-    fn MainInput<F4>(
+    fn MainInput(
         column_value: RwSignal<Option<ColumnValue<Rc<str>>>>,
-        get_column_type: F4,
+        get_column_type: impl Fn(String) -> Option<ColumnConfig> + 'static + Copy,
         header: Rc<str>,
-    ) -> impl IntoView
-    where
-        F4: Fn(String) -> Option<ColumnConfig> + 'static + Clone + Copy,
-    {
+    ) -> impl IntoView {
         let on_input = move |ev| {
             let value = event_target_value(&ev).trim().to_string();
             let value = match column_value.get() {
@@ -302,25 +285,16 @@ where
     }
 }
 
-#[inline(always)]
 #[component]
-pub fn ShowNewRows<BH, CH, FD, FP, FI, BT>(
-    basic_headers: BH,
-    calc_headers: CH,
-    delete_row: FD,
-    priorities: FP,
-    sheet_id: FI,
-    get_column_type: BT,
+pub fn ShowNewRows(
+    basic_headers: impl Fn() -> Vec<Rc<str>> + 'static + Copy,
+    calc_headers: impl Fn() -> Vec<Rc<str>> + 'static + Copy,
+    delete_row: impl Fn(Uuid) + 'static + Copy,
+    priorities: impl Fn() -> Rc<[Rc<str>]> + 'static + Copy,
+    sheet_id: impl Fn() -> Uuid + 'static + Copy,
+    get_column_type: impl Fn(String) -> Option<ColumnConfig> + 'static + Copy,
     rows: RwSignal<Vec<Row<Uuid, Rc<str>>>>,
-) -> impl IntoView
-where
-    BH: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
-    CH: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
-    FP: Fn() -> Rc<[Rc<str>]> + 'static + Clone + Copy,
-    FD: Fn(Uuid) + 'static + Clone + Copy,
-    FI: Fn() -> Uuid + 'static + Clone + Copy,
-    BT: Fn(String) -> Option<ColumnConfig> + 'static + Clone + Copy,
-{
+) -> impl IntoView {
     type EditColumn = (Rc<str>, Uuid, Rc<HashMap<Rc<str>, Column<Rc<str>>>>);
     let edit_column = RwSignal::from(None::<EditColumn>);
     let new_rows = Memo::new(move |_| {
@@ -330,18 +304,13 @@ where
             .collect::<Vec<_>>()
     });
 
-    #[inline(always)]
     #[component]
-    fn ShowColumnEdit<FP, BT>(
+    fn ShowColumnEdit(
         edit_column: RwSignal<Option<EditColumn>>,
         rows: RwSignal<Vec<Row<Uuid, Rc<str>>>>,
-        priorities: FP,
-        get_column_type: BT,
-    ) -> impl IntoView
-    where
-        FP: Fn() -> Rc<[Rc<str>]> + 'static + Clone + Copy,
-        BT: Fn(String) -> Option<ColumnConfig> + 'static + Clone + Copy,
-    {
+        priorities: impl Fn() -> Rc<[Rc<str>]> + 'static + Copy,
+        get_column_type: impl Fn(String) -> Option<ColumnConfig> + 'static + Copy,
+    ) -> impl IntoView {
         view! {
             <Show
                 when=move || edit_column.get().is_some()
@@ -357,17 +326,13 @@ where
         }
     }
 
-    #[inline(always)]
     #[component]
-    fn BasicColumns<BH>(
-        basic_headers: BH,
+    fn BasicColumns(
+        basic_headers: impl Fn() -> Vec<Rc<str>> + 'static + Copy,
         columns: Rc<HashMap<Rc<str>, Column<Rc<str>>>>,
         edit_column: RwSignal<Option<EditColumn>>,
         id: Uuid,
-    ) -> impl IntoView
-    where
-        BH: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
-    {
+    ) -> impl IntoView {
         let children = move |header: Rc<str>| {
             let on_dblclick = {
                 let columns = columns.clone();
@@ -397,15 +362,11 @@ where
         }
     }
 
-    #[inline(always)]
     #[component]
-    fn CalcColumn<CH>(
-        calc_headers: CH,
+    fn CalcColumn(
+        calc_headers: impl Fn() -> Vec<Rc<str>> + 'static + Copy,
         columns: Rc<HashMap<Rc<str>, Column<Rc<str>>>>,
-    ) -> impl IntoView
-    where
-        CH: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
-    {
+    ) -> impl IntoView {
         let children = move |column| {
             let columns = columns.clone();
             let content = move || columns.get(&column).map(|x| x.value.to_string());
@@ -467,20 +428,14 @@ enum ColumnSignal {
     Date(GetterSetter<NaiveDate>),
 }
 
-#[inline(always)]
 #[component]
-pub fn InputRow<F, BH, CH>(
-    basic_headers: BH,
-    calc_headers: CH,
-    append: F,
+pub fn InputRow(
+    basic_headers: impl Fn() -> Vec<Rc<str>> + 'static + Clone,
+    calc_headers: impl Fn() -> Vec<Rc<str>> + 'static,
+    append: impl Fn(Row<Uuid, Rc<str>>) + 'static + Copy,
     basic_columns: Memo<Vec<ColumnConfig>>,
     calc_columns: Memo<Vec<OperationConfig>>,
-) -> impl IntoView
-where
-    F: Fn(Row<Uuid, Rc<str>>) + 'static + Clone + Copy,
-    BH: Fn() -> Vec<Rc<str>> + 'static + Clone,
-    CH: Fn() -> Vec<Rc<str>> + 'static,
-{
+) -> impl IntoView {
     let basic_signals_map = Memo::new(move |_| {
         let mut map = HashMap::<Rc<str>, _>::new();
         for x in basic_columns.get().into_iter() {
@@ -616,7 +571,6 @@ where
     }
 }
 
-#[inline(always)]
 #[component]
 fn MyInput(
     header: Rc<str>,
@@ -659,7 +613,6 @@ pub enum EditState {
     None,
 }
 
-#[inline(always)]
 pub fn resolve_operation(
     operation: &Operation,
     columns_map: &HashMap<Rc<str>, ColumnValue<Rc<str>>>,
@@ -673,7 +626,6 @@ pub fn resolve_operation(
         }
     }
 
-    #[inline(always)]
     fn resolve_hs(
         hs: &ValueType,
         columns_map: &HashMap<Rc<str>, ColumnValue<Rc<str>>>,
@@ -700,7 +652,6 @@ pub fn resolve_operation(
     }
 }
 
-#[inline(always)]
 pub fn merge_primary_row_headers(
     primary_headers: Rc<[Rc<str>]>,
     non_primary_headers: Rc<[Rc<str>]>,
@@ -737,22 +688,15 @@ pub fn merge_primary_row_headers(
         .collect::<Rc<[_]>>()
 }
 
-#[inline(always)]
 #[component]
-pub fn PrimaryRowContent<F1, F2, F3, F4>(
-    headers: F1,
-    is_in_edit_mode: F2,
-    is_deleted: F3,
-    delete_fun: F4,
+pub fn PrimaryRowContent(
+    headers: impl Fn() -> Rc<[(Rc<str>, Rc<str>)]> + 'static + Copy,
+    is_in_edit_mode: impl Fn() -> bool + 'static + Copy,
+    is_deleted: impl Fn(Rc<str>) -> bool + 'static + Copy,
+    delete_fun: impl Fn(Rc<str>) + 'static + Copy,
     columns: Memo<HashMap<Rc<str>, Column<Rc<str>>>>,
     new_columns: RwSignal<HashMap<Rc<str>, Column<Rc<str>>>>,
-) -> impl IntoView
-where
-    F1: Fn() -> Rc<[(Rc<str>, Rc<str>)]> + 'static + Clone + Copy,
-    F2: Fn() -> bool + 'static + Clone + Copy,
-    F3: Fn(Rc<str>) -> bool + 'static + Clone + Copy,
-    F4: Fn(Rc<str>) + 'static + Clone + Copy,
-{
+) -> impl IntoView {
     let all_columns = Memo::new(move |_| {
         columns
             .get()
@@ -762,19 +706,14 @@ where
     });
 
     #[component]
-    fn RightPrimaryColumns<F2, F3, F4>(
+    fn RightPrimaryColumns(
         primary: Rc<str>,
         columns: Memo<HashMap<Rc<str>, Column<Rc<str>>>>,
         new_columns: RwSignal<HashMap<Rc<str>, Column<Rc<str>>>>,
-        is_in_edit_mode: F2,
-        is_deleted: F3,
-        delete_fun: F4,
-    ) -> impl IntoView
-    where
-        F2: Fn() -> bool + 'static + Clone + Copy,
-        F3: Fn(Rc<str>) -> bool + 'static + Clone + Copy,
-        F4: Fn(Rc<str>) + 'static + Clone + Copy,
-    {
+        is_in_edit_mode: impl Fn() -> bool + 'static + Copy,
+        is_deleted: impl Fn(Rc<str>) -> bool + 'static + Copy,
+        delete_fun: impl Fn(Rc<str>) + 'static + Copy,
+    ) -> impl IntoView {
         let get_old_value = move |primary: Rc<str>| {
             columns
                 .get()
@@ -794,17 +733,12 @@ where
         let primary_value_plus_transition =
             move |primary: Rc<str>| get_old_value(primary.clone()) + &get_new_value(primary);
         #[component]
-        fn Editor<F2, F3, F4>(
+        fn Editor(
             primary: Rc<str>,
-            is_in_edit_mode: F2,
-            is_deleted: F3,
-            delete_fun: F4,
-        ) -> impl IntoView
-        where
-            F2: Fn() -> bool + 'static + Clone + Copy,
-            F3: Fn(Rc<str>) -> bool + 'static + Clone + Copy,
-            F4: Fn(Rc<str>) + 'static + Clone + Copy,
-        {
+            is_in_edit_mode: impl Fn() -> bool + 'static + Copy,
+            is_deleted: impl Fn(Rc<str>) -> bool + 'static + Copy,
+            delete_fun: impl Fn(Rc<str>) + 'static + Copy,
+        ) -> impl IntoView {
             view! {
                 <Show
                     when=is_in_edit_mode
@@ -857,16 +791,12 @@ where
     }
 
     #[component]
-    fn LeftNonPrimaryColumns<F2, F4>(
+    fn LeftNonPrimaryColumns(
         non_primary: Rc<str>,
-        is_in_edit_mode: F2,
-        delete_fun: F4,
+        is_in_edit_mode: impl Fn() -> bool + 'static + Copy,
+        delete_fun: impl Fn(Rc<str>) + 'static + Copy,
         all_columns: Memo<HashMap<Rc<str>, Column<Rc<str>>>>,
-    ) -> impl IntoView
-    where
-        F2: Fn() -> bool + 'static + Clone + Copy,
-        F4: Fn(Rc<str>) + 'static + Clone + Copy,
-    {
+    ) -> impl IntoView {
         #[component]
         fn TitleValue(
             non_primary: Rc<str>,
@@ -963,7 +893,6 @@ where
     }
 }
 
-#[inline(always)]
 #[component]
 pub fn PrimaryRowEditor(new_columns: RwSignal<HashMap<Rc<str>, Column<Rc<str>>>>) -> impl IntoView {
     let add_what = RwSignal::from(None::<&str>);

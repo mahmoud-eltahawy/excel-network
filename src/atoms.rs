@@ -29,10 +29,10 @@ pub enum RenderMode {
 }
 
 #[component]
-pub fn CollapseIcon<F>(render_mode: RwSignal<RenderMode>, is_collapsble: F) -> impl IntoView
-where
-    F: Fn() -> bool + 'static,
-{
+pub fn CollapseIcon(
+    render_mode: RwSignal<RenderMode>,
+    is_collapsble: impl Fn() -> bool + 'static,
+) -> impl IntoView {
     let toggle = move |_| match render_mode.get() {
         RenderMode::None | RenderMode::Accumalate => render_mode.set(RenderMode::Collapse),
         RenderMode::Collapse => render_mode.set(RenderMode::Accumalate),
@@ -59,11 +59,10 @@ pub fn AddIcon() -> impl IntoView {
 }
 
 #[component]
-pub fn SaveIcon<F1, F2>(save_edits: F1, has_anything_changed: F2) -> impl IntoView
-where
-    F1: Fn(MouseEvent) + Clone + Copy + 'static,
-    F2: Fn() -> bool + Clone + Copy + 'static,
-{
+pub fn SaveIcon(
+    save_edits: impl Fn(MouseEvent) + Copy + 'static,
+    has_anything_changed: impl Fn() -> bool + Copy + 'static,
+) -> impl IntoView {
     view! {
         <Show
             when=has_anything_changed
@@ -75,10 +74,7 @@ where
     }
 }
 #[component]
-pub fn DownIcon<F1>(scroll: F1) -> impl IntoView
-where
-    F1: Fn(MouseEvent) + Clone + Copy + 'static,
-{
+pub fn DownIcon(scroll: impl Fn(MouseEvent) + Copy + 'static) -> impl IntoView {
     view! {
         <Button on_click=scroll>
             <Icon style=ICON_STYLE icon=icondata::AiArrowDownOutlined/>
@@ -86,10 +82,7 @@ where
     }
 }
 #[component]
-pub fn UpIcon<F1>(scroll: F1) -> impl IntoView
-where
-    F1: Fn(MouseEvent) + Clone + Copy + 'static,
-{
+pub fn UpIcon(scroll: impl Fn(MouseEvent) + Copy + 'static) -> impl IntoView {
     view! {
         <Button on_click=scroll>
             <Icon style=ICON_STYLE icon=icondata::AiArrowUpOutlined/>
@@ -98,15 +91,11 @@ where
 }
 
 #[component]
-pub fn EditIcon<F1, F2>(
+pub fn EditIcon(
     on_edit: RwSignal<bool>,
-    has_anything_changed: F1,
-    revert_all_edits: F2,
-) -> impl IntoView
-where
-    F1: Fn() -> bool + Clone + Copy + 'static,
-    F2: Fn() + Clone + Copy + 'static,
-{
+    has_anything_changed: impl Fn() -> bool + Copy + 'static,
+    revert_all_edits: impl Fn() + Copy + 'static,
+) -> impl IntoView {
     let cancel_edit = move || {
         spawn_local(async move {
             let reset = if has_anything_changed() {
@@ -148,12 +137,11 @@ use crate::{
 };
 
 #[component]
-pub fn ExcelExport<F1, F2, F3>(sheet: F1, all_rows: F2, headers: F3) -> impl IntoView
-where
-    F1: Fn() -> Sheet<Uuid, Rc<str>> + Clone + Copy + 'static,
-    F2: Fn() -> Vec<Row<Uuid, Rc<str>>> + Clone + Copy + 'static,
-    F3: Fn() -> Vec<Rc<str>> + Clone + Copy + 'static,
-{
+pub fn ExcelExport(
+    sheet: impl Fn() -> Sheet<Uuid, Rc<str>> + Copy + 'static,
+    all_rows: impl Fn() -> Vec<Row<Uuid, Rc<str>>> + Copy + 'static,
+    headers: impl Fn() -> Vec<Rc<str>> + Copy + 'static,
+) -> impl IntoView {
     fn export(
         mut sheet: Sheet<Uuid, Rc<str>>,
         headers: Vec<Rc<str>>,

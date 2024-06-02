@@ -55,7 +55,6 @@ fn spawn_my_local_process<T: Serialize + 'static>(
     });
 }
 
-#[inline(always)]
 async fn collapse_rows(
     rows: Vec<Row<Uuid, Rc<str>>>,
     row_identity: RowIdentity<Rc<str>>,
@@ -67,7 +66,6 @@ async fn collapse_rows(
             .map(|x| Rc::from(x.value.to_string()))
             .unwrap_or(Rc::from(""))
     };
-    #[inline(always)]
     fn stack_rows(
         rows: Vec<Row<Uuid, Rc<str>>>,
         rows_ids_id: &Rc<str>,
@@ -487,7 +485,7 @@ pub fn ShowSheet() -> impl IntoView {
             .collect::<Vec<_>>()
     });
 
-    let is_collapsed_id = move |id: &Uuid| rows_collapsed_ids.get().get(id).is_some();
+    let is_collapsed_id = move |id: &Uuid| rows_collapsed_ids.get().contains_key(id);
 
     let delete_row = move |id| {
         if is_collapsed_id(&id) {
@@ -980,16 +978,12 @@ pub fn ShowSheet() -> impl IntoView {
     }
 }
 
-#[inline(always)]
 #[component]
-fn EditButtons<FL>(
+fn EditButtons(
     edit_mode: RwSignal<EditState>,
-    load_file: FL,
+    load_file: impl Fn() + 'static + Copy,
     on_edit: RwSignal<bool>,
-) -> impl IntoView
-where
-    FL: Fn() + 'static + Clone + Copy,
-{
+) -> impl IntoView {
     view! {
         <Modal
             show=on_edit
@@ -1012,28 +1006,19 @@ where
     }
 }
 
-#[inline(always)]
 #[component]
-fn ShowRows<BH, CH, FD, BT, EX, CL>(
-    basic_headers: BH,
-    calc_headers: CH,
-    delete_row: FD,
-    get_column_type: BT,
-    expand_collapse_id: EX,
+fn ShowRows(
+    basic_headers: impl Fn() -> Vec<Rc<str>> + 'static + Copy,
+    calc_headers: impl Fn() -> Vec<Rc<str>> + 'static + Copy,
+    delete_row: impl Fn(Uuid) + 'static + Copy,
+    get_column_type: impl Fn(String) -> Option<ColumnConfig> + 'static + Copy,
+    expand_collapse_id: impl Fn(Uuid) -> Option<Vec<Uuid>> + 'static + Copy,
     rows_updates: RwSignal<HashMap<Uuid, i32>>,
     rows: Memo<Vec<Row<Uuid, Rc<str>>>>,
     edit_mode: RwSignal<EditState>,
     modified_columns: RwSignal<Vec<ColumnIdentity>>,
-    get_collapse_pattern: CL,
-) -> impl IntoView
-where
-    BH: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
-    CH: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
-    FD: Fn(Uuid) + 'static + Clone + Copy,
-    BT: Fn(String) -> Option<ColumnConfig> + 'static + Clone + Copy,
-    EX: Fn(Uuid) -> Option<Vec<Uuid>> + 'static + Clone + Copy,
-    CL: Fn(Rc<str>) -> Option<IdentityDiffsOps> + 'static + Clone + Copy,
-{
+    get_collapse_pattern: impl Fn(Rc<str>) -> Option<IdentityDiffsOps> + 'static + Copy,
+) -> impl IntoView {
     let edit_column = RwSignal::from(None::<ColumnIdentity>);
 
     let get_row_id = move |id: Uuid| {
@@ -1046,36 +1031,22 @@ where
                 .as_str()
     };
 
-    #[inline(always)]
     #[component]
-    fn ShowColumnEditor<EX, CL>(
+    fn ShowColumnEditor(
         edit_column: RwSignal<Option<ColumnIdentity>>,
         modified_columns: RwSignal<Vec<ColumnIdentity>>,
-        expand_collapse_id: EX,
-        get_collapse_pattern: CL,
-    ) -> impl IntoView
-    where
-        EX: Fn(Uuid) -> Option<Vec<Uuid>> + 'static + Clone + Copy,
-        CL: Fn(Rc<str>) -> Option<IdentityDiffsOps> + 'static + Clone + Copy,
-    {
-        #[inline(always)]
+        expand_collapse_id: impl Fn(Uuid) -> Option<Vec<Uuid>> + 'static + Copy,
+        get_collapse_pattern: impl Fn(Rc<str>) -> Option<IdentityDiffsOps> + 'static + Copy,
+    ) -> impl IntoView {
         #[component]
-        fn ColumnEdit<F1, F2, F3, F4, EX, CL>(
-            column_identity: F1,
-            cancel: F2,
-            push_to_modified: F3,
-            push_list_to_modified: F4,
-            expand_collapse_id: EX,
-            get_collapse_pattern: CL,
-        ) -> impl IntoView
-        where
-            F1: Fn() -> ColumnIdentity + 'static,
-            F2: Fn() + 'static + Clone + Copy,
-            F3: Fn(ColumnIdentity) + 'static,
-            F4: Fn(Vec<ColumnIdentity>) + 'static,
-            EX: Fn(Uuid) -> Option<Vec<Uuid>> + 'static + Clone + Copy,
-            CL: Fn(Rc<str>) -> Option<IdentityDiffsOps> + 'static + Clone + Copy,
-        {
+        fn ColumnEdit(
+            column_identity: impl Fn() -> ColumnIdentity + 'static,
+            cancel: impl Fn() + 'static + Copy,
+            push_to_modified: impl Fn(ColumnIdentity) + 'static,
+            push_list_to_modified: impl Fn(Vec<ColumnIdentity>) + 'static,
+            expand_collapse_id: impl Fn(Uuid) -> Option<Vec<Uuid>> + 'static + Copy,
+            get_collapse_pattern: impl Fn(Rc<str>) -> Option<IdentityDiffsOps> + 'static + Copy,
+        ) -> impl IntoView {
             let column_value = RwSignal::from(column_identity().value);
             let on_input = move |ev| {
                 let value = event_target_value(&ev).trim().to_string();
@@ -1132,8 +1103,7 @@ where
                 _ => "text",
             };
 
-            let placeholder =
-                move || format!("{} ({})", "القيمة الحالية", column_value.get().to_string());
+            let placeholder = move || format!("{} ({})", "القيمة الحالية", column_value.get());
 
             view! {
                 <div>
@@ -1175,24 +1145,17 @@ where
             </Show>
         }
     }
-    #[inline(always)]
     #[component]
-    fn BasicColumns<BH, BT, EX, CL>(
-        basic_headers: BH,
-        get_column_type: BT,
+    fn BasicColumns(
+        basic_headers: impl Fn() -> Vec<Rc<str>> + 'static + Copy,
+        get_column_type: impl Fn(String) -> Option<ColumnConfig> + 'static + Copy,
         modified_columns: RwSignal<Vec<ColumnIdentity>>,
         row: Row<Uuid, Rc<str>>,
         edit_mode: RwSignal<EditState>,
         edit_column: RwSignal<Option<ColumnIdentity>>,
-        expand_collapse_id: EX,
-        get_collapse_pattern: CL,
-    ) -> impl IntoView
-    where
-        BH: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
-        BT: Fn(String) -> Option<ColumnConfig> + 'static + Clone + Copy,
-        EX: Fn(Uuid) -> Option<Vec<Uuid>> + 'static + Clone + Copy,
-        CL: Fn(Rc<str>) -> Option<IdentityDiffsOps> + 'static + Clone + Copy,
-    {
+        expand_collapse_id: impl Fn(Uuid) -> Option<Vec<Uuid>> + 'static + Copy,
+        get_collapse_pattern: impl Fn(Rc<str>) -> Option<IdentityDiffsOps> + 'static + Copy,
+    ) -> impl IntoView {
         let Row { id, columns } = row;
         let columns = Rc::from(columns);
 
@@ -1285,15 +1248,11 @@ where
         }
     }
 
-    #[inline(always)]
     #[component]
-    fn CalcColumns<CH>(
-        calc_headers: CH,
+    fn CalcColumns(
+        calc_headers: impl Fn() -> Vec<Rc<str>> + 'static + Copy,
         columns: Rc<HashMap<Rc<str>, Column<Rc<str>>>>,
-    ) -> impl IntoView
-    where
-        CH: Fn() -> Vec<Rc<str>> + 'static + Clone + Copy,
-    {
+    ) -> impl IntoView {
         let get_column = {
             let columns = columns.clone();
             move |header: &Rc<str>| columns.get(header).map(|x| x.value.to_string())
@@ -1309,17 +1268,13 @@ where
         }
     }
 
-    #[inline(always)]
     #[component]
-    fn RowEditor<FD>(
+    fn RowEditor(
         modified_columns: RwSignal<Vec<ColumnIdentity>>,
         edit_mode: RwSignal<EditState>,
         id: Uuid,
-        delete_row: FD,
-    ) -> impl IntoView
-    where
-        FD: Fn(Uuid) + 'static + Clone + Copy,
-    {
+        delete_row: impl Fn(Uuid) + 'static + Copy,
+    ) -> impl IntoView {
         let on_click = move |_| {
             if modified_columns.get().iter().any(|x| x.row_id == id) {
                 modified_columns.update(|xs| xs.retain(|x| x.row_id != id))
@@ -1386,20 +1341,15 @@ where
     }
 }
 
-#[inline(always)]
 #[component]
-fn PrimaryRow<FP, FN>(
-    primary_headers: FP,
-    non_primary_headers: FN,
+fn PrimaryRow(
+    primary_headers: impl Fn() -> Rc<[Rc<str>]> + 'static + Copy,
+    non_primary_headers: impl Fn() -> Rc<[Rc<str>]> + 'static + Copy,
     columns: Memo<HashMap<Rc<str>, Column<Rc<str>>>>,
     new_columns: RwSignal<HashMap<Rc<str>, Column<Rc<str>>>>,
     deleted_columns: RwSignal<Vec<Rc<str>>>,
     edit_mode: RwSignal<EditState>,
-) -> impl IntoView
-where
-    FP: Fn() -> Rc<[Rc<str>]> + 'static + Clone + Copy,
-    FN: Fn() -> Rc<[Rc<str>]> + 'static + Clone + Copy,
-{
+) -> impl IntoView {
     let headers = move || merge_primary_row_headers(primary_headers(), non_primary_headers());
 
     let is_in_edit_mode = move || matches!(edit_mode.get(), EditState::Primary);
